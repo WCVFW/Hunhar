@@ -1,0 +1,24 @@
+server:
+  port: ${PORT:8086}
+  shutdown: graceful
+
+spring:
+  application:
+    name: messaging-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:messaging_db}
+    username: ${DB_USER:messaging_user}
+    password: ${DB_PASSWORD:messaging_pass}
+
+theunoia:
+  security:
+    public-paths:
+      - /ws/**          # handshake authenticated by GatewayHandshakeInterceptor
+  events:
+    relay-interval-ms: 200   # chat latency: outbox -> RabbitMQ -> websocket
+    subscriptions:
+      - project.awarded
+      - team.member_joined
+      - team.member_removed

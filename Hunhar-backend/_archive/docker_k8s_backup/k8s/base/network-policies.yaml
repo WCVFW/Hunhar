@@ -1,0 +1,83 @@
+# Zero-trust networking: deny all ingress by default, then allow only the required paths.
+#   internet -> ingress-nginx -> api-gateway -> backend services -> data stores
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-from-ingress-controller
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: api-gateway }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+        - podSelector:                       # in-cluster callers, e.g. the CI smoke-test pod
+            matchLabels: { app.kubernetes.io/part-of: theunoia }
+      ports:
+        - { port: 8080 }
+---
+# Backend services accept traffic only from the gateway and from each other (service-to-service calls).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-platform
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/component: backend }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/part-of: theunoia }
+---
+# Data stores accept traffic only from platform pods (and MinIO from the ingress for presigned URLs).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-from-platform
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/component: data }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/part-of: theunoia }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-from-ingress-controller
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: minio }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { port: 9000 }
+---
+# Prometheus (monitoring namespace) may scrape /actuator/prometheus on every app pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/part-of: theunoia }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }

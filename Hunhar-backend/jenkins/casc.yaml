@@ -1,0 +1,73 @@
+# Jenkins Configuration-as-Code for THEUNOiA (loaded at every start).
+jenkins:
+  systemMessage: "THEUNOiA backend CI/CD - pipeline job 'theunoia-backend' builds, tests and deploys to Kubernetes"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          name: "Administrator"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  globalNodeProperties:
+    - envVars:
+        env:
+          # empty = local mode: images are built into the Docker Desktop engine and used directly by its Kubernetes
+          - key: "DOCKER_REGISTRY"
+            value: "${DOCKER_REGISTRY:-}"
+
+unclassified:
+  location:
+    url: "http://localhost:8180/"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - file:
+              scope: GLOBAL
+              id: "kubeconfig-staging"
+              description: "kubeconfig for the staging cluster"
+              fileName: "kubeconfig"
+              secretBytes: "${readFileBase64:/run/theunoia/kubeconfig}"
+          - file:
+              scope: GLOBAL
+              id: "theunoia-secrets-staging"
+              description: "THEUNOiA application secrets (staging)"
+              fileName: "secrets.env"
+              secretBytes: "${readFileBase64:/run/theunoia/secrets.staging.env}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: "docker-registry"
+              description: "Container registry (only used when DOCKER_REGISTRY is set)"
+              username: "${DOCKER_REGISTRY_USER:-unused}"
+              password: "${DOCKER_REGISTRY_PASSWORD:-unused}"
+
+jobs:
+  - script: >
+      pipelineJob('theunoia-backend') {
+        description('THEUNOiA microservices: test -> build images -> deploy to Kubernetes staging')
+        properties {
+          pipelineTriggers {
+            triggers {
+              pollSCM { scmpoll_spec('H/2 * * * *') }
+            }
+          }
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('file:///workspace/theunoia-backend') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(false)
+          }
+        }
+      }

@@ -1,0 +1,21 @@
+server:
+  port: ${PORT:8088}
+  shutdown: graceful
+
+spring:
+  application:
+    name: community-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:community_db}
+    username: ${DB_USER:community_user}
+    password: ${DB_PASSWORD:community_pass}
+
+theunoia:
+  security:
+    public-paths:
+      - /api/v1/community/categories
+      - /api/v1/community/threads
+      - /api/v1/community/threads/*
+      - /api/v1/community/users/*/network

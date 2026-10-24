@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: theunoia
+
+labels:
+  - pairs:
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - infra/postgres.yaml
+  - infra/messaging-cache-storage.yaml
+  - services/api-gateway.yaml
+  - services/auth-service.yaml
+  - services/user-service.yaml
+  - services/project-service.yaml
+  - services/credit-service.yaml
+  - services/payment-service.yaml
+  - services/messaging-service.yaml
+  - services/notification-service.yaml
+  - services/community-service.yaml
+  - services/content-service.yaml
+  - services/analytics-service.yaml
+  - services/file-service.yaml
+  - ingress.yaml
+  - network-policies.yaml
+
+configMapGenerator:
+  - name: db-init-script
+    files:
+      - infra/init-databases.sh
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# CI replaces these tags with the build's immutable tag (kustomize edit set image ...)
+images:
+  - { name: theunoia/api-gateway, newTag: latest }
+  - { name: theunoia/auth-service, newTag: latest }
+  - { name: theunoia/user-service, newTag: latest }
+  - { name: theunoia/project-service, newTag: latest }
+  - { name: theunoia/credit-service, newTag: latest }
+  - { name: theunoia/payment-service, newTag: latest }
+  - { name: theunoia/messaging-service, newTag: latest }
+  - { name: theunoia/notification-service, newTag: latest }
+  - { name: theunoia/community-service, newTag: latest }
+  - { name: theunoia/content-service, newTag: latest }
+  - { name: theunoia/analytics-service, newTag: latest }
+  - { name: theunoia/file-service, newTag: latest }

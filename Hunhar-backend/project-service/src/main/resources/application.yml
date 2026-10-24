@@ -1,0 +1,38 @@
+server:
+  port: ${PORT:8083}
+  shutdown: graceful
+
+spring:
+  application:
+    name: project-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:project_db}
+    username: ${DB_USER:project_user}
+    password: ${DB_PASSWORD:project_pass}
+
+theunoia:
+  services:
+    credit: ${CREDIT_SERVICE_URL:http://localhost:8084}
+  security:
+    public-paths:            # auth optional (method-level @PreAuthorize still applies)
+      - /api/v1/categories
+      - /api/v1/reviews/**
+      - /api/v1/projects
+      - /api/v1/projects/*
+  projects:
+    max-credit-cost: 8
+    max-team-size: 10
+    credit-tiers:          # credits consumed per bid, by project budget (INR)
+      - up-to: 10000
+        credits: 2
+      - up-to: 50000
+        credits: 4
+      - up-to: 200000
+        credits: 6
+  events:
+    subscriptions:
+      - payment.captured
+      - escrow.released
+      - escrow.refunded

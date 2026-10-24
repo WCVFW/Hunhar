@@ -1,0 +1,36 @@
+server:
+  port: ${PORT:8090}
+  shutdown: graceful
+
+spring:
+  application:
+    name: analytics-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:analytics_db}
+    username: ${DB_USER:analytics_user}
+    password: ${DB_PASSWORD:analytics_pass}
+
+theunoia:
+  services:
+    auth: ${AUTH_SERVICE_URL:http://localhost:8081}
+    user: ${USER_SERVICE_URL:http://localhost:8082}
+    project: ${PROJECT_SERVICE_URL:http://localhost:8083}
+    payment: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+  events:
+    subscriptions:
+      - user.registered
+      - user.approved
+      - user.logged_in
+      - project.*
+      - bid.submitted
+      - payment.captured
+      - escrow.*
+      - credits.purchased
+      - withdrawal.completed
+      - dispute.raised
+      - review.created
+      - lead.captured
+      - message.sent
+      - community.thread_created

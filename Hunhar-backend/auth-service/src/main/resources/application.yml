@@ -1,0 +1,45 @@
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+
+spring:
+  application:
+    name: auth-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:auth_db}
+    username: ${DB_USER:auth_user}
+    password: ${DB_PASSWORD:auth_pass}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+theunoia:
+  security:
+    public-paths:
+      - /api/v1/auth/register/**
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
+      - /api/v1/auth/logout
+      - /api/v1/auth/verify-email
+      - /api/v1/auth/forgot-password
+      - /api/v1/auth/reset-password
+  auth:
+    jwt-secret: ${JWT_SECRET:ZGV2LW9ubHktand0LXNlY3JldC1jaGFuZ2UtbWUtaW4tcHJvZHVjdGlvbi0zMmJ5dGVzIQ==}
+    access-token-ttl: ${ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${REFRESH_TOKEN_TTL:30d}
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    kyc-required-roles: ${KYC_REQUIRED_ROLES:FREELANCER,CLIENT}
+    admin:
+      email: ${ADMIN_EMAIL:admin@theunoia.com}
+      password: ${ADMIN_PASSWORD:Admin@12345}
+      mobile: ${ADMIN_MOBILE:9999999999}
+    kyc:
+      provider: ${KYC_PROVIDER:mock}
+      cashfree-base-url: ${CASHFREE_VERIFICATION_BASE_URL:https://sandbox.cashfree.com/verification}
+      cashfree-client-id: ${CASHFREE_CLIENT_ID:}
+      cashfree-client-secret: ${CASHFREE_CLIENT_SECRET:}
+      redirect-url: ${KYC_REDIRECT_URL:http://localhost:3000/kyc/callback}

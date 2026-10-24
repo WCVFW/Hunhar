@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-white text-navy min-h-screen;
+    background-image: radial-gradient(#E8DFC9 1.1px, transparent 1.1px);
+    background-size: 32px 32px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+/* Custom button classes from client project */
+.btn {
+  @apply px-8 py-4 font-bold uppercase tracking-widest text-sm transition-all active:scale-[0.98] inline-flex items-center justify-center rounded-lg;
+}
+
+.btn-primary {
+  @apply bg-terracotta hover:bg-[#AA572D] text-white;
+}
+
+/* Custom modern scrollbar from client project */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #C06B3E;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #AA572D;
+}
+
+/* Custom sleek modern modal scrollbar */
+.custom-modal-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 16px 0;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-thumb {
+  background: #D4D4D8;
+  border-radius: 9999px;
+}
+.custom-modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #A1A1AA;
+}
+

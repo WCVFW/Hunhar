@@ -1,0 +1,71 @@
+server:
+  port: ${PORT:8087}
+  shutdown: graceful
+
+spring:
+  application:
+    name: notification-service
+  config:
+    import: optional:classpath:service-defaults.yml
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:notification_db}
+    username: ${DB_USER:notification_user}
+    password: ${DB_PASSWORD:notification_pass}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+
+theunoia:
+  services:
+    user: ${USER_SERVICE_URL:http://localhost:8082}
+  security:
+    public-paths:
+      - /api/v1/calendar/google/callback
+  notifications:
+    frontend-url: ${FRONTEND_URL:http://localhost:3000}
+    api-base-url: ${PUBLIC_API_URL:http://localhost:8080}
+    support-email: ${SUPPORT_EMAIL:support@theunoia.com}
+    encryption-key: ${NOTIFICATION_ENCRYPTION_KEY:ZGV2LW9ubHktMzItYnl0ZS1hZXMta2V5LWNoYW5nZSE=}
+    email:
+      enabled: ${EMAIL_ENABLED:true}
+      from: ${EMAIL_FROM:THEUNOiA <no-reply@theunoia.com>}
+    whatsapp:
+      enabled: ${WHATSAPP_ENABLED:false}
+      phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+      access-token: ${WHATSAPP_ACCESS_TOKEN:}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/api/v1/calendar/google/callback}
+  events:
+    subscriptions:
+      - user.*
+      - auth.*
+      - project.published
+      - project.awarded
+      - bid.submitted
+      - bid.shortlisted
+      - milestone.*
+      - team.invited
+      - dispute.*
+      - review.created
+      - payment.captured
+      - escrow.*
+      - withdrawal.*
+      - invoice.generated
+      - credits.purchased
+      - credits.allocated
+      - message.sent
+      - contact.received
+
+management:
+  health:
+    mail:
+      enabled: false
