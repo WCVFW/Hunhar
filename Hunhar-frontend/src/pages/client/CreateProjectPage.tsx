@@ -6,7 +6,9 @@ import {
   Check,
   X,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react'
+import { projectsApi } from '../../services/api'
 
 const categories = [
   'Branding',
@@ -33,6 +35,7 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [attachments, setAttachments] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const toggleCategory = (cat: string) => {
     setSelectedCategories((prev) =>
@@ -51,13 +54,44 @@ export default function CreateProjectPage(): React.JSX.Element {
     setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const parseTimelineDays = (t: string): number => {
+    if (t.includes('1 week')) return 7
+    if (t.includes('1 to 2')) return 14
+    if (t.includes('2 to 4')) return 28
+    if (t.includes('1 to 3')) return 60
+    if (t.includes('3+')) return 90
+    return 14
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage(null)
     setIsSubmitting(true)
-    setTimeout(() => {
-      setIsSubmitting(false)
+
+    try {
+      const numericBudget = parseFloat(budget.replace(/[^0-9.]/g, '')) || 1000
+      const days = parseTimelineDays(timeline)
+      const parsedSkills = skillsRequired
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+
+      await projectsApi.createProject({
+        title: projectTitle,
+        description: projectDescription,
+        category: selectedCategories[0] || 'General',
+        budget: numericBudget,
+        timelineDays: days,
+        skills: parsedSkills,
+      })
+
       setIsSuccess(true)
-    }, 800)
+    } catch (err: any) {
+      console.error('Failed to create project:', err)
+      setErrorMessage(err.message || 'Failed to publish project to hunhar.in backend. Please ensure you are logged in as a Client.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -121,6 +155,13 @@ export default function CreateProjectPage(): React.JSX.Element {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col space-y-6">
+            {errorMessage && (
+              <div className="flex items-center gap-2.5 rounded-[12px] border border-red-200 bg-red-50 p-3.5 text-[13px] font-medium text-red-700">
+                <AlertCircle size={18} className="shrink-0 text-red-600" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             {/* Field 1: Project Title */}
             <div>
               <label className="block font-manrope text-[13px] font-bold text-[#08182B]">

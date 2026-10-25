@@ -12,6 +12,7 @@ import {
   Activity,
   Layers,
 } from 'lucide-react'
+import { logout } from '../../services/api'
 
 export default function AdminTopNavbar(): React.JSX.Element {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -149,7 +150,7 @@ export default function AdminTopNavbar(): React.JSX.Element {
             </div>
             <div className="hidden text-left xl:block">
               <div className="text-[12px] font-bold text-[#08182B] leading-tight">Super Admin</div>
-              <div className="text-[10px] text-[#8E8376]">admin@hunhar.com</div>
+              <div className="text-[10px] text-[#8E8376]">admin@hunhar.in</div>
             </div>
             <ChevronDown size={14} className="text-[#8E8376]" />
           </button>
@@ -180,13 +181,14 @@ export default function AdminTopNavbar(): React.JSX.Element {
 
               <div className="my-1 border-t border-[#F0EAE1]" />
 
-              <a
-                href="/"
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={15} />
                 Sign Out
-              </a>
+              </button>
             </div>
           )}
         </div>

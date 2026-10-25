@@ -16,6 +16,7 @@ import {
 import hunharLogo from '../../assets/hunha Logo.png'
 import sidebarCollapseLogo from '../../assets/Sidebar_collaps.png'
 import promoMascotCard from '../../assets/promo_mascot_card.png'
+import { logout } from '../../services/api'
 
 interface MenuItem {
   name: string
@@ -73,7 +74,7 @@ export default function Sidebar({
   const [mobileOpen, setMobileOpen] = useState<boolean>(false)
 
   const handleLogout = () => {
-    window.location.href = '/'
+    logout()
   }
 
   const renderNavContent = (collapsed: boolean = false) => (
@@ -153,12 +154,12 @@ export default function Sidebar({
                 className="h-14 w-14 -mr-1 object-contain drop-shadow-md"
               />
             </div>
-            <button
-              type="button"
-              className="mt-2 w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] shadow-sm transition-all hover:bg-white active:scale-98"
+            <NavLink
+              to="/freelancer/credits"
+              className="mt-2 block w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] no-underline shadow-sm transition-all hover:bg-white"
             >
-              Upgrade Plan
-            </button>
+              Buy Credits
+            </NavLink>
           </div>
         </div>
       )}

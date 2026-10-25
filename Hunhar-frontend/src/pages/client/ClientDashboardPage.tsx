@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar as CalendarIcon,
@@ -9,6 +9,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import cardDeskMascot from '../../assets/Job_details_image.png'
+import { projectsApi } from '../../services/api'
 
 interface BidItem {
   id: string
@@ -17,23 +18,23 @@ interface BidItem {
   status: 'Under Review' | 'Shortlisted' | 'Awaiting'
 }
 
-const recentBids: BidItem[] = [
+const defaultRecentBids: BidItem[] = [
   {
     id: '1',
     title: 'Mobile Banking App',
-    budget: '$3,200',
+    budget: '₹32,000',
     status: 'Under Review',
   },
   {
     id: '2',
     title: 'Portfolio Website',
-    budget: '$650',
+    budget: '₹6,500',
     status: 'Shortlisted',
   },
   {
     id: '3',
     title: 'SaaS Landing Page',
-    budget: '$1,100',
+    budget: '₹11,000',
     status: 'Awaiting',
   },
 ]
@@ -45,7 +46,7 @@ interface DeadlineItem {
   daysLeft: string
 }
 
-const upcomingDeadlines: DeadlineItem[] = [
+const defaultUpcomingDeadlines: DeadlineItem[] = [
   {
     id: '1',
     title: 'E-Commerce App',
@@ -67,6 +68,42 @@ const upcomingDeadlines: DeadlineItem[] = [
 ]
 
 export default function ClientDashboardPage(): React.JSX.Element {
+  const [clientName, setClientName] = useState<string>('Client Partner')
+  const [activeProject, setActiveProject] = useState<any>(null)
+  const [totalProjects, setTotalProjects] = useState<number>(0)
+  const [recentBids, setRecentBids] = useState<BidItem[]>(defaultRecentBids)
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>(defaultUpcomingDeadlines)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('hunhar_user')
+      if (stored) {
+        const u = JSON.parse(stored)
+        if (u.fullName || u.companyName) setClientName(u.fullName || u.companyName)
+      }
+    } catch (_) {}
+
+    async function loadClientProjects() {
+      try {
+        const list = await projectsApi.getClientProjects()
+        if (Array.isArray(list) && list.length > 0) {
+          setTotalProjects(list.length)
+          setActiveProject(list[0])
+        }
+      } catch (err) {
+        console.warn('Could not fetch client projects from backend:', err)
+      }
+    }
+    loadClientProjects()
+  }, [])
+
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
   return (
     <div className="w-full font-manrope">
       {/* Outer White Card Container matching Hunhar Design System */}
@@ -75,17 +112,17 @@ export default function ClientDashboardPage(): React.JSX.Element {
         <div className="flex flex-col justify-between gap-4 border-b border-[#F5F2ED] pb-6 sm:flex-row sm:items-center">
           <div>
             <h1 className="font-manrope text-[24px] sm:text-[28px] font-extrabold text-[#C06B3E]">
-              Good afternoon, Alex.
+              Good afternoon, {clientName}
             </h1>
             <p className="mt-1 font-manrope text-[13px] text-[#7A7065]">
-              Here's what's happening with your projects today.
+              Here's what's happening with your projects on hunhar.in today.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-1.5 font-manrope text-[13px] font-medium text-[#7A7065]">
               <CalendarIcon size={15} className="text-[#96897A]" />
-              <span>Wednesday, September 10, 2026</span>
+              <span>{todayFormatted}</span>
             </div>
 
             <Link
@@ -126,20 +163,20 @@ export default function ClientDashboardPage(): React.JSX.Element {
               {/* Project Details */}
               <div className="mt-5">
                 <h3 className="font-manrope text-[18px] font-extrabold text-[#08182B]">
-                  Brand Identity
+                  {activeProject ? activeProject.title : 'Brand Identity'}
                 </h3>
                 <p className="mt-0.5 font-manrope text-[13px] text-[#7A7065]">
-                  Assigned to <span className="font-semibold text-[#08182B]">Arun Kumar</span>
+                  {activeProject ? `Budget: ₹${(activeProject.budget ?? 0).toLocaleString('en-IN')}` : 'Assigned to Arun Kumar'}
                 </p>
 
                 {/* Deadline & Phase */}
                 <div className="mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[13px] font-medium text-[#C06B3E]">
                     <Clock size={15} />
-                    <span>Deadline</span>
+                    <span>Timeline</span>
                   </div>
                   <span className="font-manrope text-[13px] font-bold text-[#08182B]">
-                    Aug 28, 2026
+                    {activeProject ? `${activeProject.timelineDays ?? 14} Days` : 'Aug 28, 2026'}
                   </span>
                 </div>
 

@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # MySQL Database (Runs locally with databases for all 4 microservices)
+  # ----------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.3
+    container_name: theunoia-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: theunoia_identity
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ----------------------------------------------------------------------------
+  # Redis Cache & Sessions
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: theunoia-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # ----------------------------------------------------------------------------
+  # 1. API Gateway (Entrypoint, Port 8080)
+  # ----------------------------------------------------------------------------
+  api-gateway:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: api-gateway
+    container_name: theunoia-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      IDENTITY_SERVICE_URL: http://identity-service:8081
+      PROJECT_SERVICE_URL: http://project-service:8082
+      BILLING_SERVICE_URL: http://billing-service:8083
+      ENGAGEMENT_SERVICE_URL: http://engagement-service:8084
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      - identity-service
+      - project-service
+      - billing-service
+      - engagement-service
+
+  # ----------------------------------------------------------------------------
+  # 2. Identity Service (Auth, KYC, Profiles, Leaderboard, Port 8081)
+  # ----------------------------------------------------------------------------
+  identity-service:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: identity-service
+    container_name: theunoia-identity-service
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: 8081
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: theunoia_identity
+      DB_USER: root
+      DB_PASSWORD: root
+      JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # 3. Project Service (Discovery, Bids, Workspace, Collaboration, Port 8082)
+  # ----------------------------------------------------------------------------
+  project-service:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: project-service
+    container_name: theunoia-project-service
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: theunoia_project
+      DB_USER: root
+      DB_PASSWORD: root
+      BILLING_SERVICE_URL: http://billing-service:8083
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # 4. Billing Service (Credits, Wallet, Payments, Invoices, Port 8083)
+  # ----------------------------------------------------------------------------
+  billing-service:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: billing-service
+    container_name: theunoia-billing-service
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: 8083
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: theunoia_billing
+      DB_USER: root
+      DB_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # 5. Engagement Service (Chat, WhatsApp, Forum, CMS, Analytics, Port 8084)
+  # ----------------------------------------------------------------------------
+  engagement-service:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: engagement-service
+    container_name: theunoia-engagement-service
+    ports:
+      - "8084:8084"
+    environment:
+      PORT: 8084
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: theunoia_engagement
+      DB_USER: root
+      DB_PASSWORD: root
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

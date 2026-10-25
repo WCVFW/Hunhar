@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Trophy,
   Medal,
@@ -7,11 +7,11 @@ import {
   Star,
   TrendingUp,
   Search,
-  Filter,
-  CheckCircle2,
   Sparkles,
 } from 'lucide-react'
 import leadershipLuna from '../../assets/Leadership_luna.png'
+import { fileUrl, leaderboardApi, tokenStorage, type LeaderboardEntry } from '../../services/api'
+import { formatINR, initials } from '../../services/format'
 
 interface LeaderboardUser {
   rank: number
@@ -20,132 +20,85 @@ interface LeaderboardUser {
   title: string
   category: string
   avatarText: string
+  avatarUrl?: string
   score: number
   bidsWon: number
   rating: number
   earnings: string
   badge: 'Gold' | 'Silver' | 'Bronze' | 'Top Rated' | 'Rising Star'
+  skills: string[]
   isCurrentUser?: boolean
 }
 
-const mockLeaderboard: LeaderboardUser[] = [
-  {
-    rank: 1,
-    id: 'u-1',
-    name: 'Rajshankar.M',
-    title: 'Senior UI/UX & Brand Strategist',
-    category: 'Design & Creative',
-    avatarText: 'RS',
-    score: 9850,
-    bidsWon: 42,
-    rating: 4.98,
-    earnings: '₹ 84,500',
-    badge: 'Gold',
-    isCurrentUser: true,
-  },
-  {
-    rank: 2,
-    id: 'u-2',
-    name: 'Vikash Mehta',
-    title: 'Full Stack React & Node Developer',
-    category: 'Web Development',
-    avatarText: 'VM',
-    score: 9420,
-    bidsWon: 38,
-    rating: 4.95,
-    earnings: '₹ 76,200',
-    badge: 'Silver',
-  },
-  {
-    rank: 3,
-    id: 'u-3',
-    name: 'Ananya Roy',
-    title: 'Motion Designer & 3D Artist',
-    category: 'Video & Animation',
-    avatarText: 'AR',
-    score: 8990,
-    bidsWon: 35,
-    rating: 4.92,
-    earnings: '₹ 68,900',
-    badge: 'Bronze',
-  },
-  {
-    rank: 4,
-    id: 'u-4',
-    name: 'Arun Kumar',
-    title: 'UI/UX Designer | Frontend Developer',
-    category: 'Design & Creative',
-    avatarText: 'A',
-    score: 8450,
-    bidsWon: 29,
-    rating: 4.90,
-    earnings: '₹ 18,240',
-    badge: 'Top Rated',
-  },
-  {
-    rank: 5,
-    id: 'u-5',
-    name: 'Rohan Verma',
-    title: 'Illustrator & Character Designer',
-    category: 'Design & Creative',
-    avatarText: 'RV',
-    score: 8120,
-    bidsWon: 26,
-    rating: 4.88,
-    earnings: '₹ 45,600',
-    badge: 'Top Rated',
-  },
-  {
-    rank: 6,
-    id: 'u-6',
-    name: 'Kavita Das',
-    title: 'Creative Copywriter & Content Strategist',
-    category: 'Writing & Translation',
-    avatarText: 'KD',
-    score: 7850,
-    bidsWon: 24,
-    rating: 4.85,
-    earnings: '₹ 38,400',
-    badge: 'Rising Star',
-  },
-  {
-    rank: 7,
-    id: 'u-7',
-    name: 'Aditya Sen',
-    title: 'Brand Identity & Print Specialist',
-    category: 'Design & Creative',
-    avatarText: 'AS',
-    score: 7540,
-    bidsWon: 22,
-    rating: 4.82,
-    earnings: '₹ 34,000',
-    badge: 'Rising Star',
-  },
-]
-
-type TimeRange = 'week' | 'month' | 'all'
 type CategoryFilter = 'all' | 'design' | 'web' | 'video'
 
+const CATEGORY_KEYWORDS: Record<Exclude<CategoryFilter, 'all'>, string[]> = {
+  design: ['design', 'ui', 'ux', 'figma', 'brand', 'illustrat', 'logo', 'graphic', 'photo'],
+  web: ['web', 'react', 'develop', 'javascript', 'typescript', 'node', 'java', 'python', 'frontend', 'backend', 'full stack', 'it'],
+  video: ['video', 'motion', 'animation', 'after effects', 'edit', 'premiere'],
+}
+
+const categoryOf = (skills: string[]): string => {
+  const s = skills.join(' ').toLowerCase()
+  if (CATEGORY_KEYWORDS.design.some((k) => s.includes(k))) return 'Design & Creative'
+  if (CATEGORY_KEYWORDS.web.some((k) => s.includes(k))) return 'Web Development'
+  if (CATEGORY_KEYWORDS.video.some((k) => s.includes(k))) return 'Video & Motion'
+  return skills[0] || '—'
+}
+
+const toUser = (entry: LeaderboardEntry, myId?: string): LeaderboardUser => {
+  const rank = entry.rank
+  return {
+    rank,
+    id: entry.userId,
+    name: entry.fullName,
+    title: entry.professionalTitle || (entry.skills.length ? entry.skills.slice(0, 2).join(' · ') : 'Freelancer'),
+    category: categoryOf(entry.skills),
+    avatarText: initials(entry.fullName),
+    avatarUrl: entry.avatarUrl,
+    score: Math.round(entry.leaderboardScore),
+    bidsWon: entry.completedProjects,
+    rating: entry.rating,
+    earnings: formatINR(entry.revenueGenerated),
+    badge: rank === 1 ? 'Gold' : rank === 2 ? 'Silver' : rank === 3 ? 'Bronze' : entry.completedProjects >= 5 ? 'Top Rated' : 'Rising Star',
+    skills: entry.skills,
+    isCurrentUser: entry.userId === myId,
+  }
+}
+
 export default function LeadershipBoardPage(): React.JSX.Element {
-  const [timeRange, setTimeRange] = useState<TimeRange>('month')
+  const myId: string | undefined = tokenStorage.getUser()?.id
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [users, setUsers] = useState<LeaderboardUser[]>([])
+  const [me, setMe] = useState<LeaderboardUser | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState('')
 
-  const top3 = mockLeaderboard.slice(0, 3)
+  useEffect(() => {
+    Promise.allSettled([leaderboardApi.getLeaderboard(100), leaderboardApi.getMyStanding()]).then(([list, mine]) => {
+      if (list.status === 'fulfilled') setUsers(list.value.map((e) => toUser(e, myId)))
+      else setError(list.reason?.message || 'Could not load the leaderboard')
+      if (mine.status === 'fulfilled') setMe(toUser(mine.value, myId))
+      setLoading(false)
+    })
+  }, [myId])
 
-  const filteredList = mockLeaderboard.filter((u) => {
+  const rank1 = users.find((u) => u.rank === 1) || null
+  const rank2 = users.find((u) => u.rank === 2) || null
+  const rank3 = users.find((u) => u.rank === 3) || null
+  const currentUserStanding = me
+
+  const filteredList = users.filter((u) => {
+    const q = searchQuery.trim().toLowerCase()
     const matchesSearch =
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.title.toLowerCase().includes(searchQuery.toLowerCase())
+      !q || u.name.toLowerCase().includes(q) || u.title.toLowerCase().includes(q) || u.skills.some((s) => s.toLowerCase().includes(q))
     if (categoryFilter === 'all') return matchesSearch
-    if (categoryFilter === 'design')
-      return matchesSearch && u.category.includes('Design')
-    if (categoryFilter === 'web')
-      return matchesSearch && u.category.includes('Web')
-    if (categoryFilter === 'video')
-      return matchesSearch && u.category.includes('Video')
-    return matchesSearch
+    const hay = u.skills.join(' ').toLowerCase()
+    return matchesSearch && CATEGORY_KEYWORDS[categoryFilter].some((k) => hay.includes(k))
   })
+
+  const ratingText = (u: LeaderboardUser | null) => (u && u.bidsWon > 0 && u.rating > 0 ? u.rating.toFixed(1) : '—')
 
   return (
     <div className="w-full font-manrope">
@@ -161,48 +114,20 @@ export default function LeadershipBoardPage(): React.JSX.Element {
               </h1>
             </div>
             <p className="mt-1 font-manrope text-[13px] text-[#8C9BA8]">
-              Recognizing the top performing freelancers and high-achieving creators on Hunhar.
+              Recognizing the top performing freelancers and high-achieving creators on Hunhar.in.
             </p>
           </div>
 
-          {/* Time Filter Pills */}
-          <div className="flex items-center gap-1.5 rounded-full border border-[#EBE4DC] bg-[#FAF8F5] p-1">
-            <button
-              type="button"
-              onClick={() => setTimeRange('week')}
-              className={`rounded-full px-3.5 py-1 text-[12px] font-bold transition-all ${timeRange === 'week'
-                ? 'bg-[#C06B3E] text-white shadow-xs'
-                : 'text-[#7A7065] hover:text-[#08182B]'
-                }`}
-            >
-              This Week
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeRange('month')}
-              className={`rounded-full px-3.5 py-1 text-[12px] font-bold transition-all ${timeRange === 'month'
-                ? 'bg-[#C06B3E] text-white shadow-xs'
-                : 'text-[#7A7065] hover:text-[#08182B]'
-                }`}
-            >
-              This Month
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeRange('all')}
-              className={`rounded-full px-3.5 py-1 text-[12px] font-bold transition-all ${timeRange === 'all'
-                ? 'bg-[#C06B3E] text-white shadow-xs'
-                : 'text-[#7A7065] hover:text-[#08182B]'
-                }`}
-            >
-              All Time
-            </button>
-          </div>
+          <span className="rounded-full border border-[#EBE4DC] bg-[#FAF8F5] px-3.5 py-1.5 text-[12px] font-bold text-[#7A7065]">
+            {users.length} ranked freelancer{users.length === 1 ? '' : 's'} · all time
+          </span>
         </div>
 
         {/* Hero Section: Top 3 Podium + Current User Standing Banner */}
+        {error && <div className="mt-6 rounded-[12px] border border-red-200 bg-red-50 p-3 text-[13px] font-semibold text-red-700">{error}</div>}
+
         <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Left: Your Current Standing Card (lg:col-span-4) */}
+          {/* Left: Your Current Standing Card (lg:col-span-5) */}
           <div className="relative flex flex-col justify-between overflow-hidden rounded-[20px] border border-[#DECFBE] bg-[#EFE5DB] p-6 lg:col-span-5 shadow-xs">
             {/* Background Luna Accent */}
             <div className="pointer-events-none absolute -bottom-6 right-2 h-44 w-44 rounded-full bg-[#D7A97E]/30" />
@@ -220,15 +145,21 @@ export default function LeadershipBoardPage(): React.JSX.Element {
 
               <div className="mt-4 flex items-baseline gap-2">
                 <span className="font-manrope text-[40px] font-extrabold leading-none text-[#08182B]">
-                  #1
+                  {currentUserStanding ? `#${currentUserStanding.rank}` : '—'}
                 </span>
                 <span className="font-manrope text-[14px] font-semibold text-[#16A34A]">
-                  Top 1% Creator
+                  {currentUserStanding ? `of ${Math.max(users.length, currentUserStanding.rank)}` : ''}
                 </span>
               </div>
 
               <p className="mt-2 max-w-[240px] text-[13px] leading-relaxed text-[#6E6458]">
-                You are currently leading the platform as the <strong className="text-[#C06B3E]">#1 Top Creator</strong>!
+                {currentUserStanding ? (
+                  <span>
+                    Complete projects and earn great reviews to climb, <strong className="text-[#C06B3E]">{currentUserStanding.name.split(' ')[0]}</strong>.
+                  </span>
+                ) : (
+                  <span>{loading ? 'Loading your standing…' : 'Your rank appears once your freelancer profile is set up.'}</span>
+                )}
               </p>
             </div>
 
@@ -236,16 +167,20 @@ export default function LeadershipBoardPage(): React.JSX.Element {
             <div className="relative z-10 mt-6 grid grid-cols-3 gap-2 rounded-[14px] border border-[#D9C8B5] bg-white/70 p-3 backdrop-blur-xs">
               <div className="flex flex-col text-center">
                 <span className="text-[10px] font-bold text-[#8C9BA8] uppercase">SCORE</span>
-                <span className="mt-0.5 text-[15px] font-bold text-[#08182B]">9,850</span>
+                <span className="mt-0.5 text-[15px] font-bold text-[#08182B]">
+                  {currentUserStanding ? currentUserStanding.score.toLocaleString('en-IN') : '—'}
+                </span>
               </div>
               <div className="flex flex-col border-x border-[#EFE5DB] text-center">
-                <span className="text-[10px] font-bold text-[#8C9BA8] uppercase">WON BIDS</span>
-                <span className="mt-0.5 text-[15px] font-bold text-[#C06B3E]">42</span>
+                <span className="text-[10px] font-bold text-[#8C9BA8] uppercase">PROJECTS</span>
+                <span className="mt-0.5 text-[15px] font-bold text-[#C06B3E]">
+                  {currentUserStanding?.bidsWon ?? '—'}
+                </span>
               </div>
               <div className="flex flex-col text-center">
                 <span className="text-[10px] font-bold text-[#8C9BA8] uppercase">RATING</span>
                 <span className="mt-0.5 flex items-center justify-center gap-0.5 text-[15px] font-bold text-[#08182B]">
-                  4.98 <Star size={11} className="fill-[#F59E0B] text-[#F59E0B]" />
+                  {ratingText(currentUserStanding)} <Star size={11} className="fill-[#F59E0B] text-[#F59E0B]" />
                 </span>
               </div>
             </div>
@@ -258,28 +193,28 @@ export default function LeadershipBoardPage(): React.JSX.Element {
               <div className="flex flex-col items-center">
                 <div className="relative">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#E2E8F0] font-manrope text-[18px] font-bold text-[#475569] ring-4 ring-[#CBD5E1]">
-                    {top3[1].avatarText}
+                    {rank2?.avatarUrl ? <img src={fileUrl(rank2.avatarUrl)} alt="" className="h-full w-full rounded-full object-cover" /> : rank2 ? rank2.avatarText : '2'}
                   </div>
                   <div className="absolute -bottom-2 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#94A3B8] text-[11px] font-bold text-white shadow-xs">
                     2
                   </div>
                 </div>
 
-                <h3 className="mt-3 font-manrope text-[14.5px] font-bold text-[#08182B]">
-                  {top3[1].name}
+                <h3 className="mt-3 font-manrope text-[14.5px] font-bold text-[#08182B] truncate max-w-[140px]">
+                  {rank2 ? rank2.name : 'Spot Open'}
                 </h3>
                 <p className="mt-0.5 line-clamp-1 text-[11.5px] text-[#8C9BA8]">
-                  {top3[1].title}
+                  {rank2 ? rank2.title : 'Compete to rank #2'}
                 </p>
 
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#F1F5F9] px-2.5 py-0.5 text-[11px] font-semibold text-[#475569]">
                   <Medal size={12} className="text-[#94A3B8]" />
-                  <span>{top3[1].score.toLocaleString()} pts</span>
+                  <span>{rank2 ? `${rank2.score.toLocaleString()} pts` : '—'}</span>
                 </div>
               </div>
 
               <div className="mt-4 w-full border-t border-[#EFECE6] pt-3 text-[12px] font-semibold text-[#16A34A]">
-                {top3[1].bidsWon} Projects Done
+                {rank2 ? `${rank2.bidsWon} Projects Done` : 'Open Position'}
               </div>
             </div>
 
@@ -296,28 +231,28 @@ export default function LeadershipBoardPage(): React.JSX.Element {
               <div className="mt-2 flex flex-col items-center">
                 <div className="relative">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#08182B] font-manrope text-[20px] font-bold text-[#FFD700] ring-4 ring-[#E8B896]">
-                    {top3[0].avatarText}
+                    {rank1?.avatarUrl ? <img src={fileUrl(rank1.avatarUrl)} alt="" className="h-full w-full rounded-full object-cover" /> : rank1 ? rank1.avatarText : '1'}
                   </div>
                   <div className="absolute -bottom-2 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#F59E0B] text-[12px] font-bold text-white shadow-xs">
                     🥇
                   </div>
                 </div>
 
-                <h3 className="mt-3 font-manrope text-[15px] font-bold text-[#08182B]">
-                  {top3[0].name}
+                <h3 className="mt-3 font-manrope text-[15px] font-bold text-[#08182B] truncate max-w-[150px]">
+                  {rank1 ? rank1.name : 'Spot Open'}
                 </h3>
                 <p className="mt-0.5 line-clamp-1 text-[11.5px] text-[#8C9BA8]">
-                  {top3[0].title}
+                  {rank1 ? rank1.title : 'Be the first to rank #1'}
                 </p>
 
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#FEF5E7] px-3 py-0.5 text-[11.5px] font-bold text-[#D97706]">
                   <Trophy size={13} className="text-[#F59E0B]" />
-                  <span>{top3[0].score.toLocaleString()} pts</span>
+                  <span>{rank1 ? `${rank1.score.toLocaleString()} pts` : '—'}</span>
                 </div>
               </div>
 
               <div className="mt-4 w-full border-t border-[#F2EAE1] pt-3 text-[12.5px] font-bold text-[#C06B3E]">
-                {top3[0].bidsWon} Projects Done
+                {rank1 ? `${rank1.bidsWon} Projects Done` : 'Leaderboard Peak'}
               </div>
             </div>
 
@@ -326,28 +261,28 @@ export default function LeadershipBoardPage(): React.JSX.Element {
               <div className="flex flex-col items-center">
                 <div className="relative">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F6ECE3] font-manrope text-[18px] font-bold text-[#A87146] ring-4 ring-[#E8D4C3]">
-                    {top3[2].avatarText}
+                    {rank3?.avatarUrl ? <img src={fileUrl(rank3.avatarUrl)} alt="" className="h-full w-full rounded-full object-cover" /> : rank3 ? rank3.avatarText : '3'}
                   </div>
                   <div className="absolute -bottom-2 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#B47444] text-[11px] font-bold text-white shadow-xs">
                     3
                   </div>
                 </div>
 
-                <h3 className="mt-3 font-manrope text-[14.5px] font-bold text-[#08182B]">
-                  {top3[2].name}
+                <h3 className="mt-3 font-manrope text-[14.5px] font-bold text-[#08182B] truncate max-w-[140px]">
+                  {rank3 ? rank3.name : 'Spot Open'}
                 </h3>
                 <p className="mt-0.5 line-clamp-1 text-[11.5px] text-[#8C9BA8]">
-                  {top3[2].title}
+                  {rank3 ? rank3.title : 'Compete to rank #3'}
                 </p>
 
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#FAF0E7] px-2.5 py-0.5 text-[11px] font-semibold text-[#A87146]">
                   <Award size={12} className="text-[#A87146]" />
-                  <span>{top3[2].score.toLocaleString()} pts</span>
+                  <span>{rank3 ? `${rank3.score.toLocaleString()} pts` : '—'}</span>
                 </div>
               </div>
 
               <div className="mt-4 w-full border-t border-[#EFECE6] pt-3 text-[12px] font-semibold text-[#16A34A]">
-                {top3[2].bidsWon} Projects Done
+                {rank3 ? `${rank3.bidsWon} Projects Done` : 'Open Position'}
               </div>
             </div>
           </div>
@@ -360,40 +295,44 @@ export default function LeadershipBoardPage(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setCategoryFilter('all')}
-              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all ${categoryFilter === 'all'
-                ? 'bg-[#0A1629] text-white shadow-xs'
-                : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
-                }`}
+              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all cursor-pointer ${
+                categoryFilter === 'all'
+                  ? 'bg-[#0A1629] text-white shadow-xs'
+                  : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
+              }`}
             >
               All Creators
             </button>
             <button
               type="button"
               onClick={() => setCategoryFilter('design')}
-              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all ${categoryFilter === 'design'
-                ? 'bg-[#0A1629] text-white shadow-xs'
-                : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
-                }`}
+              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all cursor-pointer ${
+                categoryFilter === 'design'
+                  ? 'bg-[#0A1629] text-white shadow-xs'
+                  : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
+              }`}
             >
               Design & Creative
             </button>
             <button
               type="button"
               onClick={() => setCategoryFilter('web')}
-              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all ${categoryFilter === 'web'
-                ? 'bg-[#0A1629] text-white shadow-xs'
-                : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
-                }`}
+              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all cursor-pointer ${
+                categoryFilter === 'web'
+                  ? 'bg-[#0A1629] text-white shadow-xs'
+                  : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
+              }`}
             >
               Web Development
             </button>
             <button
               type="button"
               onClick={() => setCategoryFilter('video')}
-              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all ${categoryFilter === 'video'
-                ? 'bg-[#0A1629] text-white shadow-xs'
-                : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
-                }`}
+              className={`rounded-[10px] px-3.5 py-1.5 text-[12px] font-bold transition-all cursor-pointer ${
+                categoryFilter === 'video'
+                  ? 'bg-[#0A1629] text-white shadow-xs'
+                  : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:bg-[#F8F6F2]'
+              }`}
             >
               Video & Motion
             </button>
@@ -426,7 +365,8 @@ export default function LeadershipBoardPage(): React.JSX.Element {
                   <th className="px-4 py-3.5">Freelancer</th>
                   <th className="px-4 py-3.5">Category</th>
                   <th className="px-4 py-3.5 text-center">Score</th>
-                  <th className="px-4 py-3.5 text-center">Bids Won</th>
+                  <th className="px-4 py-3.5 text-center">Projects</th>
+                  <th className="px-4 py-3.5 text-right">Earned</th>
                   <th className="px-4 py-3.5 text-center">Rating</th>
                   <th className="py-3.5 pl-4 pr-6 text-right">Badge</th>
                 </tr>
@@ -434,129 +374,148 @@ export default function LeadershipBoardPage(): React.JSX.Element {
 
               {/* Rows */}
               <tbody className="divide-y divide-[#F7F4F0] text-[13px]">
-                {filteredList.map((user) => {
-                  const isGold = user.rank === 1
-                  const isSilver = user.rank === 2
-                  const isBronze = user.rank === 3
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-[13.5px] text-[#8C9BA8]">
+                      Loading leaderboard…
+                    </td>
+                  </tr>
+                ) : filteredList.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-[13.5px] text-[#8C9BA8]">
+                      {users.length ? 'No freelancers match your search.' : 'No freelancers ranked yet.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredList.map((user) => {
+                    const isGold = user.rank === 1
+                    const isSilver = user.rank === 2
+                    const isBronze = user.rank === 3
 
-                  return (
-                    <tr
-                      key={user.id}
-                      className={`transition-colors ${user.isCurrentUser
-                        ? 'bg-[#FEF8F3] hover:bg-[#FDF4EB]'
-                        : 'hover:bg-[#FCFBF9]'
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`transition-colors ${
+                          user.isCurrentUser
+                            ? 'bg-[#FEF8F3] hover:bg-[#FDF4EB]'
+                            : 'hover:bg-[#FCFBF9]'
                         }`}
-                    >
-                      {/* Rank Number */}
-                      <td className="py-4 pl-6 pr-3 font-extrabold">
-                        {isGold && <span className="text-[17px]">🥇</span>}
-                        {isSilver && <span className="text-[17px]">🥈</span>}
-                        {isBronze && <span className="text-[17px]">🥉</span>}
-                        {!isGold && !isSilver && !isBronze && (
-                          <span
-                            className={`font-manrope text-[14px] ${user.isCurrentUser
-                              ? 'text-[#C06B3E] font-bold'
-                              : 'text-[#8C9BA8]'
+                      >
+                        {/* Rank Number */}
+                        <td className="py-4 pl-6 pr-3 font-extrabold">
+                          {isGold && <span className="text-[17px]">🥇</span>}
+                          {isSilver && <span className="text-[17px]">🥈</span>}
+                          {isBronze && <span className="text-[17px]">🥉</span>}
+                          {!isGold && !isSilver && !isBronze && (
+                            <span
+                              className={`font-manrope text-[14px] ${
+                                user.isCurrentUser
+                                  ? 'text-[#C06B3E] font-bold'
+                                  : 'text-[#8C9BA8]'
                               }`}
-                          >
-                            #{user.rank}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Freelancer Profile Info */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-white shadow-xs ${user.isCurrentUser
-                              ? 'bg-[#08182B] ring-2 ring-[#C06B3E]'
-                              : 'bg-[#1E293B]'
-                              }`}
-                          >
-                            {user.avatarText}
-                          </div>
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[#08182B]">
-                                {user.name}
-                              </span>
-                              {user.isCurrentUser && (
-                                <span className="rounded-full bg-[#C06B3E] px-2 py-0.2 text-[10px] font-bold text-white">
-                                  You
-                                </span>
-                              )}
-                              <CheckCircle2
-                                size={13}
-                                className="text-[#C06B3E]"
-                              />
-                            </div>
-                            <span className="text-[11.5px] text-[#8C9BA8]">
-                              {user.title}
+                            >
+                              #{user.rank}
                             </span>
+                          )}
+                        </td>
+
+                        {/* Freelancer Profile Info */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-white shadow-xs ${
+                                user.isCurrentUser
+                                  ? 'bg-[#08182B] ring-2 ring-[#C06B3E]'
+                                  : 'bg-[#1E293B]'
+                              }`}
+                            >
+                              {user.avatarUrl ? (
+                                <img src={fileUrl(user.avatarUrl)} alt="" className="h-full w-full rounded-full object-cover" />
+                              ) : (
+                                user.avatarText
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-[#08182B]">
+                                  {user.name}
+                                </span>
+                                {user.isCurrentUser && (
+                                  <span className="rounded-full bg-[#C06B3E] px-2 py-0.2 text-[10px] font-bold text-white">
+                                    You
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11.5px] text-[#8C9BA8]">
+                                {user.title}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Category */}
-                      <td className="px-4 py-4 text-[12.5px] text-[#64748B]">
-                        {user.category}
-                      </td>
+                        {/* Category */}
+                        <td className="px-4 py-4 text-[12.5px] text-[#64748B]">
+                          {user.category}
+                        </td>
 
-                      {/* Points / Score */}
-                      <td className="px-4 py-4 text-center font-bold text-[#08182B]">
-                        {user.score.toLocaleString()}
-                      </td>
+                        {/* Points / Score */}
+                        <td className="px-4 py-4 text-center font-bold text-[#08182B]">
+                          {user.score.toLocaleString()}
+                        </td>
 
-                      {/* Projects / Bids Won */}
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center gap-1 font-bold text-[#C06B3E]">
-                          <TrendingUp size={13} />
-                          {user.bidsWon}
-                        </span>
-                      </td>
+                        {/* Projects / Bids Won */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center gap-1 font-bold text-[#C06B3E]">
+                            <TrendingUp size={13} />
+                            {user.bidsWon}
+                          </span>
+                        </td>
 
-                      {/* Rating */}
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center gap-1 font-bold text-[#1A202C]">
-                          {user.rating}{' '}
-                          <Star
-                            size={11}
-                            className="fill-[#F59E0B] text-[#F59E0B]"
-                          />
-                        </span>
-                      </td>
+                        <td className="px-4 py-4 text-right font-semibold text-[#08182B]">{user.earnings}</td>
 
-                      {/* Badge / Standing Status */}
-                      <td className="py-4 pl-4 pr-6 text-right">
-                        {user.badge === 'Gold' && (
-                          <span className="inline-flex rounded-full bg-[#FEF5E7] px-2.5 py-0.5 text-[11px] font-bold text-[#D97706]">
-                            Gold Elite
+                        {/* Rating */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center gap-1 font-bold text-[#1A202C]">
+                            {ratingText(user)}{' '}
+                            <Star
+                              size={11}
+                              className="fill-[#F59E0B] text-[#F59E0B]"
+                            />
                           </span>
-                        )}
-                        {user.badge === 'Silver' && (
-                          <span className="inline-flex rounded-full bg-[#F1F5F9] px-2.5 py-0.5 text-[11px] font-bold text-[#475569]">
-                            Silver Pro
-                          </span>
-                        )}
-                        {user.badge === 'Bronze' && (
-                          <span className="inline-flex rounded-full bg-[#FAF0E7] px-2.5 py-0.5 text-[11px] font-bold text-[#B47444]">
-                            Bronze Star
-                          </span>
-                        )}
-                        {user.badge === 'Top Rated' && (
-                          <span className="inline-flex rounded-full bg-[#EBF7EE] px-2.5 py-0.5 text-[11px] font-bold text-[#16A34A]">
-                            Top Rated
-                          </span>
-                        )}
-                        {user.badge === 'Rising Star' && (
-                          <span className="inline-flex rounded-full bg-[#F0FDF4] px-2.5 py-0.5 text-[11px] font-bold text-[#15803D]">
-                            Rising Star
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
+                        </td>
+
+                        {/* Badge / Standing Status */}
+                        <td className="py-4 pl-4 pr-6 text-right">
+                          {user.badge === 'Gold' && (
+                            <span className="inline-flex rounded-full bg-[#FEF5E7] px-2.5 py-0.5 text-[11px] font-bold text-[#D97706]">
+                              Gold Elite
+                            </span>
+                          )}
+                          {user.badge === 'Silver' && (
+                            <span className="inline-flex rounded-full bg-[#F1F5F9] px-2.5 py-0.5 text-[11px] font-bold text-[#475569]">
+                              Silver Pro
+                            </span>
+                          )}
+                          {user.badge === 'Bronze' && (
+                            <span className="inline-flex rounded-full bg-[#FAF0E7] px-2.5 py-0.5 text-[11px] font-bold text-[#B47444]">
+                              Bronze Star
+                            </span>
+                          )}
+                          {user.badge === 'Top Rated' && (
+                            <span className="inline-flex rounded-full bg-[#EBF7EE] px-2.5 py-0.5 text-[11px] font-bold text-[#16A34A]">
+                              Top Rated
+                            </span>
+                          )}
+                          {user.badge === 'Rising Star' && (
+                            <span className="inline-flex rounded-full bg-[#F0FDF4] px-2.5 py-0.5 text-[11px] font-bold text-[#15803D]">
+                              Rising Star
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>

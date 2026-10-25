@@ -1,52 +1,48 @@
 package com.theunoia.common.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.theunoia.common.exception.ErrorResponse;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
+@EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties(SecurityProperties.class)
 public class CommonSecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityProperties props, ObjectMapper mapper)
-            throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
-                .httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable)
-                .logout(AbstractHttpConfigurer::disable)
+    @ConditionalOnMissingBean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public GatewayHeaderAuthFilter gatewayHeaderAuthFilter(com.theunoia.common.internal.InternalClient internalClient) {
+        return new GatewayHeaderAuthFilter(internalClient);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http, GatewayHeaderAuthFilter filter) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(new InternalTokenFilter(props.getInternalToken(), mapper), UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(new GatewayHeaderAuthFilter(), InternalTokenFilter.class)
-                .authorizeHttpRequests(auth -> {
-                    auth.requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/error").permitAll();
-                    auth.requestMatchers("/internal/**").permitAll(); // protected by internal token
-                    props.getPublicPaths().forEach(p -> auth.requestMatchers(p).permitAll());
-                    auth.anyRequest().authenticated();
-                })
-                .exceptionHandling(e -> e
-                        .authenticationEntryPoint((req, res, ex) -> {
-                            res.setStatus(401);
-                            res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            mapper.writeValue(res.getOutputStream(),
-                                    ErrorResponse.of(401, "UNAUTHORIZED", "Authentication required", req.getRequestURI(), null));
-                        })
-                        .accessDeniedHandler((req, res, ex) -> {
-                            res.setStatus(403);
-                            res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            mapper.writeValue(res.getOutputStream(),
-                                    ErrorResponse.of(403, "FORBIDDEN", "Access denied", req.getRequestURI(), null));
-                        }));
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/api/v1/content/**", "/api/v1/webhooks/**").permitAll()
+                        .anyRequest().permitAll() // Detailed RBAC handled via method security @PreAuthorize or controller logic
+                )
+                .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 }

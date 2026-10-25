@@ -1,70 +1,42 @@
 package com.theunoia.project.domain;
 
-import com.theunoia.common.persistence.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import lombok.Getter;
-import lombok.Setter;
+import com.theunoia.common.model.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.util.EnumSet;
-import java.util.Set;
 import java.util.UUID;
 
-/**
- * Milestone lifecycle (PLATFORM payments):
- * PENDING -> FUNDED (escrow captured) -> SUBMITTED -> APPROVED -> PAID (escrow released)
- *                                      \-> REVISION_REQUESTED -> SUBMITTED
- * DIRECT payments skip FUNDED/PAID: PENDING -> SUBMITTED -> APPROVED.
- */
-@Getter
-@Setter
 @Entity
 @Table(name = "milestones")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Milestone extends BaseEntity {
 
-    public enum Status { PENDING, FUNDED, SUBMITTED, REVISION_REQUESTED, APPROVED, PAID, REFUNDED, CANCELLED }
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    public static final Set<Status> SETTLED = EnumSet.of(Status.APPROVED, Status.PAID, Status.REFUNDED, Status.CANCELLED);
-
-    @Column(name = "project_id", nullable = false)
+    @Column(nullable = false)
     private UUID projectId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 150)
     private String title;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "due_date")
-    private LocalDate dueDate;
-
-    private int position;
+    private Instant dueDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Status status = Status.PENDING;
-
-    @Column(name = "funded_at")
-    private Instant fundedAt;
-
-    @Column(name = "submitted_at")
-    private Instant submittedAt;
-
-    @Column(name = "approved_at")
-    private Instant approvedAt;
-
-    @Column(name = "paid_at")
-    private Instant paidAt;
-
-    @Version
-    private long version;
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private MilestoneStatus status = MilestoneStatus.PENDING;
 }

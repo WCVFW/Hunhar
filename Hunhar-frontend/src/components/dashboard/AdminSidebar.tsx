@@ -17,6 +17,7 @@ import {
 import hunharLogo from '../../assets/hunha Logo.png'
 import sidebarCollapseLogo from '../../assets/Sidebar_collaps.png'
 import promoMascotCard from '../../assets/promo_mascot_card.png'
+import { logout } from '../../services/api'
 
 interface MenuItem {
   name: string
@@ -70,7 +71,7 @@ export default function AdminSidebar({
   const [mobileOpen, setMobileOpen] = useState<boolean>(false)
 
   const handleLogout = () => {
-    window.location.href = '/'
+    logout()
   }
 
   const renderNavContent = (collapsed: boolean = false) => (

@@ -1,372 +1,398 @@
-import React, { useState } from 'react'
-import {
-  Search,
-  Paperclip,
-  Send,
-} from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Search, Send, Paperclip, MessageSquare, ArrowLeft, Briefcase, FileText, X } from 'lucide-react'
 import messageDoodleBg from '../../assets/Message doodle 6.png'
+import {
+  fileUrl,
+  filesApi,
+  messagesApi,
+  tokenStorage,
+  type ChatMessage,
+  type Conversation,
+  type StoredFile,
+} from '../../services/api'
+import { formatDate, formatTime, initials, timeAgo } from '../../services/format'
 
 type ConversationTab = 'Client' | 'Hustlers'
 
-interface ChatContact {
-  id: string
-  name: string
-  initial: string
-  avatarBg: string
-  avatarText: string
-  lastMessage: string
-  timeAgo?: string
-  unread?: boolean
+const AVATAR_COLORS = [
+  'bg-[#FFD7D0] text-[#E04B35]',
+  'bg-[#CFF3F9] text-[#0284C7]',
+  'bg-[#DCD8FE] text-[#6366F1]',
+  'bg-[#E0F2CE] text-[#65A30D]',
+]
+
+const colorFor = (id: string) => AVATAR_COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length]
+
+const MESSAGE_POLL_MS = 5000
+const LIST_POLL_MS = 15000
+
+function Avatar({ name, url, id, size = 'h-10 w-10' }: { name?: string; url?: string; id: string; size?: string }) {
+  if (url) return <img src={fileUrl(url)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
+  return (
+    <div className={`flex ${size} shrink-0 items-center justify-center rounded-full font-manrope text-[14px] font-bold ${colorFor(id)}`}>
+      {initials(name)}
+    </div>
+  )
 }
-
-interface MessageItem {
-  id: string
-  sender: 'other' | 'me'
-  senderName: string
-  senderInitial: string
-  avatarBg: string
-  timestamp: string
-  text: string
-}
-
-const clientContacts: ChatContact[] = [
-  {
-    id: '1',
-    name: 'Praveen',
-    initial: 'P',
-    avatarBg: 'bg-[#FFD7D0]',
-    avatarText: 'text-[#E04B35]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: '2h ago',
-  },
-  {
-    id: '2',
-    name: 'Ashok',
-    initial: 'A',
-    avatarBg: 'bg-[#CFF3F9]',
-    avatarText: 'text-[#0284C7]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: 'Yesterday',
-  },
-  {
-    id: '3',
-    name: 'Raj',
-    initial: 'R',
-    avatarBg: 'bg-[#DCD8FE]',
-    avatarText: 'text-[#6366F1]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: '3d ago',
-  },
-  {
-    id: '4',
-    name: 'Aswin',
-    initial: 'A',
-    avatarBg: 'bg-[#E0F2CE]',
-    avatarText: 'text-[#65A30D]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: '1w ago',
-  },
-  {
-    id: '5',
-    name: 'Sai',
-    initial: 'S',
-    avatarBg: 'bg-[#FDF0CE]',
-    avatarText: 'text-[#CA8A04]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: '2w ago',
-  },
-  {
-    id: '6',
-    name: 'Om',
-    initial: 'O',
-    avatarBg: 'bg-[#D0F5F7]',
-    avatarText: 'text-[#0D9488]',
-    lastMessage: 'Lorem Ipsum has been the industry\'s standard dummy text ever since 1966',
-    timeAgo: '3w ago',
-  },
-]
-
-const hustlerContacts: ChatContact[] = [
-  {
-    id: 'h1',
-    name: 'Kavitha Devi',
-    initial: 'K',
-    avatarBg: 'bg-[#FCE7F3]',
-    avatarText: 'text-[#DB2777]',
-    lastMessage: 'Uploaded the brand guidelines Figma frame for your review',
-    timeAgo: '1h ago',
-  },
-  {
-    id: 'h2',
-    name: 'Vikram Joshi',
-    initial: 'V',
-    avatarBg: 'bg-[#E0E7FF]',
-    avatarText: 'text-[#4F46E5]',
-    lastMessage: 'I can take up the motion graphics component if needed',
-    timeAgo: '4h ago',
-  },
-]
-
-const initialMessages: MessageItem[] = [
-  {
-    id: 'm1',
-    sender: 'other',
-    senderName: 'ALEX',
-    senderInitial: 'A',
-    avatarBg: 'bg-[#4338CA]',
-    timestamp: '10:24 AM',
-    text: 'Hi Alex! I have started working on the initial logo concepts. Will share 3 drafts by end of week.',
-  },
-  {
-    id: 'm2',
-    sender: 'me',
-    senderName: 'You',
-    senderInitial: 'C',
-    avatarBg: 'bg-[#C06B3E]',
-    timestamp: '10:31 AM',
-    text: 'Great! Looking forward to seeing the directions. Please keep the aesthetic minimal and modern.',
-  },
-  {
-    id: 'm3',
-    sender: 'other',
-    senderName: 'ALEX',
-    senderInitial: 'A',
-    avatarBg: 'bg-[#4338CA]',
-    timestamp: '10:45 AM',
-    text: 'Absolutely — minimal and modern is the plan. I will also attach some moodboard references before sharing concepts.',
-  },
-]
 
 export default function MessagesPage(): React.JSX.Element {
+  const me = tokenStorage.getUser()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<ConversationTab>('Client')
-  const [selectedContactId, setSelectedContactId] = useState<string>('1')
-  const [searchQuery, setSearchQuery] = useState<string>('')
-  const [messages, setMessages] = useState<MessageItem[]>(initialMessages)
-  const [inputText, setInputText] = useState<string>('')
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [selectedId, setSelectedId] = useState<string>(searchParams.get('c') || '')
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [inputText, setInputText] = useState('')
+  const [attachment, setAttachment] = useState<StoredFile | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const contactsList = activeTab === 'Client' ? clientContacts : hustlerContacts
-  const filteredContacts = contactsList.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const activeContact =
-    contactsList.find((c) => c.id === selectedContactId) || contactsList[0]
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputText.trim()) return
-
-    const now = new Date()
-    const hours = now.getHours()
-    const minutes = now.getMinutes()
-    const ampm = hours >= 12 ? 'PM' : 'AM'
-    const formattedTime = `${hours % 12 || 12}:${minutes.toString().padStart(2, '0')} ${ampm}`
-
-    const newMsg: MessageItem = {
-      id: Date.now().toString(),
-      sender: 'me',
-      senderName: 'You',
-      senderInitial: 'C',
-      avatarBg: 'bg-[#C06B3E]',
-      timestamp: formattedTime,
-      text: inputText.trim(),
+  const loadConversations = useCallback(async () => {
+    try {
+      const list = await messagesApi.getConversations()
+      setConversations(list)
+      setError('')
+    } catch (err: any) {
+      setError(err.message || 'Could not load conversations')
+    } finally {
+      setLoading(false)
     }
+  }, [])
 
-    setMessages((prev) => [...prev, newMsg])
-    setInputText('')
+  useEffect(() => {
+    loadConversations()
+    const t = window.setInterval(loadConversations, LIST_POLL_MS)
+    return () => window.clearInterval(t)
+  }, [loadConversations])
+
+  // Open the conversation from ?c= and switch to its tab
+  useEffect(() => {
+    const target = conversations.find((c) => c.id === selectedId)
+    if (target) setActiveTab(target.otherPartyRole === 'FREELANCER' ? 'Hustlers' : 'Client')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations.length > 0])
+
+  const loadMessages = useCallback(async () => {
+    if (!selectedId) return
+    try {
+      const list = await messagesApi.getMessages(selectedId)
+      setMessages((prev) => (prev.length === list.length && prev[prev.length - 1]?.id === list[list.length - 1]?.id ? prev : list))
+      setConversations((prev) => prev.map((c) => (c.id === selectedId ? { ...c, unreadCount: 0 } : c)))
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }, [selectedId])
+
+  useEffect(() => {
+    setMessages([])
+    if (!selectedId) return
+    loadMessages()
+    const t = window.setInterval(loadMessages, MESSAGE_POLL_MS)
+    return () => window.clearInterval(t)
+  }, [selectedId, loadMessages])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages.length])
+
+  const selectConversation = (id: string) => {
+    setSelectedId(id)
+    setSearchParams(id ? { c: id } : {}, { replace: true })
   }
 
+  const tabConversations = conversations.filter((c) =>
+    activeTab === 'Hustlers' ? c.otherPartyRole === 'FREELANCER' : c.otherPartyRole !== 'FREELANCER'
+  )
+  const filtered = tabConversations.filter((c) => {
+    const q = searchQuery.toLowerCase()
+    return !q || (c.otherPartyName || '').toLowerCase().includes(q) || (c.lastMessage || '').toLowerCase().includes(q)
+  })
+  const unreadIn = (tab: ConversationTab) =>
+    conversations
+      .filter((c) => (tab === 'Hustlers' ? c.otherPartyRole === 'FREELANCER' : c.otherPartyRole !== 'FREELANCER'))
+      .reduce((n, c) => n + (c.unreadCount || 0), 0)
+
+  const active = conversations.find((c) => c.id === selectedId)
+
+  const handleAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      setAttachment(await filesApi.upload(file, active?.projectId || undefined))
+    } catch (err: any) {
+      setError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const content = inputText.trim()
+    if ((!content && !attachment) || !selectedId || sending) return
+    setSending(true)
+    try {
+      const msg = await messagesApi.sendMessage(selectedId, content, attachment?.url)
+      setMessages((prev) => [...prev, msg])
+      setInputText('')
+      setAttachment(null)
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selectedId ? { ...c, lastMessage: content || '📎 Attachment', lastMessageAt: msg.createdAt } : c))
+      )
+    } catch (err: any) {
+      setError(err.message || 'Message not sent')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // group messages by day
+  let lastDay = ''
+
   return (
-    <div className="flex h-[calc(100vh-100px)] min-h-[620px] w-full gap-5 font-manrope">
-      {/* ========================================================= */}
-      {/* LEFT COLUMN: CONTACTS LIST (Client / Hustlers + Search) */}
-      {/* ========================================================= */}
-      <div className="flex w-full flex-col rounded-[24px] border border-[#E5E5E5] bg-white p-4 shadow-xs sm:w-[320px] lg:w-[350px] shrink-0">
-        {/* Toggle Pill: Client vs Hustlers */}
-        <div className="mx-auto mb-4 flex w-full max-w-[280px] items-center rounded-full border border-[#EBE4DC] bg-[#F7F3EE] p-1 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('Client')}
-            className={`flex-1 rounded-full py-1.5 text-center font-manrope text-[13px] font-bold transition-all ${
-              activeTab === 'Client'
-                ? 'bg-[#C06B3E] text-white shadow-sm'
-                : 'text-[#7A7065] hover:text-[#08182B]'
-            }`}
-          >
-            Client
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('Hustlers')}
-            className={`flex-1 rounded-full py-1.5 text-center font-manrope text-[13px] font-bold transition-all ${
-              activeTab === 'Hustlers'
-                ? 'bg-[#C06B3E] text-white shadow-sm'
-                : 'text-[#7A7065] hover:text-[#08182B]'
-            }`}
-          >
-            Hustlers
-          </button>
-        </div>
+    <div className="w-full font-manrope">
+      <div className="w-full rounded-[24px] border border-[#E9EBEF]/60 bg-[#FFFFFF] p-2 shadow-xs sm:p-6 lg:p-7">
+        <div className="flex h-[calc(100vh-170px)] min-h-[520px] overflow-hidden rounded-[20px] border border-[#DECFBE] lg:h-[750px]">
+          {/* LEFT: conversations */}
+          <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px]`}>
+            <div className="p-4 pb-2">
+              <h1 className="font-manrope text-[20px] font-bold text-[#08182B]">Messages</h1>
+              <p className="mt-0.5 text-[12px] text-[#786D61]">Conversations with clients & collaborators</p>
+            </div>
 
-        {/* Search Message Box */}
-        <div className="relative mb-3 w-full">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9E9284]"
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Message"
-            className="w-full rounded-full border border-transparent bg-[#F2EDE7] py-2 pl-9 pr-4 font-manrope text-[13px] text-[#08182B] placeholder-[#9E9284] outline-none transition-all focus:border-[#C06B3E]/40 focus:bg-white focus:ring-0"
-          />
-        </div>
-
-        {/* Contacts List */}
-        <div className="flex-1 overflow-y-auto space-y-1 pr-1 [scrollbar-width:thin]">
-          {filteredContacts.map((contact) => {
-            const isSelected = contact.id === activeContact?.id
-            return (
-              <div
-                key={contact.id}
-                onClick={() => setSelectedContactId(contact.id)}
-                className={`flex cursor-pointer items-start gap-3 rounded-[16px] p-2.5 transition-all ${
-                  isSelected
-                    ? 'bg-[#F9F5F0]'
-                    : 'hover:bg-[#FAF8F5]'
-                }`}
-              >
-                {/* Monogram Avatar with circle */}
-                <div
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-manrope text-[16px] font-bold ${contact.avatarBg} ${contact.avatarText}`}
-                >
-                  {contact.initial}
-                </div>
-
-                {/* Name & snippet */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="truncate font-manrope text-[14px] font-bold text-[#08182B]">
-                      {contact.name}
-                    </h4>
-                  </div>
-                  <p className="line-clamp-2 mt-0.5 font-manrope text-[11.5px] leading-snug text-[#7A7065]">
-                    {contact.lastMessage}
-                  </p>
-                </div>
+            <div className="px-4 py-2">
+              <div className="flex rounded-full bg-[#E5D7CA] p-1" role="tablist">
+                {(['Client', 'Hustlers'] as ConversationTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 font-manrope text-[12px] font-bold transition-all ${
+                      activeTab === tab ? 'bg-[#C06B3E] text-white shadow-xs' : 'text-[#6E6357] hover:text-[#08182B]'
+                    }`}
+                  >
+                    {tab === 'Client' ? 'Clients' : 'Freelancers'}
+                    {unreadIn(tab) > 0 && (
+                      <span className={`rounded-full px-1.5 text-[10px] ${activeTab === tab ? 'bg-white text-[#C06B3E]' : 'bg-[#C06B3E] text-white'}`}>
+                        {unreadIn(tab)}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
-            )
-          })}
-        </div>
-      </div>
+            </div>
 
-      {/* ========================================================= */}
-      {/* RIGHT COLUMN: ACTIVE CHAT CONVERSATION VIEW */}
-      {/* ========================================================= */}
-      <div className="relative flex flex-1 flex-col overflow-hidden rounded-[24px] border border-[#E5E5E5] bg-white shadow-xs">
-        {/* Chat Header: Contact Name + Time */}
-        <div className="border-b border-[#F0ECE6] px-6 py-4">
-          <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">
-            {activeContact?.name || 'Praveen'}
-          </h3>
-          <span className="font-manrope text-[12px] font-medium text-[#9E9284]">
-            {activeContact?.timeAgo || '2h ago'}
-          </span>
-        </div>
-
-        {/* Message Thread Body with WhatsApp-style Doodle Pattern Background */}
-        <div
-          className="relative flex-1 overflow-y-auto p-6 space-y-6 [scrollbar-width:thin] bg-[#F7F5F0]"
-          style={{
-            backgroundImage: `url("${messageDoodleBg}")`,
-            backgroundRepeat: 'repeat',
-            backgroundSize: '420px auto',
-            backgroundPosition: 'center top',
-          }}
-        >
-          {messages.map((msg) => {
-            const isMe = msg.sender === 'me'
-
-            if (isMe) {
-              // Right side message bubble (Beige bubble + Terracotta Monogram on right)
-              return (
-                <div key={msg.id} className="flex flex-col items-end">
-                  <span className="mb-1 font-manrope text-[10.5px] font-medium text-[#9E9284] pr-10">
-                    You · {msg.timestamp}
-                  </span>
-                  <div className="flex items-end gap-2.5 max-w-[80%] sm:max-w-[70%]">
-                    {/* Message Bubble (Warm beige tint) */}
-                    <div className="rounded-[18px] rounded-br-[4px] bg-[#F3ECE1] px-4 py-3 font-manrope text-[13.5px] leading-relaxed text-[#2C2318] shadow-xs">
-                      {msg.text}
-                    </div>
-
-                    {/* My Avatar (Terracotta 'C') */}
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] font-manrope text-[13px] font-bold text-white shadow-2xs">
-                      {msg.senderInitial}
-                    </div>
-                  </div>
-                </div>
-              )
-            }
-
-            // Left side message bubble (White bubble + Purple/Blue Monogram on left)
-            return (
-              <div key={msg.id} className="flex flex-col items-start">
-                <span className="mb-1 font-manrope text-[10.5px] font-medium uppercase tracking-wider text-[#9E9284] pl-10">
-                  {msg.senderName} · {msg.timestamp}
-                </span>
-                <div className="flex items-start gap-2.5 max-w-[80%] sm:max-w-[70%]">
-                  {/* Sender Avatar ('A' on dark indigo) */}
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#4338CA] font-manrope text-[13px] font-bold text-white shadow-2xs">
-                    {msg.senderInitial}
-                  </div>
-
-                  {/* Message Bubble (Pure white with subtle border) */}
-                  <div className="rounded-[18px] rounded-tl-[4px] border border-[#EDE5DA] bg-white px-4 py-3 font-manrope text-[13.5px] leading-relaxed text-[#08182B] shadow-xs">
-                    {msg.text}
-                  </div>
-                </div>
+            <div className="px-4 py-2">
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9A8E80]" />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  aria-label="Search chats"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-full rounded-full border border-[#DECFBE] bg-[#FDFBF7] pl-8 pr-3 text-[12px] text-[#08182B] placeholder:text-[#9A8E80] focus:border-[#C06B3E] focus:bg-white focus:outline-none"
+                />
               </div>
-            )
-          })}
-        </div>
+            </div>
 
-        {/* Chat Input Bar */}
-        <div className="border-t border-[#EFECE6] bg-white p-4">
-          <form
-            onSubmit={handleSendMessage}
-            className="flex items-center gap-2 rounded-full border border-[#E8E0D5] bg-white px-4 py-2 shadow-xs transition-all focus-within:border-[#C06B3E]/50 focus-within:ring-1 focus-within:ring-[#C06B3E]/30"
-          >
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Write a message..."
-              className="flex-1 bg-transparent font-manrope text-[13.5px] text-[#08182B] placeholder-[#9E9284] outline-none"
+            <div className="flex-1 divide-y divide-[#F2E8DC] overflow-y-auto">
+              {loading ? (
+                <div className="p-6 text-center text-xs text-[#8E8376]">Loading conversations…</div>
+              ) : filtered.length === 0 ? (
+                <div className="p-6 text-center text-xs leading-relaxed text-[#8E8376]">
+                  {searchQuery
+                    ? 'No chats match your search.'
+                    : activeTab === 'Client'
+                    ? 'No client conversations yet. A chat opens automatically when a client hires you, or use "Send Message" in a project workspace.'
+                    : 'No conversations with other freelancers yet. Team invites open chats here.'}
+                </div>
+              ) : (
+                filtered.map((c) => {
+                  const isSelected = c.id === selectedId
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectConversation(c.id)}
+                      className={`flex w-full items-start gap-3 p-3.5 text-left transition-colors ${
+                        isSelected ? 'border-l-4 border-l-[#C06B3E] bg-[#FAF4EE]' : 'hover:bg-[#FAF7F2]'
+                      }`}
+                    >
+                      <Avatar name={c.otherPartyName} url={c.otherPartyAvatarUrl} id={c.otherPartyId} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className={`truncate font-manrope text-[13.5px] text-[#08182B] ${c.unreadCount ? 'font-extrabold' : 'font-bold'}`}>
+                            {c.otherPartyName || 'User'}
+                          </h4>
+                          <span className="shrink-0 text-[11px] text-[#9A8E80]">{timeAgo(c.lastMessageAt)}</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <p className={`line-clamp-1 font-manrope text-[12px] ${c.unreadCount ? 'font-semibold text-[#08182B]' : 'text-[#7A7065]'}`}>
+                            {c.lastMessage || 'Say hello 👋'}
+                          </p>
+                          {c.unreadCount > 0 && (
+                            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] px-1.5 text-[10px] font-bold text-white">
+                              {c.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: chat */}
+          <div className={`${selectedId ? 'flex' : 'hidden md:flex'} relative min-w-0 flex-1 flex-col bg-[#FDFBF7]`}>
+            <div
+              className="pointer-events-none absolute inset-0 bg-repeat opacity-[0.06]"
+              style={{ backgroundImage: `url("${messageDoodleBg}")`, backgroundSize: '360px' }}
             />
 
-            {/* Paperclip attachment icon */}
-            <button
-              type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-[#9E9284] transition-colors hover:bg-[#F5EFE6] hover:text-[#08182B]"
-              aria-label="Attach file"
-            >
-              <Paperclip size={17} />
-            </button>
+            <div className="relative z-10 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-[#DECFBE] bg-white px-3 shadow-2xs sm:px-6">
+              {active ? (
+                <>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => selectConversation('')}
+                      aria-label="Back to conversations"
+                      className="rounded-full p-1.5 text-[#7A7065] hover:bg-[#FAF4EE] md:hidden"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <Avatar name={active.otherPartyName} url={active.otherPartyAvatarUrl} id={active.otherPartyId} />
+                    <div className="min-w-0">
+                      <h3 className="truncate font-manrope text-[15px] font-bold text-[#08182B]">{active.otherPartyName || 'User'}</h3>
+                      <span className="text-[11px] font-semibold text-[#8E8376]">
+                        {active.otherPartyRole === 'CLIENT' ? 'Client' : active.otherPartyRole === 'FREELANCER' ? 'Freelancer' : 'Hunhar'}
+                      </span>
+                    </div>
+                  </div>
+                  {active.projectId && (
+                    <Link
+                      to={`/freelancer/projects/${active.projectId}`}
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#DECFBE] px-3 py-1.5 text-[12px] font-bold text-[#08182B] no-underline hover:bg-[#FAF4EE]"
+                    >
+                      <Briefcase size={13} /> <span className="hidden sm:inline">Project</span>
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <h3 className="font-manrope text-[15px] font-bold text-[#08182B]">Select a conversation</h3>
+              )}
+            </div>
 
-            {/* Terracotta Send Icon Button */}
-            <button
-              type="submit"
-              disabled={!inputText.trim()}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-xs transition-all hover:bg-[#AA572D] active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-              aria-label="Send message"
-            >
-              <Send size={15} />
-            </button>
-          </form>
+            {error && (
+              <div className="relative z-10 border-b border-red-200 bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700">{error}</div>
+            )}
+
+            <div className="relative z-10 flex flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-6">
+              {!active || messages.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+                  <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#FAF3EC] text-[#C06B3E]">
+                    <MessageSquare size={26} />
+                  </div>
+                  <h4 className="font-manrope text-[16px] font-bold text-[#08182B]">{active ? 'No messages yet' : 'Your messages'}</h4>
+                  <p className="mt-1 max-w-[340px] font-manrope text-[13px] text-[#8E8376]">
+                    {active ? `Send a message to start the conversation with ${active.otherPartyName || 'them'}.` : 'Pick a conversation from the list.'}
+                  </p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isMe = msg.senderId === me?.id
+                  const day = formatDate(msg.createdAt, true)
+                  const showDay = day !== lastDay
+                  lastDay = day
+                  return (
+                    <React.Fragment key={msg.id}>
+                      {showDay && (
+                        <div className="my-1 self-center rounded-full bg-white/80 px-3 py-0.5 text-[11px] font-semibold text-[#8E8376] shadow-2xs">{day}</div>
+                      )}
+                      <div className={`flex max-w-[85%] items-end gap-2 sm:max-w-[75%] ${isMe ? 'flex-row-reverse self-end' : 'self-start'}`}>
+                        {!isMe && <Avatar name={msg.senderName} url={active.otherPartyAvatarUrl} id={msg.senderId} size="h-8 w-8" />}
+                        <div className="min-w-0">
+                          <div
+                            className={`whitespace-pre-wrap break-words rounded-[16px] p-3 font-manrope text-[13px] leading-relaxed shadow-2xs ${
+                              isMe ? 'rounded-br-none bg-[#C06B3E] text-white' : 'rounded-bl-none border border-[#DECFBE] bg-white text-[#08182B]'
+                            }`}
+                          >
+                            {msg.content}
+                            {msg.attachmentUrl && (
+                              <a
+                                href={fileUrl(msg.attachmentUrl) + '?download=true'}
+                                className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-bold underline ${isMe ? 'text-white' : 'text-[#C06B3E]'}`}
+                              >
+                                <FileText size={13} /> Attachment
+                              </a>
+                            )}
+                          </div>
+                          <span className={`mt-1 block text-[10px] text-[#9A8E80] ${isMe ? 'text-right' : 'text-left'}`}>{formatTime(msg.createdAt)}</span>
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  )
+                })
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {active && (
+              <div className="relative z-10 border-t border-[#DECFBE] bg-white p-2.5 sm:p-4">
+                {attachment && (
+                  <div className="mb-2 flex items-center gap-2 rounded-full bg-[#FAF4EE] px-3 py-1 text-[12px] font-semibold text-[#08182B]">
+                    <FileText size={13} /> <span className="truncate">{attachment.originalName}</span>
+                    <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)} className="ml-auto text-[#8E8376]">
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <input ref={fileRef} type="file" className="hidden" onChange={handleAttach} />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#9A8E80] hover:bg-[#FAF4EE] hover:text-[#C06B3E] disabled:opacity-50"
+                    title="Attach file"
+                    aria-label="Attach file"
+                  >
+                    <Paperclip size={18} className={uploading ? 'animate-pulse' : ''} />
+                  </button>
+                  <input
+                    type="text"
+                    value={inputText}
+                    maxLength={5000}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder="Type a message..."
+                    aria-label="Message"
+                    className="h-10 min-w-0 flex-1 rounded-full border border-[#DECFBE] bg-[#FDFBF7] px-4 font-manrope text-[13px] text-[#08182B] placeholder:text-[#9A8E80] focus:border-[#C06B3E] focus:bg-white focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={(!inputText.trim() && !attachment) || sending}
+                    aria-label="Send"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-50"
+                  >
+                    <Send size={16} />
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

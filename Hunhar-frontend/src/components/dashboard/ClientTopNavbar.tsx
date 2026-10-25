@@ -10,6 +10,7 @@ import {
   LogOut,
   User,
 } from 'lucide-react'
+import { logout } from '../../services/api'
 
 export default function ClientTopNavbar(): React.JSX.Element {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -162,7 +163,7 @@ export default function ClientTopNavbar(): React.JSX.Element {
                   type="button"
                   onClick={() => {
                     setIsDropdownOpen(false)
-                    window.location.href = '/'
+                    logout()
                   }}
                   className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 font-manrope text-[13px] font-bold text-[#E11D48] transition-colors hover:bg-[#FFF1F2]"
                 >

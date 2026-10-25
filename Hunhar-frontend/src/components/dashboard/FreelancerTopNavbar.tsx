@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Search,
   Bell,
@@ -11,22 +11,88 @@ import {
   BadgeCheck,
   ChevronRight,
   LogOut,
-  User,
   CheckCircle2,
   DollarSign,
   Briefcase,
   MessageSquare,
-  Sparkles,
   ArrowRight,
-  Check,
 } from 'lucide-react'
-import { mockNotifications } from '../../pages/freelancer/FreelancerNotificationsPage'
+import {
+  creditsApi,
+  walletApi,
+  notificationsApi,
+  profileApi,
+  tokenStorage,
+  fileUrl,
+  logout,
+  type AppNotification,
+} from '../../services/api'
+import { formatINR, initials, timeAgo } from '../../services/format'
+
+const POLL_MS = 60_000
+
+const iconFor = (type: string) =>
+  type === 'PROJECT_AWARDED' || type === 'DELIVERABLE_APPROVED'
+    ? 'bid_accepted'
+    : type.startsWith('PAYMENT') || type.startsWith('PAYOUT')
+    ? 'payment_received'
+    : 'other'
 
 export default function FreelancerTopNavbar(): React.JSX.Element {
+  const navigate = useNavigate()
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false)
   const [isNotifOpen, setIsNotifOpen] = useState<boolean>(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
+
+  const [credits, setCredits] = useState<number | null>(null)
+  const [walletBalance, setWalletBalance] = useState<number | null>(null)
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [userName, setUserName] = useState<string>(() => tokenStorage.getUser()?.fullName || '')
+  const [userHeadline, setUserHeadline] = useState<string>('')
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => tokenStorage.getUser()?.avatarUrl || '')
+  const [verified, setVerified] = useState<boolean>(false)
+  const [search, setSearch] = useState<string>('')
+
+  const loadProfile = () =>
+    profileApi
+      .getMine()
+      .then((p) => {
+        setUserName(p.fullName)
+        setUserHeadline(p.professionalTitle || '')
+        setAvatarUrl(p.avatarUrl || '')
+        setVerified(p.kycStatus === 'VERIFIED')
+      })
+      .catch(() => {})
+
+  const loadBalances = () => {
+    creditsApi.getMyCredits().then((res) => setCredits(res.balance)).catch(() => {})
+    walletApi.getMyWallet().then((res) => setWalletBalance(Number(res?.availableBalance ?? 0))).catch(() => {})
+  }
+
+  const loadNotifications = () => notificationsApi.getNotifications(10).then(setNotifications).catch(() => {})
+
+  useEffect(() => {
+    loadProfile()
+    loadBalances()
+    loadNotifications()
+    const t = window.setInterval(() => {
+      loadNotifications()
+      loadBalances()
+    }, POLL_MS)
+    // Other pages tell the navbar when something it shows has changed
+    const onProfile = () => loadProfile()
+    const onNotifications = () => loadNotifications()
+    window.addEventListener('hunhar:profile-updated', onProfile)
+    window.addEventListener('hunhar:notifications-changed', onNotifications)
+    window.addEventListener('focus', loadBalances)
+    return () => {
+      window.clearInterval(t)
+      window.removeEventListener('hunhar:profile-updated', onProfile)
+      window.removeEventListener('hunhar:notifications-changed', onNotifications)
+      window.removeEventListener('focus', loadBalances)
+    }
+  }, [])
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -50,22 +116,52 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
     }
   }, [])
 
-  const unreadCount = mockNotifications.filter((n) => !n.read).length
+  const unreadCount = notifications.filter((n) => !n.read).length
+  const userInitial = initials(userName) || 'F'
+
+  const handleLogout = () => {
+    setIsDropdownOpen(false)
+    logout()
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    const q = search.trim()
+    navigate(q ? `/freelancer/browse?q=${encodeURIComponent(q)}` : '/freelancer/browse')
+  }
+
+  const openNotification = (n: AppNotification) => {
+    setIsNotifOpen(false)
+    if (!n.read) {
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
+      notificationsApi.markAsRead(n.id).catch(() => {})
+    }
+  }
+
+  const avatar = (size: string, text: string) =>
+    avatarUrl ? (
+      <img src={fileUrl(avatarUrl)} alt="" className={`${size} rounded-full object-cover`} />
+    ) : (
+      <span className={text}>{userInitial}</span>
+    )
 
   return (
     <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8">
       {/* Search Input Box */}
-      <div className="relative min-w-0 flex-1 max-w-[420px]">
+      <form onSubmit={handleSearch} role="search" className="relative min-w-0 flex-1 max-w-[420px]">
         <Search
           size={16}
           className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E8376]"
         />
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search live projects, skills, gigs..."
+          aria-label="Search projects"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           className="h-9 sm:h-11 w-full rounded-full border border-[#E5DACD] bg-white pl-9 sm:pl-11 pr-3 sm:pr-4 font-manrope text-[12.5px] sm:text-[14px] text-[#08182B] placeholder-[#9D9183] shadow-xs transition-all focus:border-[#C06B3E] focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
         />
-      </div>
+      </form>
 
       {/* Top Badges & Freelancer Profile */}
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5 md:gap-3">
@@ -75,7 +171,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
           className="hidden sm:flex h-9 sm:h-10 items-center gap-1.5 sm:gap-2 rounded-full border border-[#F2C5A5] bg-[#FCECE0]/80 px-3 sm:px-4 font-manrope text-[12px] sm:text-[13px] font-semibold text-[#A85123] shadow-xs shrink-0 transition-all hover:bg-[#F9DEC9] active:scale-98"
         >
           <Coins size={14} className="text-[#C06B3E]" />
-          <span>680 Credits</span>
+          <span>{credits ?? '–'} Credits</span>
         </Link>
 
         {/* Wallet Balance Badge (Compact on mobile) */}
@@ -84,7 +180,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
           className="flex h-9 sm:h-10 items-center gap-1.5 sm:gap-2 rounded-full border border-[#BDE8CA] bg-[#E9F9EE] px-2.5 sm:px-4 font-manrope text-[12px] sm:text-[13px] font-bold text-[#1F874C] shadow-xs shrink-0 transition-all hover:bg-[#D6F4DF] active:scale-98"
         >
           <Wallet size={14} className="text-[#1F874C]" />
-          <span>₹ 2,840</span>
+          <span>{walletBalance === null ? '₹ –' : formatINR(walletBalance)}</span>
         </Link>
 
         {/* Notification Bell with Dropdown Menu & Direct Route */}
@@ -95,10 +191,11 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
               setIsNotifOpen((prev) => !prev)
               setIsDropdownOpen(false)
             }}
-            className={`relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border transition-all cursor-pointer ${isNotifOpen
-              ? 'border-[#C06B3E] bg-[#FFF7ED] text-[#C06B3E] shadow-sm'
-              : 'border-[#E5DACD] bg-white text-[#524B42] shadow-xs hover:bg-[#F8F4EE]'
-              }`}
+            className={`relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border transition-all cursor-pointer ${
+              isNotifOpen
+                ? 'border-[#C06B3E] bg-[#FFF7ED] text-[#C06B3E] shadow-sm'
+                : 'border-[#E5DACD] bg-white text-[#524B42] shadow-xs hover:bg-[#F8F4EE]'
+            }`}
             aria-label="Notifications"
             aria-expanded={isNotifOpen}
           >
@@ -132,56 +229,54 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
                 </Link>
               </div>
 
-              {/* Items List (Top 4 recent notifications) */}
+              {/* Items List */}
               <div className="mt-2 divide-y divide-[#F5F2EC] max-h-[340px] overflow-y-auto">
-                {mockNotifications.slice(0, 4).map((item) => (
-                  <Link
-                    key={item.id}
-                    to={item.actionUrl || '/freelancer/notifications'}
-                    onClick={() => setIsNotifOpen(false)}
-                    className={`flex items-start gap-3 p-2.5 rounded-[14px] transition-colors ${item.read
-                      ? 'hover:bg-[#FAF8F5]'
-                      : 'bg-[#FFFBF7] hover:bg-[#FFF7ED]'
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-[12.5px] text-[#8E8376]">
+                    No notifications yet
+                  </div>
+                ) : (
+                  notifications.slice(0, 5).map((item) => (
+                    <Link
+                      key={item.id}
+                      to={item.link && item.link.startsWith('/freelancer/') ? item.link : '/freelancer/notifications'}
+                      onClick={() => openNotification(item)}
+                      className={`flex items-start gap-3 p-2.5 rounded-[14px] transition-colors ${
+                        item.read ? 'hover:bg-[#FAF8F5]' : 'bg-[#FFFBF7] hover:bg-[#FFF7ED]'
                       }`}
-                  >
-                    <div className="mt-0.5">
-                      {item.iconType === 'bid_accepted' && (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EBF7EE] text-[#16A34A]">
-                          <CheckCircle2 size={16} />
-                        </div>
-                      )}
-                      {item.iconType === 'payment_received' && (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FFF7ED] text-[#C06B3E]">
-                          <DollarSign size={16} />
-                        </div>
-                      )}
-                      {item.iconType === 'invite' && (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
-                          <Briefcase size={15} />
-                        </div>
-                      )}
-                      {item.iconType === 'message' && (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7C3AED]">
-                          <MessageSquare size={15} />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="text-[12.5px] font-bold text-[#08182B] truncate">
-                          {item.title}
-                        </h4>
-                        <span className="text-[10.5px] text-[#94A3B8] shrink-0">
-                          {item.time}
-                        </span>
+                    >
+                      <div className="mt-0.5">
+                        {iconFor(item.type) === 'bid_accepted' ? (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EBF7EE] text-[#16A34A]">
+                            <CheckCircle2 size={16} />
+                          </div>
+                        ) : iconFor(item.type) === 'payment_received' ? (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FFF7ED] text-[#C06B3E]">
+                            <DollarSign size={16} />
+                          </div>
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+                            <Briefcase size={15} />
+                          </div>
+                        )}
                       </div>
-                      <p className="line-clamp-2 text-[11.5px] text-[#64748B] mt-0.5">
-                        {item.description}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="text-[12.5px] font-bold text-[#08182B] truncate">
+                            {item.title}
+                          </h4>
+                          <span className="text-[10.5px] text-[#94A3B8] shrink-0">
+                            {timeAgo(item.createdAt)}
+                          </span>
+                        </div>
+                        <p className="line-clamp-2 text-[11.5px] text-[#64748B] mt-0.5">
+                          {item.message}
+                        </p>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
 
               {/* View Full Page Bottom Button */}
@@ -211,12 +306,13 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
             aria-expanded={isDropdownOpen}
             aria-label="User Profile Menu"
           >
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-[#08182B] font-manrope text-[13px] sm:text-[14px] font-bold text-white shadow-xs ring-2 ring-[#E5DACD]">
-              R
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center overflow-hidden rounded-full bg-[#08182B] font-manrope text-[13px] sm:text-[14px] font-bold text-white shadow-xs ring-2 ring-[#E5DACD]">
+              {avatar('h-full w-full', '')}
             </div>
             <svg
-              className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#8E8376] transition-transform duration-200 ${isDropdownOpen ? 'rotate-180 text-[#C06B3E]' : ''
-                }`}
+              className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#8E8376] transition-transform duration-200 ${
+                isDropdownOpen ? 'rotate-180 text-[#C06B3E]' : ''
+              }`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -225,30 +321,27 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
             </svg>
           </button>
 
-          {/* DROPDOWN MENU MODAL (Matching User Images 1 & 2 in Hunhar Theme) */}
+          {/* DROPDOWN MENU MODAL */}
           {isDropdownOpen && (
             <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[300px] overflow-hidden rounded-[24px] border border-[#E5E5E5] bg-white p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.14)] animate-in fade-in zoom-in-95 duration-150 font-manrope">
-              {/* Top: LinkedIn-style Freelancer Identity Section (Hunhar Theme) */}
+              {/* Top: Freelancer Identity Section */}
               <div className="rounded-[18px] border border-[#EFE8DF] bg-[#FAF8F5] p-3.5">
                 <div className="flex items-start gap-3">
                   {/* Avatar with Verified Ring / Status badge */}
                   <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#08182B] font-manrope text-[16px] font-bold text-white shadow-xs">
-                    <span>R</span>
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#1F874C] ring-2 ring-white">
-                      <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                    </span>
+                    {avatar('h-12 w-12', '')}
                   </div>
 
                   {/* Name, Verified badge & Headline */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <h4 className="font-manrope text-[14.5px] font-bold text-[#08182B] truncate">
-                        Rajshankar.M
+                        {userName}
                       </h4>
-                      <BadgeCheck size={16} className="text-[#C06B3E] shrink-0" />
+                      {verified && <BadgeCheck size={16} className="text-[#C06B3E] shrink-0" aria-label="KYC verified" />}
                     </div>
                     <p className="mt-0.5 line-clamp-2 font-manrope text-[11px] leading-snug text-[#7A7065]">
-                      UI/UX Designer | Frontend Developer | Creating Digital Experiences
+                      {userHeadline || 'Add a headline to your profile'}
                     </p>
                   </div>
                 </div>
@@ -263,7 +356,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
                 </Link>
               </div>
 
-              {/* Navigation Items (Matching Image 1: My Bids, Leadership Board, Contract, Wallet) */}
+              {/* Navigation Items */}
               <div className="mt-2.5 flex flex-col space-y-0.5 border-t border-[#F0ECE6] pt-2">
                 <Link
                   to="/freelancer/bids"
@@ -296,7 +389,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
                 >
                   <div className="flex items-center gap-2.5">
                     <FileText size={16} className="text-[#C06B3E]" />
-                    <span>Contract</span>
+                    <span>My Projects</span>
                   </div>
                   <ChevronRight size={14} className="text-[#CBD5E1]" />
                 </Link>
@@ -311,7 +404,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
                     <span>Wallet</span>
                   </div>
                   <span className="rounded-full bg-[#E9F9EE] px-2 py-0.5 text-[11px] font-extrabold text-[#1F874C]">
-                    ₹ 2,840
+                    {walletBalance === null ? '–' : formatINR(walletBalance)}
                   </span>
                 </Link>
               </div>
@@ -320,11 +413,8 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
               <div className="mt-2 border-t border-[#F0ECE6] pt-1.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsDropdownOpen(false)
-                    window.location.href = '/'
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 font-manrope text-[13px] font-bold text-[#E11D48] transition-colors hover:bg-[#FFF1F2]"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 font-manrope text-[13px] font-bold text-[#E11D48] transition-colors hover:bg-[#FFF1F2] cursor-pointer"
                 >
                   <LogOut size={15} />
                   <span>Log out</span>

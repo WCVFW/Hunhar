@@ -1,59 +1,74 @@
 package com.theunoia.project.domain;
 
-import com.theunoia.common.persistence.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import lombok.Getter;
-import lombok.Setter;
+import com.theunoia.common.model.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.UUID;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "bids")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Bid extends BaseEntity {
 
-    public enum Status { SUBMITTED, SHORTLISTED, ACCEPTED, REJECTED, WITHDRAWN }
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    @Column(name = "project_id", nullable = false)
+    @Column(nullable = false)
     private UUID projectId;
 
-    @Column(name = "freelancer_id", nullable = false)
+    @Column(nullable = false)
     private UUID freelancerId;
 
-    /** Proposed cost. */
-    @Column(nullable = false)
-    private BigDecimal amount;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal proposedCost;
 
-    /** Delivery timeline in days. */
-    @Column(name = "delivery_days", nullable = false)
-    private int deliveryDays;
-
-    /** Proposal message. */
     @Column(nullable = false)
-    private String proposal;
+    private Integer deliveryTimelineDays;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String proposalMessage;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Status status = Status.SUBMITTED;
+    @Column(nullable = false, length = 30)
+    @Builder.Default
+    private BidStatus status = BidStatus.SUBMITTED;
 
-    @Column(name = "credits_spent", nullable = false)
-    private int creditsSpent;
+    @Builder.Default
+    private boolean isShortlisted = false;
 
-    @Column(name = "shortlisted_at")
-    private Instant shortlistedAt;
+    @Column(columnDefinition = "TEXT")
+    private String attachmentUrls; // comma separated file URLs
 
-    @Version
-    private long version;
+    // ----- Read-only view fields (not persisted) -----
 
-    public boolean isOpen() {
-        return status == Status.SUBMITTED || status == Status.SHORTLISTED;
-    }
+    @Transient
+    private String projectTitle;
+
+    @Transient
+    private String projectCategory;
+
+    @Transient
+    private ProjectStatus projectStatus;
+
+    @Transient
+    private java.math.BigDecimal projectBudget;
+
+    @Transient
+    private UUID clientId;
+
+    @Transient
+    private String clientName;
+
+    @Transient
+    private String freelancerName;
+
+    @Transient
+    private String freelancerAvatarUrl;
 }

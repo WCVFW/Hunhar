@@ -1,59 +1,94 @@
 #!/usr/bin/env bash
-# THEUNOiA backend - one command to build, start, check and stop the whole platform (Linux / macOS / Git Bash).
-#   ./run.sh start | stop | restart | status | logs [service] | demo | clean | test | infra
-set -euo pipefail
-cd "$(dirname "$0")"
+# ==============================================================================
+# hunhar.in Backend Native Runner for Linux / macOS / Jenkins (No Docker Required)
+# ==============================================================================
 
-GATEWAY=http://localhost:8080
-SERVICES="api-gateway auth-service user-service project-service credit-service payment-service messaging-service \
-notification-service community-service content-service analytics-service file-service"
+set -e
 
-step() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
-ok()   { printf '    \033[32m[OK]\033[0m %s\n' "$1"; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-need_docker() {
-  command -v docker >/dev/null || { echo "Docker is not installed (give it >= 8 GB RAM)"; exit 1; }
-  docker info >/dev/null 2>&1 || { echo "Docker daemon is not running"; exit 1; }
-}
-ensure_env() { [ -f .env ] || { cp .env.example .env; ok "created .env from .env.example"; }; }
+ACTION="${1:-start}"
+DB_USER="${2:-${DB_USER:-root}}"
+DB_PASSWORD="${3:-${DB_PASSWORD:-root}}"
 
-wait_healthy() {
-  step "Waiting for all services to become healthy..."
-  for _ in $(seq 1 90); do
-    pending=""
-    for s in $SERVICES; do
-      docker compose ps --format '{{.Service}}|{{.Health}}' | grep -q "^$s|healthy$" || pending="$pending $s"
+PID_FILE="$SCRIPT_DIR/.hunhar-services.pid"
+
+SERVICES=("identity-service:8081" "project-service:8082" "billing-service:8083" "engagement-service:8084" "api-gateway:8080")
+
+stop_services() {
+    echo "[*] Stopping any existing hunhar.in backend services..."
+    for item in "${SERVICES[@]}"; do
+        PORT="${item#*:}"
+        PID=$(lsof -ti :"$PORT" 2>/dev/null || true)
+        if [ -n "$PID" ]; then
+            echo "  -> Killing PID $PID on port $PORT"
+            kill -9 "$PID" 2>/dev/null || true
+        fi
     done
-    [ -z "$pending" ] && { ok "All 12 microservices are healthy"; return 0; }
-    echo "    waiting for:$pending"; sleep 10
-  done
-  echo "Timed out - check ./run.sh status and ./run.sh logs <service>"; exit 1
+    rm -f "$PID_FILE"
+    echo "[+] All backend services stopped."
 }
 
-urls() {
-  cat <<EOF
+case "$ACTION" in
+    stop)
+        stop_services
+        ;;
+    status)
+        echo "=========================================================="
+        echo " hunhar.in Backend Services Status"
+        echo "=========================================================="
+        for item in "${SERVICES[@]}"; do
+            NAME="${item%%:*}"
+            PORT="${item#*:}"
+            PID=$(lsof -ti :"$PORT" 2>/dev/null || true)
+            if [ -n "$PID" ]; then
+                echo -e "$NAME\t[ONLINE] (Port $PORT, PID $PID)"
+            else
+                echo -e "$NAME\t[OFFLINE] (Port $PORT)"
+            fi
+        done
+        ;;
+    start|*)
+        stop_services
 
-  THEUNOiA is running
-  ---------------------------------------------------------------
-  API Gateway (all APIs)   $GATEWAY
-  MailHog (emails)         http://localhost:8025
-  RabbitMQ console         http://localhost:15672   (theunoia / theunoia)
-  MinIO console            http://localhost:9001    (minioadmin / minioadmin)
-  Admin login              admin@theunoia.com / Admin@12345
-  Full demo flow (Windows) .\\run.ps1 demo   (needs PowerShell; on Linux: pwsh ./scripts/demo-flow.ps1)
+        echo "=========================================================="
+        echo " Starting hunhar.in Backend Services (Native Java)"
+        echo "=========================================================="
 
-EOF
-}
+        for item in "${SERVICES[@]}"; do
+            NAME="${item%%:*}"
+            PORT="${item#*:}"
+            JAR_PATH="$SCRIPT_DIR/$NAME/target/$NAME-1.0.0.jar"
 
-case "${1:-start}" in
-  test)    step "Running all tests"; mvn -B clean verify ;;
-  infra)   need_docker; ensure_env; docker compose up -d postgres redis rabbitmq minio mailhog; ok "infra up" ;;
-  start)   need_docker; ensure_env; step "Building and starting everything"; docker compose up -d --build; wait_healthy; urls ;;
-  restart) need_docker; docker compose restart ${2:-}; wait_healthy ;;
-  stop)    need_docker; docker compose down; ok "stopped (data kept)" ;;
-  clean)   need_docker; docker compose down -v --remove-orphans; ok "stopped and data deleted" ;;
-  status)  need_docker; docker compose ps; curl -fsS "$GATEWAY/actuator/health" && echo ;;
-  logs)    need_docker; docker compose logs -f --tail 200 ${2:-} ;;
-  demo)    pwsh ./scripts/demo-flow.ps1 -Gateway "$GATEWAY" ;;
-  *)       echo "usage: $0 start|stop|restart|status|logs [svc]|demo|clean|test|infra"; exit 1 ;;
+            if [ ! -f "$JAR_PATH" ]; then
+                echo "JAR not found: $JAR_PATH. Running Maven build..."
+                mvn clean package -DskipTests
+            fi
+
+            echo "[*] Launching $NAME on port $PORT..."
+            nohup java \
+                -Dserver.port="$PORT" \
+                -DDB_USER="$DB_USER" \
+                -DDB_PASSWORD="$DB_PASSWORD" \
+                -DSPRING_DATASOURCE_USERNAME="$DB_USER" \
+                -DSPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \
+                -Xms128m -Xmx256m \
+                -jar "$JAR_PATH" > "$SCRIPT_DIR/$NAME.log" 2>&1 &
+            
+            PID=$!
+            echo "$NAME:$PID" >> "$PID_FILE"
+            sleep 2
+        done
+
+        echo "[*] Services launched. Checking API Gateway health at http://localhost:8080/actuator/health..."
+        for i in {1..20}; do
+            STATUS=$(curl -s http://localhost:8080/actuator/health | grep '"status":"UP"' || true)
+            if [ -n "$STATUS" ]; then
+                echo "[+] API Gateway is UP and database is auto-connected!"
+                break
+            fi
+            sleep 2
+        done
+        ;;
 esac

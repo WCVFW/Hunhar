@@ -151,7 +151,7 @@ export default function SkillsShowcase({ onOpenSignup }: SkillsShowcaseProps) {
               Place.
             </h2>
             <p className="mb-0 mt-6 max-w-[320px] font-['Manrope',sans-serif] text-sm font-medium leading-[1.65] text-[#94A3B8] min-[541px]:text-[15px]">
-              THEUNOiA connects ambitious freelancers with real projects, real
+              hunhar.in connects ambitious freelancers with real projects, real
               businesses, and opportunities to grow.
             </p>
           </div>

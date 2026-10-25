@@ -1,299 +1,199 @@
 package com.theunoia.project.service;
 
-import com.theunoia.common.event.EventPublisher;
-import com.theunoia.common.exception.ApiException;
+import com.theunoia.common.dto.PagedResponse;
+import com.theunoia.common.exception.BadRequestException;
+import com.theunoia.common.exception.ForbiddenException;
+import com.theunoia.common.internal.InternalClient;
+import com.theunoia.common.internal.NotificationPublisher;
 import com.theunoia.common.security.AuthUser;
-import com.theunoia.common.web.PageResponse;
-import com.theunoia.common.web.Pagination;
-import com.theunoia.project.config.ProjectProperties;
-import com.theunoia.project.domain.Bid;
-import com.theunoia.project.domain.Milestone;
-import com.theunoia.project.domain.Project;
-import com.theunoia.project.domain.ProjectAttachment;
-import com.theunoia.project.dto.ProjectDtos.AttachmentRequest;
-import com.theunoia.project.dto.ProjectDtos.ProjectRequest;
-import com.theunoia.project.dto.ProjectDtos.ProjectResponse;
-import com.theunoia.project.dto.ProjectDtos.ProjectSummary;
-import com.theunoia.project.repository.ProjectRepositories.AttachmentRepository;
-import com.theunoia.project.repository.ProjectRepositories.BidRepository;
-import com.theunoia.project.repository.ProjectRepositories.CategoryRepository;
-import com.theunoia.project.repository.ProjectRepositories.MilestoneRepository;
-import com.theunoia.project.repository.ProjectRepositories.ProjectRepository;
+import com.theunoia.project.domain.*;
+import com.theunoia.project.dto.CreateProjectDto;
+import com.theunoia.project.repository.BidRepository;
+import com.theunoia.project.repository.ProjectRepository;
+import com.theunoia.project.repository.TeamCollaboratorRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProjectService {
 
-    private final ProjectRepository projects;
-    private final AttachmentRepository attachments;
-    private final CategoryRepository categories;
-    private final BidRepository bids;
-    private final MilestoneRepository milestones;
-    private final ProjectAccess access;
-    private final ProjectSearchRepository search;
-    private final EventPublisher events;
-    private final ProjectProperties props;
+    private final ProjectRepository projectRepository;
+    private final BidRepository bidRepository;
+    private final TeamCollaboratorRepository collaboratorRepository;
+    private final ProjectAccessService access;
+    private final ProjectViewEnricher enricher;
+    private final NotificationPublisher notifications;
+    private final InternalClient internalClient;
+
+    public record SearchFilters(
+            List<String> categories,
+            List<String> excludeCategories,
+            String search,
+            BigDecimal minBudget,
+            BigDecimal maxBudget,
+            Integer maxDays,
+            String sort
+    ) {}
 
     @Transactional
-    public ProjectResponse create(AuthUser client, ProjectRequest req) {
-        validate(req);
-        Project p = new Project();
-        p.setClientId(client.id());
-        apply(p, req);
-        p.setCreditCost(creditCostFor(req.budgetMax()));
-        projects.save(p);
-        if (req.attachments() != null) req.attachments().forEach(a -> addAttachment(p.getId(), client.id(), a));
-        if (req.publish()) publish(p);
-        return view(p, client);
-    }
+    public Project createProject(UUID clientId, CreateProjectDto dto) {
+        String skillsStr = dto.getSkills() != null ? String.join(",", dto.getSkills()) : "";
+        String attachmentsStr = dto.getAttachmentUrls() != null ? String.join(",", dto.getAttachmentUrls()) : "";
 
-    @Transactional
-    public ProjectResponse update(AuthUser user, UUID projectId, ProjectRequest req) {
-        Project p = access.requireOwner(projectId, user);
-        ProjectAccess.requireStatus(p, Project.Status.DRAFT, Project.Status.OPEN);
-        validate(req);
-        if (p.getStatus() == Project.Status.OPEN && p.getBidCount() > 0
-                && (req.budgetMax().compareTo(p.getBudgetMax()) != 0 || req.paymentMode() != null && req.paymentMode() != p.getPaymentMode())) {
-            throw ApiException.unprocessable("BIDS_EXIST", "Budget and payment mode cannot change after bids were received");
-        }
-        apply(p, req);
-        if (req.publish() && p.getStatus() == Project.Status.DRAFT) publish(p);
-        return view(p, user);
-    }
+        Project project = Project.builder()
+                .clientId(clientId)
+                .title(dto.getTitle())
+                .description(dto.getDescription())
+                .category(dto.getCategory())
+                .budget(dto.getBudget())
+                .timelineDays(dto.getTimelineDays())
+                .skills(skillsStr)
+                .attachmentUrls(attachmentsStr)
+                .status(ProjectStatus.OPEN)
+                .progressPercentage(0)
+                .bidCount(0)
+                .build();
 
-    @Transactional
-    public ProjectResponse publish(AuthUser user, UUID projectId) {
-        Project p = access.requireOwner(projectId, user);
-        ProjectAccess.requireStatus(p, Project.Status.DRAFT);
-        publish(p);
-        return view(p, user);
-    }
-
-    private void publish(Project p) {
-        p.setStatus(Project.Status.OPEN);
-        p.setPublishedAt(Instant.now());
-        Map<String, Object> data = new HashMap<>();
-        data.put("projectId", p.getId());
-        data.put("clientId", p.getClientId());
-        data.put("title", p.getTitle());
-        data.put("skills", List.copyOf(p.getSkills()));
-        data.put("budgetMin", p.getBudgetMin());
-        data.put("budgetMax", p.getBudgetMax());
-        data.put("paymentMode", p.getPaymentMode().name());
-        if (p.getCategoryId() != null) data.put("categoryId", p.getCategoryId());
-        events.publish("project.published", data);
+        return projectRepository.save(project);
     }
 
     /**
-     * Cancelling an open project refunds the credits of every active bidder (asynchronously via
-     * credit-service). An in-progress project can only be cancelled when no money is in escrow.
+     * Open projects are visible to every logged-in user. Once a project is awarded, only its
+     * participants (and freelancers who bid on it) can still open it.
      */
-    @Transactional
-    public ProjectResponse cancel(AuthUser user, UUID projectId, String reason) {
-        Project p = access.requireOwner(projectId, user);
-        ProjectAccess.requireStatus(p, Project.Status.DRAFT, Project.Status.OPEN, Project.Status.IN_PROGRESS);
-        if (p.getStatus() == Project.Status.IN_PROGRESS) {
-            boolean moneyInFlight = milestones.findByProjectIdOrderByPositionAsc(projectId).stream()
-                    .anyMatch(m -> EnumSet.of(Milestone.Status.FUNDED, Milestone.Status.SUBMITTED,
-                            Milestone.Status.REVISION_REQUESTED).contains(m.getStatus()));
-            if (moneyInFlight) {
-                throw ApiException.unprocessable("FUNDS_IN_ESCROW", "Funded milestones exist - raise a dispute to cancel this project");
+    @Transactional(readOnly = true)
+    public Project getProjectById(UUID id, AuthUser viewer) {
+        Project project = access.load(id);
+        if (project.getStatus() != ProjectStatus.OPEN && viewer != null
+                && !access.isParticipant(project, viewer)
+                && bidRepository.findByProjectIdAndFreelancerId(id, viewer.id()).isEmpty()) {
+            throw new ForbiddenException("This project is no longer open");
+        }
+        enricher.project(project, viewer == null ? null : viewer.id());
+        if (viewer != null && access.isCollaborator(project, viewer.id())) {
+            project.setMyRole("COLLABORATOR");
+        }
+        return project;
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<Project> searchProjects(SearchFilters f, int page, int size, UUID viewerId) {
+        Sort sort = switch (f.sort() == null ? "" : f.sort()) {
+            case "budget_desc" -> Sort.by("budget").descending();
+            case "budget_asc" -> Sort.by("budget").ascending();
+            case "deadline_asc" -> Sort.by("timelineDays").ascending();
+            default -> Sort.by("createdAt").descending();
+        };
+        Page<Project> result = projectRepository.findAll(openProjects(f),
+                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 50), sort));
+
+        List<Project> content = new ArrayList<>(result.getContent());
+        enricher.projects(content, viewerId);
+
+        return PagedResponse.<Project>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .last(result.isLast())
+                .build();
+    }
+
+    private Specification<Project> openProjects(SearchFilters f) {
+        return (root, query, cb) -> {
+            List<Predicate> preds = new ArrayList<>();
+            preds.add(cb.equal(root.get("status"), ProjectStatus.OPEN));
+            if (f.categories() != null && !f.categories().isEmpty()) {
+                preds.add(cb.lower(root.get("category")).in(lower(f.categories())));
             }
-            milestones.findByProjectIdOrderByPositionAsc(projectId).stream()
-                    .filter(m -> m.getStatus() == Milestone.Status.PENDING)
-                    .forEach(m -> m.setStatus(Milestone.Status.CANCELLED));
-        }
-        if (p.getStatus() == Project.Status.OPEN) {
-            for (Bid b : bids.findByProjectIdAndStatusIn(projectId, EnumSet.of(Bid.Status.SUBMITTED, Bid.Status.SHORTLISTED))) {
-                b.setStatus(Bid.Status.REJECTED);
-                if (b.getCreditsSpent() > 0) {
-                    events.publish("bid.refund_requested", Map.of("bidId", b.getId(), "freelancerId", b.getFreelancerId(),
-                            "credits", b.getCreditsSpent(), "projectId", projectId, "reason", "Project cancelled by client"));
-                }
+            if (f.excludeCategories() != null && !f.excludeCategories().isEmpty()) {
+                preds.add(cb.not(cb.lower(root.get("category")).in(lower(f.excludeCategories()))));
             }
+            if (f.search() != null && !f.search().isBlank()) {
+                String like = "%" + f.search().trim().toLowerCase() + "%";
+                preds.add(cb.or(
+                        cb.like(cb.lower(root.get("title")), like),
+                        cb.like(cb.lower(root.get("description")), like),
+                        cb.like(cb.lower(root.get("skills")), like)));
+            }
+            if (f.minBudget() != null) preds.add(cb.greaterThanOrEqualTo(root.get("budget"), f.minBudget()));
+            if (f.maxBudget() != null) preds.add(cb.lessThanOrEqualTo(root.get("budget"), f.maxBudget()));
+            if (f.maxDays() != null) preds.add(cb.lessThanOrEqualTo(root.get("timelineDays"), f.maxDays()));
+            return cb.and(preds.toArray(new Predicate[0]));
+        };
+    }
+
+    private static List<String> lower(List<String> values) {
+        return values.stream().map(v -> v.trim().toLowerCase()).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Project> getClientProjects(UUID clientId) {
+        return enricher.projects(projectRepository.findByClientId(clientId), clientId);
+    }
+
+    /** Projects the freelancer is delivering: awarded to them, or joined as an accepted team member. */
+    @Transactional(readOnly = true)
+    public List<Project> getFreelancerProjects(UUID freelancerId) {
+        List<Project> owned = projectRepository.findByAwardedFreelancerId(freelancerId);
+        Set<UUID> collabIds = collaboratorRepository.findByCollaboratorFreelancerIdAndStatus(freelancerId, "ACCEPTED")
+                .stream().map(TeamCollaborator::getProjectId).collect(Collectors.toSet());
+        List<Project> collab = projectRepository.findAllById(collabIds);
+        collab.forEach(p -> p.setMyRole("COLLABORATOR"));
+
+        List<Project> all = new ArrayList<>(owned);
+        collab.stream().filter(p -> !freelancerId.equals(p.getAwardedFreelancerId())).forEach(all::add);
+        all.sort(Comparator.comparing(Project::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        return enricher.projects(all, freelancerId);
+    }
+
+    /** Client marks the work as complete: closes the project and credits the freelancer's stats. */
+    @Transactional
+    public Project completeProject(UUID projectId, AuthUser user) {
+        Project project = access.requireClient(projectId, user);
+        if (project.getStatus() != ProjectStatus.ACTIVE) {
+            throw new BadRequestException("Only active projects can be marked complete");
         }
-        Project.Status previous = p.getStatus();
-        p.setStatus(Project.Status.CANCELLED);
-        p.setCancelledAt(Instant.now());
-        p.setCancelReason(reason);
-        Map<String, Object> data = new HashMap<>();
-        data.put("projectId", p.getId());
-        data.put("clientId", p.getClientId());
-        data.put("previousStatus", previous.name());
-        data.put("title", p.getTitle());
-        if (p.getFreelancerId() != null) data.put("freelancerId", p.getFreelancerId());
-        events.publish("project.cancelled", data);
-        return view(p, user);
-    }
+        project.setStatus(ProjectStatus.COMPLETED);
+        project.setProgressPercentage(100);
+        project.setEndDate(Instant.now());
+        projectRepository.save(project);
 
-    @Transactional(readOnly = true)
-    public ProjectResponse get(UUID projectId, AuthUser viewer) {
-        Project p = access.load(projectId);
-        boolean visible = p.getStatus() != Project.Status.DRAFT
-                || (viewer != null && (p.isOwnedBy(viewer.id()) || viewer.isAdmin()));
-        if (!visible) throw ApiException.notFound("Project");
-        return view(p, viewer);
-    }
-
-    @Transactional(readOnly = true)
-    public PageResponse<ProjectSummary> browse(ProjectSearchRepository.Criteria criteria) {
-        return search.search(criteria);
-    }
-
-    /** Client: own projects (Open / Active / Completed / Cancelled tabs). Freelancer: assigned projects. */
-    @Transactional(readOnly = true)
-    public PageResponse<ProjectResponse> mine(AuthUser user, Project.Status status, int page, int size) {
-        Pageable pageable = Pagination.newestFirst(page, size);
-        Page<Project> result;
-        if (user.isClient()) {
-            result = status == null ? projects.findByClientId(user.id(), pageable)
-                    : projects.findByClientIdAndStatusIn(user.id(), List.of(status), pageable);
-        } else {
-            result = status == null ? projects.findByFreelancerId(user.id(), pageable)
-                    : projects.findByFreelancerIdAndStatusIn(user.id(), List.of(status), pageable);
+        BigDecimal earned = bidRepository.findByProjectIdAndFreelancerId(projectId, project.getAwardedFreelancerId())
+                .map(Bid::getProposedCost).orElse(project.getBudget());
+        try {
+            internalClient.post(internalClient.identity() + "/internal/freelancers/" + project.getAwardedFreelancerId() + "/completed-project",
+                    Map.of("revenue", earned), new ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Could not update freelancer stats for project {}: {}", projectId, e.getMessage());
         }
-        return PageResponse.of(result, p -> view(p, user));
+        notifications.notify(project.getAwardedFreelancerId(), "PROJECT_COMPLETED",
+                "Project completed 🎉",
+                "The client marked \"" + project.getTitle() + "\" as complete.",
+                "/freelancer/projects/" + projectId);
+        return enricher.project(project, user.id());
     }
 
     @Transactional
-    public Map<String, Object> addAttachment(AuthUser user, UUID projectId, AttachmentRequest req) {
-        Project p = access.requireOwner(projectId, user);
-        ProjectAccess.requireStatus(p, Project.Status.DRAFT, Project.Status.OPEN, Project.Status.IN_PROGRESS);
-        return toMap(addAttachment(projectId, user.id(), req));
-    }
-
-    private ProjectAttachment addAttachment(UUID projectId, UUID uploader, AttachmentRequest req) {
-        ProjectAttachment a = new ProjectAttachment();
-        a.setProjectId(projectId);
-        a.setFileId(req.fileId());
-        a.setFileName(req.fileName());
-        a.setUrl(req.url());
-        a.setUploadedBy(uploader);
-        return attachments.save(a);
-    }
-
-    // ------------------------------------------------------------------ dashboards
-
-    @Transactional(readOnly = true)
-    public Map<String, Object> freelancerDashboard(UUID freelancerId) {
-        Map<String, Object> d = new LinkedHashMap<>();
-        d.put("activeProjects", projects.countByFreelancerIdAndStatus(freelancerId, Project.Status.IN_PROGRESS));
-        d.put("completedProjects", projects.countByFreelancerIdAndStatus(freelancerId, Project.Status.COMPLETED));
-        d.put("pendingBids", bids.countByFreelancerIdAndStatusIn(freelancerId, EnumSet.of(Bid.Status.SUBMITTED, Bid.Status.SHORTLISTED)));
-        d.put("shortlistedBids", bids.countByFreelancerIdAndStatusIn(freelancerId, EnumSet.of(Bid.Status.SHORTLISTED)));
-        d.put("teamProjects", projects.findTeamProjectIds(freelancerId).size());
-        d.put("upcomingDeadlines", milestones.upcomingForFreelancer(freelancerId, LocalDate.now().plusDays(14)).stream()
-                .limit(10).map(m -> Map.of("milestoneId", m.getId(), "projectId", m.getProjectId(), "title", m.getTitle(),
-                        "dueDate", m.getDueDate(), "status", m.getStatus().name())).toList());
-        return d;
-    }
-
-    @Transactional(readOnly = true)
-    public Map<String, Object> clientDashboard(UUID clientId) {
-        Map<String, Object> d = new LinkedHashMap<>();
-        for (Project.Status s : Project.Status.values()) {
-            d.put(s.name().toLowerCase() + "Projects", projects.countByClientIdAndStatus(clientId, s));
-        }
-        d.put("openBidsToReview", bids.countOpenBidsForClient(clientId));
-        d.put("milestonesAwaitingReview", milestones.awaitingClientReview(clientId).stream().limit(10)
-                .map(m -> Map.of("milestoneId", m.getId(), "projectId", m.getProjectId(), "title", m.getTitle(),
-                        "amount", m.getAmount())).toList());
-        return d;
-    }
-
-    // ------------------------------------------------------------------ admin
-
-    @Transactional(readOnly = true)
-    public PageResponse<ProjectResponse> adminSearch(Project.Status status, UUID clientId, int page, int size) {
-        return PageResponse.of(projects.adminSearch(status, clientId, Pagination.newestFirst(page, size)), p -> view(p, null));
-    }
-
-    @Transactional
-    public ProjectResponse adminChangeStatus(AuthUser admin, UUID projectId, Project.Status status, String reason) {
-        Project p = access.loadForUpdate(projectId);
-        Project.Status previous = p.getStatus();
-        p.setStatus(status);
-        if (status == Project.Status.CANCELLED) {
-            p.setCancelledAt(Instant.now());
-            p.setCancelReason(reason);
-        }
-        events.publish("project.status_changed_by_admin", Map.of("projectId", projectId, "adminId", admin.id(),
-                "from", previous.name(), "to", status.name(), "reason", reason == null ? "" : reason));
-        return view(p, admin);
-    }
-
-    @Transactional(readOnly = true)
-    public Map<String, Object> platformStats() {
-        Map<String, Object> s = new LinkedHashMap<>();
-        long total = 0;
-        for (Project.Status status : Project.Status.values()) {
-            long c = projects.countByStatus(status);
-            total += c;
-            s.put(status.name().toLowerCase(), c);
-        }
-        s.put("total", total);
-        s.put("totalBids", bids.count());
-        return s;
-    }
-
-    // ------------------------------------------------------------------ helpers
-
-    ProjectResponse view(Project p, AuthUser viewer) {
-        List<Map<String, Object>> files = attachments.findByProjectIdOrderByCreatedAtAsc(p.getId()).stream()
-                .map(ProjectService::toMap).toList();
-        Map<String, Object> myBid = null;
-        if (viewer != null && viewer.isFreelancer()) {
-            myBid = bids.findByProjectIdAndFreelancerId(p.getId(), viewer.id())
-                    .map(b -> Map.<String, Object>of("bidId", b.getId(), "status", b.getStatus().name(), "amount", b.getAmount()))
-                    .orElse(null);
-        }
-        return ProjectResponse.of(p, files, myBid);
-    }
-
-    private static Map<String, Object> toMap(ProjectAttachment a) {
-        return Map.of("id", a.getId(), "fileId", a.getFileId(), "fileName", a.getFileName(), "url", a.getUrl());
-    }
-
-    private void validate(ProjectRequest req) {
-        if (req.budgetMax().compareTo(req.budgetMin()) < 0) throw ApiException.badRequest("budgetMax must be >= budgetMin");
-        if (req.deadline() != null && req.deadline().isBefore(LocalDate.now())) throw ApiException.badRequest("Deadline must be in the future");
-        if (req.categoryId() != null && !categories.existsById(req.categoryId())) throw ApiException.badRequest("Unknown category");
-    }
-
-    private void apply(Project p, ProjectRequest req) {
-        p.setTitle(req.title().trim());
-        p.setDescription(req.description());
-        p.setCategoryId(req.categoryId());
-        p.setBudgetType(req.budgetType());
-        p.setBudgetMin(req.budgetMin());
-        p.setBudgetMax(req.budgetMax());
-        p.setDeadline(req.deadline());
-        if (req.paymentMode() != null) p.setPaymentMode(req.paymentMode());
-        p.getSkills().clear();
-        p.getSkills().addAll(new LinkedHashSet<>(req.skills().stream().map(String::trim).toList()));
-    }
-
-    /** Credits needed to bid scale with the project's budget (configurable tiers). */
-    int creditCostFor(BigDecimal budgetMax) {
-        for (ProjectProperties.CreditTier tier : props.getCreditTiers()) {
-            if (budgetMax.compareTo(tier.getUpTo()) <= 0) return tier.getCredits();
-        }
-        return props.getMaxCreditCost();
+    public Project updateProjectStatus(UUID projectId, ProjectStatus status) {
+        Project project = access.load(projectId);
+        project.setStatus(status);
+        return projectRepository.save(project);
     }
 }

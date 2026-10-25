@@ -29,7 +29,7 @@ export default function CTASection({ onOpenSignup }: CTASectionProps): React.JSX
           </h2>
 
           <p className="font-manrope text-base sm:text-lg xl:text-2xl xl:whitespace-nowrap font-normal text-white/95 leading-normal m-0 mb-7">
-            Join thousands of students earning and businesses growing with THEUNOiA.
+            Join thousands of students earning and businesses growing with hunhar.in.
           </p>
 
           <div className="flex items-center flex-wrap gap-4">

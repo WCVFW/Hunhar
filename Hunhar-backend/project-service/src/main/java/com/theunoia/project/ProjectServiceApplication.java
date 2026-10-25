@@ -2,14 +2,11 @@ package com.theunoia.project;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.context.annotation.ComponentScan;
 
-@SpringBootApplication(scanBasePackages = "com.theunoia")
-@ConfigurationPropertiesScan
-@EnableJpaRepositories(basePackages = "com.theunoia.project", considerNestedRepositories = true)
+@SpringBootApplication
+@ComponentScan(basePackages = {"com.theunoia.common", "com.theunoia.project"})
 public class ProjectServiceApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(ProjectServiceApplication.class, args);
     }

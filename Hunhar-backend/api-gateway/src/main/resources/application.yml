@@ -1,79 +1,39 @@
 server:
   port: ${PORT:8080}
-  shutdown: graceful
 
 spring:
   application:
     name: api-gateway
-  lifecycle:
-    timeout-per-shutdown-phase: 20s
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
   cloud:
     gateway:
-      httpclient:
-        connect-timeout: 3000
-        response-timeout: 30s
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      routes:
+        # Identity Service Routes (Auth, User Profiles, KYC, Leaderboard)
+        - id: identity-service-auth
+          uri: ${IDENTITY_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/kyc/**, /api/v1/leaderboard/**
+
+        # Project Service Routes (Projects, Bids, Workspace, Collaboration, Disputes)
+        - id: project-service
+          uri: ${PROJECT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/projects/**, /api/v1/bids/**, /api/v1/workspace/**, /api/v1/collaborations/**, /api/v1/disputes/**
+
+        # Billing Service Routes (Wallet, Payments, Credits, Invoices, Payouts, Webhooks)
+        - id: billing-service
+          uri: ${BILLING_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/payments/**, /api/v1/wallets/**, /api/v1/credits/**, /api/v1/invoices/**, /api/v1/payouts/**, /api/v1/webhooks/**
+
+        # Engagement Service Routes (Messaging, WhatsApp/Notifications, Calendar, Forum, CMS, Analytics)
+        - id: engagement-service
+          uri: ${ENGAGEMENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/messages/**, /api/v1/notifications/**, /api/v1/calendar/**, /api/v1/community/**, /api/v1/content/**, /api/v1/analytics/**, /ws/**
 
 theunoia:
   gateway:
-    jwt-secret: ${JWT_SECRET:ZGV2LW9ubHktand0LXNlY3JldC1jaGFuZ2UtbWUtaW4tcHJvZHVjdGlvbi0zMmJ5dGVzIQ==}
-    internal-token: ${INTERNAL_SERVICE_TOKEN:dev-internal-token-change-me}
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
-    services:
-      auth: ${AUTH_SERVICE_URL:http://localhost:8081}
-      user: ${USER_SERVICE_URL:http://localhost:8082}
-      project: ${PROJECT_SERVICE_URL:http://localhost:8083}
-      credit: ${CREDIT_SERVICE_URL:http://localhost:8084}
-      payment: ${PAYMENT_SERVICE_URL:http://localhost:8085}
-      messaging: ${MESSAGING_SERVICE_URL:http://localhost:8086}
-      notification: ${NOTIFICATION_SERVICE_URL:http://localhost:8087}
-      community: ${COMMUNITY_SERVICE_URL:http://localhost:8088}
-      content: ${CONTENT_SERVICE_URL:http://localhost:8089}
-      analytics: ${ANALYTICS_SERVICE_URL:http://localhost:8090}
-      file: ${FILE_SERVICE_URL:http://localhost:8091}
-    # Authentication optional on these routes (a token, if sent, is still validated & forwarded).
-    public-routes:
-      - POST /api/v1/auth/register/**
-      - POST /api/v1/auth/login
-      - POST /api/v1/auth/refresh
-      - POST /api/v1/auth/verify-email
-      - POST /api/v1/auth/forgot-password
-      - POST /api/v1/auth/reset-password
-      - GET /api/v1/categories/**
-      - GET /api/v1/projects
-      - GET /api/v1/projects/*
-      - GET /api/v1/users/freelancers/**
-      - GET /api/v1/users/leaderboard
-      - GET /api/v1/reviews/**
-      - GET /api/v1/credits/packages
-      - POST /api/v1/webhooks/**
-      - GET /api/v1/content/**
-      - POST /api/v1/content/contact
-      - POST /api/v1/content/leads
-      - GET /sitemap.xml
-      - GET /api/v1/community/**
-      - GET /api/v1/calendar/google/callback
-      - GET /api/v1/files/public/**
-
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        sliding-window-size: 20
-        minimum-number-of-calls: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 15s
-        permitted-number-of-calls-in-half-open-state: 5
-  timelimiter:
-    configs:
-      default:
-        timeout-duration: 30s
+    jwt-secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 
 management:
   endpoints:
@@ -82,16 +42,8 @@ management:
         include: health,info,prometheus,gateway
   endpoint:
     health:
-      probes:
-        enabled: true
-  health:
-    redis:
-      enabled: false   # Redis is non-critical here: rate limiting + suspension deny-list fail open
-  metrics:
-    tags:
-      application: ${spring.application.name}
+      show-details: always
 
 logging:
   level:
-    root: INFO
     org.springframework.cloud.gateway: INFO

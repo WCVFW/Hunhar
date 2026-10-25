@@ -1,58 +1,36 @@
 package com.theunoia.project.domain;
 
-import com.theunoia.common.persistence.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.Setter;
+import com.theunoia.common.model.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
 
-import java.time.Instant;
 import java.util.UUID;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "disputes")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Dispute extends BaseEntity {
 
-    public enum Status { OPEN, UNDER_REVIEW, RESOLVED }
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    public enum Resolution { REFUND_CLIENT, RELEASE_TO_FREELANCER, SPLIT, NO_ACTION }
-
-    @Column(name = "project_id", nullable = false)
+    @Column(nullable = false)
     private UUID projectId;
 
-    @Column(name = "milestone_id")
-    private UUID milestoneId;
-
-    @Column(name = "raised_by", nullable = false)
-    private UUID raisedBy;
-
     @Column(nullable = false)
+    private UUID raisedById;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String reason;
 
-    @Column(nullable = false)
-    private String description;
+    @Builder.Default
+    private String status = "OPEN"; // OPEN, RESOLVED, DISMISSED
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Status status = Status.OPEN;
-
-    @Enumerated(EnumType.STRING)
-    private Resolution resolution;
-
-    @Column(name = "freelancer_share_percent")
-    private Short freelancerSharePercent;
-
-    @Column(name = "resolution_note")
-    private String resolutionNote;
-
-    @Column(name = "resolved_by")
-    private UUID resolvedBy;
-
-    @Column(name = "resolved_at")
-    private Instant resolvedAt;
+    @Column(columnDefinition = "TEXT")
+    private String resolutionNotes;
 }

@@ -1,0 +1,47 @@
+server:
+  port: ${PORT:8083}
+
+spring:
+  application:
+    name: billing-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:theunoia_billing}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:root}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:root}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+    show-sql: false
+
+theunoia:
+  payments:
+    # Simulated payments when no Razorpay keys are set. Set PAYMENTS_ALLOW_MOCK=false in production.
+    allow-mock: ${PAYMENTS_ALLOW_MOCK:true}
+  gateway:
+    razorpay:
+      key-id: ${RAZORPAY_KEY_ID:rzp_test_placeholder}
+      key-secret: ${RAZORPAY_KEY_SECRET:secret_placeholder}
+      webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+    cashfree:
+      app-id: ${CASHFREE_APP_ID:app_placeholder}
+      secret-key: ${CASHFREE_SECRET_KEY:secret_placeholder}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

@@ -3,6 +3,9 @@ import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import hunharLogo from '../assets/hunhar-Black.svg'
 import mascotBeanbag from '../assets/Signup_Mascot.png'
 
+import { useNavigate } from 'react-router-dom'
+import { authApi, tokenStorage } from '../services/api'
+
 const labelClass =
   'mb-[clamp(2px,0.5vh,6px)] block text-[11px] font-semibold text-[#334155]'
 
@@ -11,16 +14,42 @@ const inputClass =
   'h-[clamp(34px,5.4vh,46px)] w-full rounded-lg border border-[#D6DCE5] bg-white px-3 text-xs text-[#0F1B3D] outline-none transition-colors placeholder:text-[#A0AEC0] focus:border-[#C06B3E] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:[-webkit-text-fill-color:#0F1B3D]'
 
 export default function LoginPage(): React.JSX.Element {
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [loading, setLoading] = useState<boolean>(false)
+  const [errorMsg, setErrorMsg] = useState<string>('')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     rememberMe: false,
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Authentication flow
+    setErrorMsg('')
+    setLoading(true)
+
+    try {
+      const res = await authApi.login({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      tokenStorage.setToken(res.token)
+      tokenStorage.setUser(res)
+
+      if (res.role === 'CLIENT') {
+        navigate('/client/dashboard')
+      } else if (res.role === 'ADMIN') {
+        navigate('/admin/dashboard')
+      } else {
+        navigate('/freelancer/dashboard')
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Invalid email or password. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -138,12 +167,20 @@ export default function LoginPage(): React.JSX.Element {
                 </a>
               </div>
 
+              {/* Error Message */}
+              {errorMsg && (
+                <div className="rounded-lg bg-red-50 p-2 text-center text-xs font-semibold text-red-600 border border-red-200">
+                  {errorMsg}
+                </div>
+              )}
+
               {/* Login Button */}
               <button
                 type="submit"
-                className="h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer rounded-lg border-none bg-[#08182B] text-xs font-bold text-white shadow-sm transition-colors duration-200 hover:bg-[#12294A]"
+                disabled={loading}
+                className="h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer rounded-lg border-none bg-[#08182B] text-xs font-bold text-white shadow-sm transition-colors duration-200 hover:bg-[#12294A] disabled:opacity-60"
               >
-                Login
+                {loading ? 'Logging in...' : 'Login'}
               </button>
 
               {/* Sign Up Link */}

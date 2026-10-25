@@ -1,53 +1,39 @@
 package com.theunoia.project.domain;
 
-import com.theunoia.common.persistence.BaseEntity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
-import lombok.Getter;
-import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import com.theunoia.common.model.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
-@Getter
-@Setter
 @Entity
 @Table(name = "deliverables")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Deliverable extends BaseEntity {
 
-    public enum Status { SUBMITTED, APPROVED, REVISION_REQUESTED }
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
-    @Column(name = "milestone_id", nullable = false)
+    @Column(nullable = false)
     private UUID milestoneId;
 
-    @Column(name = "project_id", nullable = false)
+    @Column(nullable = false)
     private UUID projectId;
 
-    @Column(name = "submitted_by", nullable = false)
-    private UUID submittedBy;
-
-    private String note;
-
-    /** [{fileId, fileName, url}] - files live in file-service. */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb", nullable = false)
-    private List<Map<String, Object>> attachments = new ArrayList<>();
-
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Status status = Status.SUBMITTED;
+    private UUID freelancerId;
 
-    @Column(name = "review_note")
-    private String reviewNote;
+    @Column(columnDefinition = "TEXT")
+    private String notes;
 
-    @Column(name = "reviewed_at")
-    private Instant reviewedAt;
+    @Column(columnDefinition = "TEXT")
+    private String fileUrls;
+
+    @Builder.Default
+    private boolean isApproved = false;
 }

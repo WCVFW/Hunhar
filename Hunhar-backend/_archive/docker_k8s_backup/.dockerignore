@@ -1,9 +1,0 @@
-**/target
-**/.idea
-**/*.iml
-.git
-.env
-k8s
-jenkins
-docs
-*.md

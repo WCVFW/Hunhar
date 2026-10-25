@@ -1,17 +1,33 @@
-import React, { useState } from 'react'
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, RefreshCw } from 'lucide-react'
 import hunharLogo from '../assets/hunhar-Black.svg'
 import mascotBeanbag from '../assets/Signup_Mascot.png'
+
+import { useNavigate } from 'react-router-dom'
+import { authApi, tokenStorage } from '../services/api'
 
 const labelClass =
   'mb-[clamp(2px,0.5vh,6px)] block text-[11px] font-semibold text-[#334155]'
 
-// Height scales with screen height so the page never needs scrolling
 const inputClass =
   'h-[clamp(32px,5vh,44px)] w-full rounded-lg border border-[#D6DCE5] bg-white px-3 text-xs text-[#0F1B3D] outline-none transition-colors placeholder:text-[#A0AEC0] focus:border-[#C06B3E] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_white_inset] [&:-webkit-autofill]:[-webkit-text-fill-color:#0F1B3D]'
 
 export default function SignUpPage(): React.JSX.Element {
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState<boolean>(false)
+  const [loading, setLoading] = useState<boolean>(false)
+  const [errorMsg, setErrorMsg] = useState<string>('')
+  
+  // Email OTP Verification States
+  const [otpSent, setOtpSent] = useState<boolean>(false)
+  const [sendingOtp, setSendingOtp] = useState<boolean>(false)
+  const [verifyingOtp, setVerifyingOtp] = useState<boolean>(false)
+  const [enteredOtp, setEnteredOtp] = useState<string>('')
+  const [isVerified, setIsVerified] = useState<boolean>(false)
+  const [countdown, setCountdown] = useState<number>(0)
+  const [otpNotice, setOtpNotice] = useState<string>('')
+  const [otpError, setOtpError] = useState<string>('')
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -26,11 +42,135 @@ export default function SignUpPage(): React.JSX.Element {
   const role = params.get('role') || 'freelancer'
   const domain = params.get('domain') || 'it'
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Countdown timer for Resend OTP
+  useEffect(() => {
+    let timer: any
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1)
+      }, 1000)
+    }
+    return () => clearInterval(timer)
+  }, [countdown])
+
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+
+  const handleSendOtp = async () => {
+    setOtpError('')
+    setErrorMsg('')
+    setOtpNotice('')
+    const email = formData.email.trim()
+    if (!isValidEmail(email)) {
+      setOtpError('Please enter a valid email address first.')
+      return
+    }
+
+    setSendingOtp(true)
+    try {
+      await authApi.sendSignupOtp(email)
+      setOtpSent(true)
+      setEnteredOtp('')
+      setCountdown(30)
+      setOtpNotice(`We sent a 6-digit code to ${email}. Check your inbox (and spam folder).`)
+    } catch (err: any) {
+      setOtpError(err.message || 'Could not send verification code. Please try again.')
+    } finally {
+      setSendingOtp(false)
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    setOtpError('')
+    const code = enteredOtp.trim()
+    if (!/^\d{6}$/.test(code)) {
+      setOtpError('Please enter the 6-digit code from your email.')
+      return
+    }
+
+    setVerifyingOtp(true)
+    try {
+      await authApi.verifySignupOtp(formData.email.trim(), code)
+      setIsVerified(true)
+      setOtpNotice('')
+    } catch (err: any) {
+      setOtpError(err.message || 'Incorrect code. Please try again.')
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
+
+  // Changing the email after sending a code restarts the OTP flow
+  const handleEmailChange = (value: string) => {
+    setFormData({ ...formData, email: value })
+    if (otpSent) {
+      setOtpSent(false)
+      setEnteredOtp('')
+      setOtpNotice('')
+      setOtpError('')
+      setCountdown(0)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Authentication flow: send role + domain along with the form data
-    const payload = { ...formData, role, domain }
-    void payload
+    setErrorMsg('')
+
+    if (!isVerified) {
+      setErrorMsg('Please verify your email address with OTP before creating your account.')
+      return
+    }
+
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, '')
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim()
+      let res
+
+      if (role === 'client') {
+        res = await authApi.registerClient({
+          companyName: fullName || 'Client Company',
+          contactPerson: fullName,
+          email: formData.email.trim(),
+          mobile: cleanPhone,
+          password: formData.password,
+        })
+      } else {
+        res = await authApi.registerFreelancer({
+          fullName: fullName,
+          email: formData.email.trim(),
+          mobile: cleanPhone,
+          password: formData.password,
+          skills: [domain],
+        })
+      }
+
+      if (res && res.token) {
+        tokenStorage.setToken(res.token)
+        tokenStorage.setUser({
+          id: res.userId,
+          fullName: res.fullName || fullName,
+          email: res.email || formData.email,
+          role: res.role || (role === 'client' ? 'CLIENT' : 'FREELANCER'),
+        })
+      }
+
+      if (role === 'client') {
+        navigate('/client/dashboard')
+      } else {
+        navigate('/freelancer/dashboard')
+      }
+    } catch (err: any) {
+      console.error('Registration API error:', err)
+      setErrorMsg(err.message || 'Registration failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -45,7 +185,6 @@ export default function SignUpPage(): React.JSX.Element {
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        {/* CURVE: change Q30,58 to tune the bend. End points: 53,0 (top) and 0,86 (left) */}
         <path d="M0,0 L53,0 Q30,58 0,86 Z" fill="#08182B" />
       </svg>
 
@@ -66,7 +205,6 @@ export default function SignUpPage(): React.JSX.Element {
           <img
             src={mascotBeanbag}
             alt="Wolf mascot sitting on beanbag"
-            /* MASCOT SIZE: change lg:h-[82vh] (bigger = 90vh, smaller = 70vh) */
             className="h-auto w-[270px] max-w-full object-contain sm:w-[340px] lg:h-[82vh] lg:w-auto"
           />
         </div>
@@ -79,19 +217,19 @@ export default function SignUpPage(): React.JSX.Element {
             <div className="mb-[clamp(6px,1.4vh,16px)] flex justify-center">
               <img
                 src={hunharLogo}
-                alt="Hunhar Logo"
+                alt="hunhar.in Logo"
                 className="block h-9 w-auto object-contain lg:h-[clamp(26px,4.6vh,42px)]"
               />
             </div>
 
             {/* Title */}
             <h1 className="m-0 mb-[clamp(8px,1.8vh,18px)] font-makira text-xl font-bold text-[#0F1B3D] lg:text-[clamp(17px,2.5vh,22px)]">
-              Create an account
+              Create an account on hunhar.in
             </h1>
 
             <form
               onSubmit={handleSubmit}
-              className="flex flex-col gap-3.5 lg:gap-[clamp(7px,1.5vh,16px)]"
+              className="flex flex-col gap-3 lg:gap-[clamp(6px,1.4vh,14px)]"
             >
               {/* First Name & Last Name */}
               <div className="grid grid-cols-2 gap-3">
@@ -119,39 +257,110 @@ export default function SignUpPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Phone Number + separate Send OTP box */}
+              {/* Mobile Number */}
               <div>
-                <label className={labelClass}>Phone Number</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="tel"
-                    placeholder="Enter Mobile Number"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
-                  <button
-                    type="button"
-                    className="h-[clamp(32px,5vh,44px)] shrink-0 cursor-pointer rounded-lg border border-[#D6DCE5] bg-white px-3 text-[10px] font-semibold text-[#64748B] transition-colors hover:border-[#C06B3E] hover:text-[#C06B3E]"
-                  >
-                    Send OTP
-                  </button>
-                </div>
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className={labelClass}>Email</label>
+                <label className={labelClass}>Mobile Number</label>
                 <input
-                  type="email"
-                  placeholder="user@gmail.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="10-digit Mobile Number"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '') })}
                   required
                   className={inputClass}
                 />
               </div>
+
+              {/* Email + Send OTP */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className={labelClass}>Email Address</label>
+                  {isVerified && (
+                    <span className="mb-1 inline-flex items-center gap-1 text-[11px] font-bold text-green-600">
+                      <CheckCircle2 size={13} className="text-green-600" />
+                      Verified
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    placeholder="name@example.com"
+                    value={formData.email}
+                    disabled={isVerified}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    required
+                    className={`${inputClass} ${isVerified ? 'bg-green-50/50 border-green-300 font-semibold' : ''}`}
+                  />
+                  {!isVerified && (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={countdown > 0 || sendingOtp}
+                      className="h-[clamp(32px,5vh,44px)] shrink-0 cursor-pointer rounded-lg border border-[#D6DCE5] bg-white px-3 text-[11px] font-bold text-[#C06B3E] transition-all hover:border-[#C06B3E] hover:bg-[#FAF4EE] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {sendingOtp ? (
+                        <span className="inline-flex items-center gap-1">
+                          <RefreshCw size={12} className="animate-spin" /> Sending
+                        </span>
+                      ) : countdown > 0 ? `Resend (${countdown}s)` : otpSent ? 'Resend OTP' : 'Send OTP'}
+                    </button>
+                  )}
+                </div>
+                {otpError && !otpSent && (
+                  <p className="mt-1.5 text-[11px] font-bold text-red-600">{otpError}</p>
+                )}
+              </div>
+
+              {/* OTP Verification Box */}
+              {otpSent && !isVerified && (
+                <div className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-3 text-left shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-[#C06B3E]" />
+                    <span className="text-[12px] font-bold text-[#9A3412]">Verification Code Sent</span>
+                  </div>
+                  {otpNotice && <p className="mt-1 text-[11px] text-[#7C2D12]">{otpNotice}</p>}
+
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="Enter 6-digit code"
+                      value={enteredOtp}
+                      onChange={(e) => setEnteredOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleVerifyOtp()
+                        }
+                      }}
+                      className="h-10 min-w-0 flex-1 rounded-lg border border-[#D6DCE5] bg-white px-3 font-mono text-sm font-bold tracking-widest text-[#0F1B3D] outline-none focus:border-[#C06B3E] focus:ring-1 focus:ring-[#C06B3E]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      disabled={verifyingOtp}
+                      className="h-10 shrink-0 cursor-pointer rounded-lg bg-[#08182B] px-4 text-xs font-bold text-white transition-all hover:bg-[#C06B3E] active:scale-95 disabled:opacity-60"
+                    >
+                      {verifyingOtp ? 'Verifying...' : 'Verify OTP'}
+                    </button>
+                  </div>
+                  {otpError && (
+                    <p className="mt-1.5 text-[11px] font-bold text-red-600">{otpError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Verified Confirmation Banner */}
+              {isVerified && (
+                <div className="flex items-center justify-center gap-1.5 rounded-xl border border-green-200 bg-green-50 p-2.5 text-center text-xs font-bold text-green-700">
+                  <CheckCircle2 size={15} className="text-green-600" />
+                  Email address verified successfully!
+                </div>
+              )}
 
               {/* Password */}
               <div>
@@ -159,7 +368,7 @@ export default function SignUpPage(): React.JSX.Element {
                 <div className="relative flex items-center">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
+                    placeholder="Create secure password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required
@@ -176,7 +385,7 @@ export default function SignUpPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Remember Me & Forgot */}
+              {/* Remember Me & Terms */}
               <div className="-mt-1 flex items-center justify-between text-[11px]">
                 <label className="flex cursor-pointer items-center gap-1.5 text-[#64748B]">
                   <input
@@ -187,20 +396,25 @@ export default function SignUpPage(): React.JSX.Element {
                   />
                   Remember Me
                 </label>
-                <a
-                  href="#forgot"
-                  className="font-medium text-[#2F6FED] no-underline hover:underline"
-                >
-                  Forgot ?
-                </a>
+                <span className="text-[11px] text-[#718096]">
+                  Encrypted via AES-256
+                </span>
               </div>
+
+              {/* Error Alert */}
+              {errorMsg && (
+                <div className="rounded-lg bg-red-50 p-2.5 text-center text-xs font-semibold text-red-600 border border-red-200">
+                  {errorMsg}
+                </div>
+              )}
 
               {/* Create Account Button */}
               <button
                 type="submit"
-                className="h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer rounded-lg border-none bg-[#08182B] text-xs font-bold text-white shadow-sm transition-colors duration-200 hover:bg-[#12294A]"
+                disabled={loading}
+                className="h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer rounded-lg border-none bg-[#08182B] text-xs font-bold text-white shadow-sm transition-colors duration-200 hover:bg-[#12294A] disabled:opacity-60"
               >
-                Create account
+                {loading ? 'Creating account...' : 'Create account'}
               </button>
 
               {/* Divider */}

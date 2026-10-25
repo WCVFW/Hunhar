@@ -1,493 +1,464 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
   Plus,
   Clock,
   X,
-  ChevronDown,
+  Trash2,
+  Pencil,
+  Check,
+  Bell,
+  Briefcase,
 } from 'lucide-react'
+import {
+  calendarApi,
+  projectsApi,
+  type CalendarTask,
+  type CalendarTaskInput,
+  type Project,
+} from '../../services/api'
 
-interface TaskStatusCount {
-  label: string
-  count: number
-  iconType: 'todo' | 'progress' | 'completed' | 'overdue'
-  bgColor: string
-  textColor: string
-  badgeBg: string
+// ---------------------------------------------------------------- helpers
+
+type TaskType = CalendarTask['type']
+type Priority = CalendarTask['priority']
+
+/** A dated item shown on the calendar: a saved task, or a project deadline (read-only). */
+interface CalendarItem {
+  key: string
+  title: string
+  type: TaskType
+  at: Date
+  allDay: boolean
+  done: boolean
+  projectTitle?: string | null
+  task?: CalendarTask
+  projectId?: string
 }
 
-const taskStatuses: TaskStatusCount[] = [
-  {
-    label: 'To Do',
-    count: 10,
-    iconType: 'todo',
-    bgColor: 'bg-[#FBF8F3]',
-    textColor: 'text-[#4A4036]',
-    badgeBg: 'text-[#1F2937]',
-  },
-  {
-    label: 'In Progress',
-    count: 4,
-    iconType: 'progress',
-    bgColor: 'bg-[#F6EFE7]',
-    textColor: 'text-[#A05C35]',
-    badgeBg: 'text-[#C06B3E]',
-  },
-  {
-    label: 'Completed',
-    count: 2,
-    iconType: 'completed',
-    bgColor: 'bg-[#EFFBF2]',
-    textColor: 'text-[#1F874C]',
-    badgeBg: 'text-[#1F874C]',
-  },
-  {
-    label: 'Overdue',
-    count: 0,
-    iconType: 'overdue',
-    bgColor: 'bg-[#FFF1F2]',
-    textColor: 'text-[#E11D48]',
-    badgeBg: 'text-[#E11D48]',
-  },
+const TYPE_META: Record<TaskType, { label: string; dot: string; chip: string }> = {
+  TASK: { label: 'Task', dot: 'bg-[#4F46E5]', chip: 'bg-[#EEF2FF] text-[#4338CA]' },
+  MEETING: { label: 'Meeting', dot: 'bg-[#0EA5E9]', chip: 'bg-[#E0F2FE] text-[#0369A1]' },
+  DEADLINE: { label: 'Deadline', dot: 'bg-[#EF4444]', chip: 'bg-[#FEE2E2] text-[#B91C1C]' },
+  MILESTONE: { label: 'Milestone', dot: 'bg-[#F59E0B]', chip: 'bg-[#FEF3C7] text-[#B45309]' },
+  REVIEW: { label: 'Review', dot: 'bg-[#8B5CF6]', chip: 'bg-[#EDE9FE] text-[#6D28D9]' },
+}
+
+const PRIORITY_STYLE: Record<Priority, string> = {
+  LOW: 'text-[#64748B]',
+  MEDIUM: 'text-[#B45309]',
+  HIGH: 'text-[#DC2626]',
+}
+
+const REMINDERS: { label: string; minutes: number | null }[] = [
+  { label: 'No reminder', minutes: null },
+  { label: 'At time of task', minutes: 0 },
+  { label: '15 minutes before', minutes: 15 },
+  { label: '1 hour before', minutes: 60 },
+  { label: '1 day before', minutes: 1440 },
 ]
 
-interface ScheduledTask {
-  id: string
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const WEEKDAYS_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+/** Monday of the week containing d */
+const weekStart = (d: Date) => addDays(startOfDay(d), -((d.getDay() + 6) % 7))
+const toDateInput = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const toTimeInput = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+const timeLabel = (item: CalendarItem) =>
+  item.allDay ? 'All day' : item.at.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+
+interface TaskForm {
+  id?: string
   title: string
+  type: TaskType
+  priority: Priority
+  date: string
   time: string
-  type: 'Deadline' | 'Task' | 'Meeting' | 'Milestone'
-  project: string
-  completed?: boolean
+  projectId: string
+  notes: string
+  reminder: number | null
 }
 
-interface RoadmapItem {
-  id: string
-  title: string
-  time?: string
-  type: 'meeting' | 'review' | 'deadline' | 'milestone' | 'task'
-}
+const emptyForm = (date: Date): TaskForm => ({
+  title: '',
+  type: 'TASK',
+  priority: 'MEDIUM',
+  date: toDateInput(date),
+  time: '',
+  projectId: '',
+  notes: '',
+  reminder: null,
+})
 
-interface DayColumn {
-  dayName: string
-  dateNumber: number | string
-  isToday?: boolean
-  tasks: RoadmapItem[]
-  progress?: string
-}
+const inputClass =
+  'h-10 w-full rounded-[12px] border border-[#E5DACD] bg-[#FDFBF7] px-3 font-manrope text-[13px] text-[#08182B] outline-none focus:border-[#C06B3E] focus:bg-white focus:ring-2 focus:ring-[#C06B3E]/20'
 
-const initialRoadmapData: DayColumn[] = [
-  {
-    dayName: 'MON',
-    dateNumber: 31,
-    tasks: [],
-    progress: '',
-  },
-  {
-    dayName: 'TUE',
-    dateNumber: 1,
-    tasks: [
-      {
-        id: 't1',
-        title: 'Competitor Research',
-        time: '10:00',
-        type: 'task',
-      },
-    ],
-    progress: '1/1 done · 100%',
-  },
-  {
-    dayName: 'WED',
-    dateNumber: 2,
-    tasks: [
-      {
-        id: 't2',
-        title: 'Discovery Phase Sign-off',
-        time: '17:00',
-        type: 'milestone',
-      },
-    ],
-    progress: '1/1 done · 100%',
-  },
-  {
-    dayName: 'THU',
-    dateNumber: 3,
-    isToday: true,
-    tasks: [
-      {
-        id: 't3',
-        title: 'Brand Identity Check-in',
-        time: '10:00',
-        type: 'meeting',
-      },
-      {
-        id: 't4',
-        title: 'Logo Concepts Review',
-        time: '14:00',
-        type: 'review',
-      },
-      {
-        id: 't5',
-        title: 'Client Call — Orbit',
-        time: '16:30',
-        type: 'meeting',
-      },
-    ],
-    progress: '0/3 done · 0%',
-  },
-  {
-    dayName: 'FRI',
-    dateNumber: 4,
-    tasks: [
-      {
-        id: 't6',
-        title: 'Design Review Session',
-        time: '11:00',
-        type: 'review',
-      },
-      {
-        id: 't7',
-        title: 'Typography System Deadline',
-        time: '17:00',
-        type: 'deadline',
-      },
-    ],
-    progress: '0/2 done · 0%',
-  },
-  {
-    dayName: 'SAT',
-    dateNumber: 5,
-    tasks: [
-      {
-        id: 't8',
-        title: 'Website Redesign Milestone',
-        time: '12:00',
-        type: 'milestone',
-      },
-      {
-        id: 't9',
-        title: 'Social Media Templates Draft',
-        time: '13:00',
-        type: 'task',
-      },
-    ],
-    progress: '0/2 done · 0%',
-  },
-  {
-    dayName: 'SUN',
-    dateNumber: 6,
-    tasks: [
-      {
-        id: 't10',
-        title: 'Content Planning',
-        time: '14:00',
-        type: 'task',
-      },
-    ],
-    progress: '0/1 done · 0%',
-  },
-]
-
-// Scheduled tasks mapping per date key (e.g. '2026-8-4' = 4 September 2026)
-const defaultScheduledTasks: Record<string, ScheduledTask[]> = {
-  '2026-8-4': [
-    {
-      id: 'st-1',
-      title: 'Typography System Deadline',
-      time: '17:00',
-      type: 'Deadline',
-      project: 'Brand Identity',
-    },
-    {
-      id: 'st-2',
-      title: 'Design Review Session',
-      time: '11:00',
-      type: 'Task',
-      project: 'Website Redesign',
-    },
-  ],
-  '2026-8-3': [
-    {
-      id: 'st-3',
-      title: 'Brand Identity Check-in',
-      time: '10:00',
-      type: 'Meeting',
-      project: 'Brand Identity',
-    },
-    {
-      id: 'st-4',
-      title: 'Logo Concepts Review',
-      time: '14:00',
-      type: 'Task',
-      project: 'Brand Identity',
-    },
-    {
-      id: 'st-5',
-      title: 'Client Call — Orbit',
-      time: '16:30',
-      type: 'Meeting',
-      project: 'Orbit App',
-    },
-  ],
-  '2026-8-5': [
-    {
-      id: 'st-6',
-      title: 'Website Redesign Milestone',
-      time: '12:00',
-      type: 'Milestone',
-      project: 'Website Redesign',
-    },
-  ],
-}
-
-interface CalendarCell {
-  dayNumber: number
-  monthOffset: number // -1 = prev month, 0 = current, 1 = next
-  dateKey: string
-  dots?: string[]
-}
+// ---------------------------------------------------------------- page
 
 export default function CalendarPage(): React.JSX.Element {
-  // Calendar month state: September 2026 (month 8, 0-indexed)
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 8, 1))
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 8, 3))
+  const today = startOfDay(new Date())
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1))
+  const [selectedDate, setSelectedDate] = useState<Date>(today)
 
-  // Task Store
-  const [tasksStore, setTasksStore] =
-    useState<Record<string, ScheduledTask[]>>(defaultScheduledTasks)
+  const [tasks, setTasks] = useState<CalendarTask[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [summary, setSummary] = useState<{ todo: number; inProgress: number; done: number; overdue: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
-  const [modalDate, setModalDate] = useState<Date>(new Date(2026, 8, 3))
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [form, setForm] = useState<TaskForm>(emptyForm(today))
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
 
-  // New task form inside modal
-  const [taskTitle, setTaskTitle] = useState<string>('')
-  const [taskType, setTaskType] = useState<string>('Task')
-  const [taskPriority, setTaskPriority] = useState<string>('Medium')
-  const [taskTime, setTaskTime] = useState<string>('')
-  const [taskProject, setTaskProject] = useState<string>('None')
-  const [taskNotes, setTaskNotes] = useState<string>('')
-  const [taskReminder, setTaskReminder] = useState<string>('No reminder')
-
-  // Month navigation helpers
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth()
 
-  const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ]
+  // Visible range: the 6-week month grid plus the selected week (for the roadmap)
+  const gridStart = weekStart(new Date(currentYear, currentMonth, 1))
+  const gridEnd = addDays(gridStart, 42)
+  const roadmapStart = weekStart(selectedDate)
+  const rangeFrom = roadmapStart < gridStart ? roadmapStart : gridStart
+  const rangeTo = addDays(roadmapStart, 7) > gridEnd ? addDays(roadmapStart, 7) : gridEnd
 
-  const monthTitle = `${monthNames[currentMonth]} ${currentYear}`
-
-  const handlePrevMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth - 1, 1))
-  }
-
-  const handleNextMonth = () => {
-    setCurrentDate(new Date(currentYear, currentMonth + 1, 1))
-  }
-
-  const handleTodayClick = () => {
-    const today = new Date(2026, 8, 3)
-    setCurrentDate(new Date(2026, 8, 1))
-    setSelectedDate(today)
-    openDateModal(today)
-  }
-
-  // Generate 42 calendar grid cells (Monday-first)
-  const generateMonthGrid = (): CalendarCell[] => {
-    const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay()
-    // Convert Sunday=0 to Monday-first (0=Mon, ..., 6=Sun)
-    const monFirstStart = firstDayIndex === 0 ? 6 : firstDayIndex - 1
-
-    const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate()
-
-    const cells: CalendarCell[] = []
-
-    // Previous month filler days
-    for (let i = monFirstStart - 1; i >= 0; i--) {
-      const d = daysInPrevMonth - i
-      const prevDate = new Date(currentYear, currentMonth - 1, d)
-      const key = `${prevDate.getFullYear()}-${prevDate.getMonth()}-${prevDate.getDate()}`
-      cells.push({
-        dayNumber: d,
-        monthOffset: -1,
-        dateKey: key,
-      })
+  const loadTasks = useCallback(async () => {
+    try {
+      const [list, sum] = await Promise.all([calendarApi.getTasks(rangeFrom, rangeTo), calendarApi.getSummary()])
+      setTasks(list)
+      setSummary(sum)
+      setError('')
+    } catch (err: any) {
+      setError(err.message || 'Could not load your calendar')
+    } finally {
+      setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeFrom.getTime(), rangeTo.getTime()])
 
-    // Current month days
-    for (let d = 1; d <= daysInCurrentMonth; d++) {
-      const key = `${currentYear}-${currentMonth}-${d}`
-      const hasTasks = tasksStore[key] && tasksStore[key].length > 0
-      cells.push({
-        dayNumber: d,
-        monthOffset: 0,
-        dateKey: key,
-        dots: hasTasks ? ['#4F46E5', '#4F46E5', '#4F46E5'] : undefined,
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
+
+  useEffect(() => {
+    projectsApi
+      .getFreelancerProjects()
+      .then(setProjects)
+      .catch(() => setProjects([]))
+  }, [])
+
+  const activeProjects = projects.filter((p) => p.status === 'ACTIVE')
+
+  // Merge saved tasks with active project deadlines
+  const items: CalendarItem[] = useMemo(() => {
+    const list: CalendarItem[] = tasks
+      .filter((t) => t.dueAt)
+      .map((t) => ({
+        key: 't-' + t.id,
+        title: t.title,
+        type: t.type,
+        at: new Date(t.dueAt!),
+        allDay: t.allDay,
+        done: t.status === 'DONE',
+        projectTitle: t.projectTitle,
+        task: t,
+      }))
+    activeProjects.forEach((p) => {
+      if (!p.deadline) return
+      list.push({
+        key: 'p-' + p.id,
+        title: `${p.title} — final delivery`,
+        type: 'DEADLINE',
+        at: new Date(p.deadline),
+        allDay: true,
+        done: false,
+        projectTitle: p.clientName || p.category,
+        projectId: p.id,
       })
-    }
+    })
+    return list.sort((a, b) => a.at.getTime() - b.at.getTime())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, projects])
 
-    // Next month filler days up to 42 cells (6 rows x 7)
-    const remaining = 42 - cells.length
-    for (let d = 1; d <= remaining; d++) {
-      const nextDate = new Date(currentYear, currentMonth + 1, d)
-      const key = `${nextDate.getFullYear()}-${nextDate.getMonth()}-${nextDate.getDate()}`
-      cells.push({
-        dayNumber: d,
-        monthOffset: 1,
-        dateKey: key,
-      })
-    }
+  const itemsByDay = useMemo(() => {
+    const map: Record<string, CalendarItem[]> = {}
+    items.forEach((i) => {
+      const k = dayKey(i.at)
+      ;(map[k] ||= []).push(i)
+    })
+    return map
+  }, [items])
 
-    return cells
+  const flash = (text: string) => {
+    setNotice(text)
+    window.setTimeout(() => setNotice(''), 3000)
   }
 
-  const calendarGrid = generateMonthGrid()
+  // ------------------------------------------------------------ actions
 
-  // Open Modal for clicked date
-  const openDateModal = (date: Date) => {
-    setModalDate(date)
+  const openDay = (date: Date) => {
     setSelectedDate(date)
-    // Clear form inputs
-    setTaskTitle('')
-    setTaskType('Task')
-    setTaskPriority('Medium')
-    setTaskTime('')
-    setTaskProject('None')
-    setTaskNotes('')
-    setTaskReminder('No reminder')
+    setForm(emptyForm(date))
+    setShowForm((itemsByDay[dayKey(date)] || []).length === 0)
+    setFormError('')
     setIsModalOpen(true)
   }
 
-  const handleCellClick = (cell: CalendarCell) => {
-    let targetMonth = currentMonth
-    let targetYear = currentYear
-    if (cell.monthOffset === -1) {
-      targetMonth = currentMonth - 1
-      if (targetMonth < 0) {
-        targetMonth = 11
-        targetYear -= 1
-      }
-    } else if (cell.monthOffset === 1) {
-      targetMonth = currentMonth + 1
-      if (targetMonth > 11) {
-        targetMonth = 0
-        targetYear += 1
-      }
-    }
-
-    const clicked = new Date(targetYear, targetMonth, cell.dayNumber)
-    openDateModal(clicked)
+  const goToday = () => {
+    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))
+    openDay(today)
   }
 
-  // Current modal date key
-  const modalDateKey = `${modalDate.getFullYear()}-${modalDate.getMonth()}-${modalDate.getDate()}`
-  const existingTasksForModal = tasksStore[modalDateKey] || []
-
-  // Format Date for Header
-  const weekdayNames = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ]
-  const modalWeekday = weekdayNames[modalDate.getDay()]
-  const modalMonthName = monthNames[modalDate.getMonth()]
-  const modalDayNumber = modalDate.getDate()
-  const modalYear = modalDate.getFullYear()
-
-  // Form submit: Add new task
-  const handleAddNewTask = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!taskTitle.trim()) return
-
-    const newTask: ScheduledTask = {
-      id: `task-${Date.now()}`,
-      title: taskTitle.trim(),
-      time: taskTime.trim() || '12:00',
-      type: (taskType as ScheduledTask['type']) || 'Task',
-      project: taskProject !== 'None' ? taskProject : 'Personal',
-    }
-
-    setTasksStore((prev) => ({
-      ...prev,
-      [modalDateKey]: [...(prev[modalDateKey] || []), newTask],
-    }))
-
-    // Reset Title
-    setTaskTitle('')
-    setTaskNotes('')
-  }
-
-  const handleToggleTaskCompleted = (taskId: string) => {
-    setTasksStore((prev) => {
-      const dayTasks = prev[modalDateKey] || []
-      const updated = dayTasks.map((t) =>
-        t.id === taskId ? { ...t, completed: !t.completed } : t
-      )
-      return { ...prev, [modalDateKey]: updated }
+  const startEdit = (t: CalendarTask) => {
+    const due = t.dueAt ? new Date(t.dueAt) : selectedDate
+    setForm({
+      id: t.id,
+      title: t.title,
+      type: t.type,
+      priority: t.priority,
+      date: toDateInput(due),
+      time: t.allDay || !t.dueAt ? '' : toTimeInput(due),
+      projectId: t.projectId || '',
+      notes: t.notes || '',
+      reminder: t.reminderMinutes ?? null,
     })
+    setFormError('')
+    setShowForm(true)
   }
+
+  const saveTask = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.title.trim()) return setFormError('Please enter a title.')
+    if (!form.date) return setFormError('Please pick a date.')
+    const [y, m, d] = form.date.split('-').map(Number)
+    const [hh, mm] = form.time ? form.time.split(':').map(Number) : [9, 0]
+    const due = new Date(y, m - 1, d, hh, mm)
+    const project = activeProjects.find((p) => p.id === form.projectId)
+    const payload: CalendarTaskInput = {
+      title: form.title.trim(),
+      notes: form.notes.trim() || undefined,
+      type: form.type,
+      priority: form.priority,
+      dueAt: due.toISOString(),
+      allDay: !form.time,
+      projectId: project?.id ?? null,
+      projectTitle: project?.title ?? null,
+      reminderMinutes: form.reminder,
+    }
+    setSaving(true)
+    setFormError('')
+    try {
+      if (form.id) {
+        const existing = tasks.find((t) => t.id === form.id)
+        await calendarApi.updateTask(form.id, { ...payload, status: existing?.status })
+        flash('Task updated')
+      } else {
+        await calendarApi.createTask(payload)
+        flash('Task added')
+      }
+      setForm(emptyForm(selectedDate))
+      setShowForm(false)
+      // follow the task if it moved to another day
+      if (!sameDay(due, selectedDate)) setSelectedDate(startOfDay(due))
+      await loadTasks()
+    } catch (err: any) {
+      setFormError(err.message || 'Could not save the task')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleDone = async (t: CalendarTask) => {
+    const next = t.status === 'DONE' ? 'TODO' : 'DONE'
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)))
+    try {
+      await calendarApi.setStatus(t.id, next)
+      calendarApi.getSummary().then(setSummary).catch(() => {})
+    } catch (err: any) {
+      setTasks((prev) => prev.map((x) => (x.id === t.id ? t : x)))
+      setError(err.message)
+    }
+  }
+
+  const deleteTask = async (t: CalendarTask) => {
+    if (!window.confirm(`Delete "${t.title}"?`)) return
+    try {
+      await calendarApi.deleteTask(t.id)
+      setTasks((prev) => prev.filter((x) => x.id !== t.id))
+      calendarApi.getSummary().then(setSummary).catch(() => {})
+      flash('Task deleted')
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  // Close modal with Escape
+  useEffect(() => {
+    if (!isModalOpen) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setIsModalOpen(false)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isModalOpen])
+
+  // ------------------------------------------------------------ derived view data
+
+  const gridDays = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+  const roadmapDays = Array.from({ length: 7 }, (_, i) => addDays(roadmapStart, i))
+  const selectedItems = itemsByDay[dayKey(selectedDate)] || []
+  const todayItems = itemsByDay[dayKey(today)] || []
+  const projectDeadlinesOverdue = activeProjects.filter((p) => p.deadline && new Date(p.deadline) < new Date()).length
+
+  const statusCards = [
+    { label: 'To Do', count: summary?.todo ?? 0, bg: 'bg-[#FBF8F3]', num: 'text-[#1F2937]', icon: <div className="h-3.5 w-3.5 rounded-full border-2 border-[#94A3B8]" /> },
+    { label: 'In Progress', count: (summary?.inProgress ?? 0) + activeProjects.length, bg: 'bg-[#F6EFE7]', num: 'text-[#C06B3E]', icon: <Clock size={15} className="text-[#C06B3E]" /> },
+    {
+      label: 'Completed',
+      count: summary?.done ?? 0,
+      bg: 'bg-[#EFFBF2]',
+      num: 'text-[#1F874C]',
+      icon: (
+        <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#1F874C] text-white">
+          <Check size={9} strokeWidth={4} />
+        </div>
+      ),
+    },
+    {
+      label: 'Overdue',
+      count: (summary?.overdue ?? 0) + projectDeadlinesOverdue,
+      bg: 'bg-[#FFF1F2]',
+      num: 'text-[#E11D48]',
+      icon: <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-[#E11D48] text-[9px] font-black text-[#E11D48]">!</div>,
+    },
+  ]
+
+  const itemRow = (item: CalendarItem, compact = false) => {
+    const meta = TYPE_META[item.type]
+    const overdue = !item.done && item.at < new Date() && !sameDay(item.at, new Date())
+    return (
+      <div
+        key={item.key}
+        className={`flex items-start gap-2.5 rounded-[12px] border px-3 py-2.5 ${
+          item.done ? 'border-[#E8E2D9] bg-[#FAF8F5] opacity-70' : 'border-[#EFE4D7] bg-white'
+        }`}
+      >
+        {item.task ? (
+          <button
+            type="button"
+            onClick={() => toggleDone(item.task!)}
+            aria-label={item.done ? `Mark ${item.title} as not done` : `Mark ${item.title} as done`}
+            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+              item.done ? 'border-[#1F874C] bg-[#1F874C] text-white' : 'border-[#CCAFA0] hover:border-[#C06B3E]'
+            }`}
+          >
+            {item.done && <Check size={10} strokeWidth={3} />}
+          </button>
+        ) : (
+          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className={`text-[13px] font-bold text-[#08182B] ${item.done ? 'line-through' : ''} ${compact ? 'truncate' : 'break-words'}`}>{item.title}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#8E8376]">
+            <span className={`rounded-full px-1.5 py-px font-bold ${meta.chip}`}>{meta.label}</span>
+            <span className={overdue ? 'font-bold text-[#DC2626]' : ''}>{overdue ? 'Overdue · ' : ''}{timeLabel(item)}</span>
+            {item.task && <span className={`font-semibold ${PRIORITY_STYLE[item.task.priority]}`}>{item.task.priority.toLowerCase()}</span>}
+            {item.task?.reminderMinutes != null && <Bell size={10} aria-label="Reminder set" />}
+            {item.projectTitle && <span className="truncate">· {item.projectTitle}</span>}
+          </p>
+          {!compact && item.task?.notes && <p className="mt-1 whitespace-pre-line text-[12px] text-[#5C5248]">{item.task.notes}</p>}
+        </div>
+        {!compact && item.task && (
+          <div className="flex shrink-0 items-center gap-1">
+            <button type="button" onClick={() => startEdit(item.task!)} aria-label={`Edit ${item.title}`} className="rounded p-1 text-[#8E8376] hover:bg-[#F5ECE1] hover:text-[#08182B]">
+              <Pencil size={13} />
+            </button>
+            <button type="button" onClick={() => deleteTask(item.task!)} aria-label={`Delete ${item.title}`} className="rounded p-1 text-[#8E8376] hover:bg-red-50 hover:text-red-600">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
+        {!compact && item.projectId && (
+          <Link to={`/freelancer/projects/${item.projectId}`} className="shrink-0 rounded p-1 text-[#8E8376] hover:text-[#C06B3E]" aria-label="Open project">
+            <Briefcase size={13} />
+          </Link>
+        )}
+      </div>
+    )
+  }
+
+  // ------------------------------------------------------------ render
 
   return (
-    <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-7 lg:p-8 shadow-xs font-manrope">
+    <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-4 shadow-xs font-manrope sm:p-7 lg:p-8">
       <div className="flex w-full flex-col gap-6">
-        {/* 1. TOP HEADER & SUBTITLE */}
-        <div className="pb-1">
-          <h1 className="font-manrope text-[24px] font-bold text-[#C06B3E] sm:text-[26px]">
-            Calendar
-          </h1>
-          <p className="mt-0.5 font-manrope text-[14px] text-[#7A7065]">
-            Plan your schedule and manage your tasks.
-          </p>
+        {/* Header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-manrope text-[24px] font-bold text-[#C06B3E] sm:text-[26px]">Calendar</h1>
+            <p className="mt-0.5 font-manrope text-[14px] text-[#7A7065]">Plan your schedule, track deadlines and set reminders.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => openDay(selectedDate)}
+            className="inline-flex items-center justify-center gap-1.5 self-start rounded-full bg-[#C06B3E] px-4 py-2 text-[13px] font-bold text-white shadow-sm hover:bg-[#AA572D] sm:self-auto"
+          >
+            <Plus size={15} /> New task
+          </button>
         </div>
 
-        {/* 2. TOP SECTION: MONTHLY CALENDAR (Left) + STATS & SUMMARY (Right) */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
-          {/* Left: Monthly Calendar Widget (8 Cols) */}
-          <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-6 shadow-xs lg:col-span-8 flex flex-col justify-between min-h-[440px]">
+        {(error || notice) && (
+          <div
+            role="status"
+            className={`rounded-[12px] border p-3 text-[13px] font-semibold ${
+              error ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'
+            }`}
+          >
+            {error || notice}
+            {error && (
+              <button type="button" onClick={() => loadTasks()} className="ml-2 underline">
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Month grid + side cards */}
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="flex w-full flex-col justify-between rounded-[20px] border border-[#E5E5E5] bg-white p-3 shadow-xs sm:p-6 lg:col-span-8">
             <div>
-              {/* Calendar Controls with functional month changer */}
-              <div className="flex items-center justify-between pb-4">
-                <h2 className="font-manrope text-[18px] font-bold text-[#08182B]">
-                  {monthTitle}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
+                <h2 className="font-manrope text-[17px] font-bold text-[#08182B] sm:text-[18px]">
+                  {MONTHS[currentMonth]} {currentYear}
                 </h2>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={handleTodayClick}
-                    className="rounded-full border border-[#E5DACD] bg-white px-3.5 py-1 text-[12px] font-bold text-[#4A4036] transition-colors hover:bg-[#FAF7F2] active:scale-95"
+                    onClick={goToday}
+                    className="rounded-full border border-[#E5DACD] bg-white px-3.5 py-1 text-[12px] font-bold text-[#4A4036] transition-colors hover:bg-[#FAF7F2]"
                   >
                     Today
                   </button>
                   <button
                     type="button"
-                    onClick={handlePrevMonth}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] transition-colors hover:bg-[#FAF7F2] active:scale-95"
+                    onClick={() => setCurrentDate(new Date(currentYear, currentMonth - 1, 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] transition-colors hover:bg-[#FAF7F2]"
                     aria-label="Previous month"
                   >
                     <ChevronLeft size={16} />
                   </button>
                   <button
                     type="button"
-                    onClick={handleNextMonth}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] transition-colors hover:bg-[#FAF7F2] active:scale-95"
+                    onClick={() => setCurrentDate(new Date(currentYear, currentMonth + 1, 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] transition-colors hover:bg-[#FAF7F2]"
                     aria-label="Next month"
                   >
                     <ChevronRight size={16} />
@@ -495,179 +466,97 @@ export default function CalendarPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Days of Week Row */}
-              <div className="grid grid-cols-7 text-center font-manrope text-[11.5px] font-bold uppercase tracking-wider text-[#A09588] py-2">
-                <div>MON</div>
-                <div>TUE</div>
-                <div>WED</div>
-                <div>THU</div>
-                <div>FRI</div>
-                <div>SAT</div>
-                <div>SUN</div>
+              <div className="grid grid-cols-7 py-2 text-center font-manrope text-[10px] font-bold uppercase tracking-wider text-[#A09588] sm:text-[11.5px]">
+                {WEEKDAYS_SHORT.map((d) => (
+                  <div key={d}>
+                    <span className="sm:hidden">{d.charAt(0)}</span>
+                    <span className="hidden sm:inline">{d}</span>
+                  </div>
+                ))}
               </div>
 
-              {/* Dates Grid (Interactive: Click any date to open popup modal) */}
-              <div className="grid grid-cols-7 gap-y-2 text-center font-manrope text-[13.5px]">
-                {calendarGrid.map((cell, idx) => {
-                  const isCurrentMonth = cell.monthOffset === 0
-                  const isTodaySelected =
-                    isCurrentMonth &&
-                    currentYear === 2026 &&
-                    currentMonth === 8 &&
-                    cell.dayNumber === 3
-
-                  const isClickedDay =
-                    isCurrentMonth &&
-                    currentYear === selectedDate.getFullYear() &&
-                    currentMonth === selectedDate.getMonth() &&
-                    cell.dayNumber === selectedDate.getDate()
-
+              <div className={`grid grid-cols-7 gap-1 text-center font-manrope text-[13px] sm:gap-y-2 sm:text-[13.5px] ${loading ? 'opacity-50' : ''}`}>
+                {gridDays.map((day) => {
+                  const inMonth = day.getMonth() === currentMonth
+                  const isToday = sameDay(day, today)
+                  const isSelected = sameDay(day, selectedDate)
+                  const dayItems = itemsByDay[dayKey(day)] || []
+                  const types = Array.from(new Set(dayItems.filter((i) => !i.done).map((i) => i.type))).slice(0, 3)
                   return (
-                    <div
-                      key={idx}
-                      onClick={() => handleCellClick(cell)}
-                      className="group flex flex-col items-center justify-center cursor-pointer py-1"
+                    <button
+                      key={dayKey(day)}
+                      type="button"
+                      onClick={() => openDay(day)}
+                      aria-label={`${day.toDateString()}${dayItems.length ? `, ${dayItems.length} item${dayItems.length === 1 ? '' : 's'}` : ''}`}
+                      className="group flex items-center justify-center py-0.5"
                     >
-                      {isTodaySelected ? (
-                        <div className="flex h-11 w-11 flex-col items-center justify-center rounded-[12px] bg-[#EEF2FF] font-bold text-[#4F46E5] shadow-xs ring-2 ring-[#4F46E5]/20 transition-transform group-hover:scale-105">
-                          <span>{cell.dayNumber}</span>
-                          <div className="flex gap-0.5 mt-0.5">
-                            <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
-                            <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
-                            <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
-                          </div>
-                        </div>
-                      ) : isClickedDay ? (
-                        <div className="flex h-10 w-10 flex-col items-center justify-center rounded-[12px] bg-[#FAF3ED] font-bold text-[#C06B3E] ring-2 ring-[#C06B3E]/40 transition-transform group-hover:scale-105">
-                          <span>{cell.dayNumber}</span>
-                          {cell.dots && (
-                            <div className="flex gap-0.5 mt-0.5">
-                              <span className="h-1 w-1 rounded-full bg-[#C06B3E]" />
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className={`flex h-10 w-10 flex-col items-center justify-center rounded-[10px] transition-all group-hover:bg-[#F7F4EF] ${
-                            isCurrentMonth
-                              ? 'text-[#334155] font-medium'
-                              : 'text-[#CBD5E1]'
-                          }`}
-                        >
-                          <span>{cell.dayNumber}</span>
-                          {cell.dots && (
-                            <div className="flex gap-0.5 mt-0.5">
-                              <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
-                              <span className="h-1 w-1 rounded-full bg-[#4F46E5]" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                      <span
+                        className={`flex aspect-square w-full max-w-[44px] flex-col items-center justify-center rounded-[10px] transition-all ${
+                          isToday
+                            ? 'bg-[#EEF2FF] font-bold text-[#4F46E5] ring-2 ring-[#4F46E5]/25'
+                            : isSelected
+                            ? 'bg-[#FAF3ED] font-bold text-[#C06B3E] ring-2 ring-[#C06B3E]/40'
+                            : inMonth
+                            ? 'font-medium text-[#334155] group-hover:bg-[#F7F4EF]'
+                            : 'text-[#CBD5E1] group-hover:bg-[#F7F4EF]'
+                        }`}
+                      >
+                        <span>{day.getDate()}</span>
+                        <span className="mt-0.5 flex h-1 gap-0.5">
+                          {types.map((t) => (
+                            <span key={t} className={`h-1 w-1 rounded-full ${TYPE_META[t].dot}`} />
+                          ))}
+                        </span>
+                      </span>
+                    </button>
                   )
                 })}
               </div>
             </div>
 
-            {/* Bottom Indicators Legend */}
-            <div className="flex flex-wrap items-center gap-6 pt-5 border-t border-[#F0ECE6] font-manrope text-[12px] font-medium text-[#7A7065]">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#4F46E5]" />
-                <span>Task</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#0EA5E9]" />
-                <span>Meeting</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#EF4444]" />
-                <span>Deadline</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
-                <span>Milestone</span>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#F0ECE6] pt-4 font-manrope text-[12px] font-medium text-[#7A7065]">
+              {(Object.keys(TYPE_META) as TaskType[]).map((t) => (
+                <div key={t} className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${TYPE_META[t].dot}`} />
+                  <span>{TYPE_META[t].label}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Right: Task Status & Today's Summary (4 Cols) */}
-          <div className="flex flex-col gap-5 lg:col-span-4">
-            {/* Card 1: Task Status Counts */}
-            <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
-              <h3 className="font-manrope text-[16px] font-bold text-[#08182B] pb-3.5">
-                Task Status
-              </h3>
-
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-4 lg:grid-cols-1">
+            <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 shadow-xs sm:p-6">
+              <h3 className="pb-3.5 font-manrope text-[16px] font-bold text-[#08182B]">Task Status</h3>
               <div className="flex flex-col gap-2.5">
-                {taskStatuses.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-center justify-between rounded-[14px] p-3 font-manrope transition-all ${item.bgColor}`}
-                  >
+                {statusCards.map((c) => (
+                  <div key={c.label} className={`flex items-center justify-between rounded-[14px] p-3 ${c.bg}`}>
                     <div className="flex items-center gap-2.5">
-                      {item.iconType === 'todo' && (
-                        <div className="h-3.5 w-3.5 rounded-full border-2 border-[#94A3B8]" />
-                      )}
-                      {item.iconType === 'progress' && (
-                        <Clock size={15} className="text-[#C06B3E]" />
-                      )}
-                      {item.iconType === 'completed' && (
-                        <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#1F874C] text-white">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-2.5 w-2.5">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </div>
-                      )}
-                      {item.iconType === 'overdue' && (
-                        <div className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-[#E11D48] text-[#E11D48] text-[9px] font-black">
-                          !
-                        </div>
-                      )}
-                      <span className="text-[13px] font-bold text-[#2A231A]">
-                        {item.label}
-                      </span>
+                      {c.icon}
+                      <span className="text-[13px] font-bold text-[#2A231A]">{c.label}</span>
                     </div>
-
-                    <span className={`text-[15px] font-extrabold ${item.badgeBg}`}>
-                      {item.count}
-                    </span>
+                    <span className={`text-[15px] font-extrabold ${c.num}`}>{c.count}</span>
                   </div>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] text-[#8E8376]">In progress and overdue include your active project deadlines.</p>
             </div>
 
-            {/* Card 2: Today's Summary */}
-            <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
+            <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 shadow-xs sm:p-6">
               <div className="flex items-center justify-between pb-3">
-                <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">
-                  Today's Summary
-                </h3>
+                <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">Today's Summary</h3>
                 <span className="rounded-full bg-[#EDE9FE] px-2.5 py-0.5 font-manrope text-[11px] font-bold text-[#6366F1]">
-                  3 Sept
+                  {today.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                 </span>
               </div>
-
-              <div className="space-y-2 py-1 font-manrope text-[13px] text-[#4A4036]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#6366F1]" />
-                    <span>Meetings</span>
-                  </div>
-                  <span className="font-bold text-[#08182B]">2</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full border border-[#94A3B8]" />
-                    <span>Tasks</span>
-                  </div>
-                  <span className="font-bold text-[#08182B]">1</span>
-                </div>
-              </div>
-
+              {todayItems.length === 0 ? (
+                <p className="py-2 text-[13px] text-[#8E8376]">Nothing scheduled for today.</p>
+              ) : (
+                <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto pr-1">{todayItems.map((i) => itemRow(i, true))}</div>
+              )}
               <button
                 type="button"
-                onClick={handleTodayClick}
-                className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-[12px] bg-[#EEF2FF] font-manrope text-[13px] font-bold text-[#4F46E5] transition-all hover:bg-[#E0E7FF] active:scale-98"
+                onClick={goToday}
+                className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-[12px] bg-[#EEF2FF] font-manrope text-[13px] font-bold text-[#4F46E5] transition-all hover:bg-[#E0E7FF]"
               >
                 <Plus size={15} />
                 <span>Add to Today</span>
@@ -676,33 +565,25 @@ export default function CalendarPage(): React.JSX.Element {
           </div>
         </div>
 
-        {/* 3. BOTTOM SECTION: WEEKLY ROADMAP */}
-        <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-6 shadow-xs">
-          {/* Roadmap Title & View Switcher */}
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center pb-5">
-            <div>
-              <h2 className="font-manrope text-[18px] font-bold text-[#08182B]">
-                Weekly Roadmap
-              </h2>
-              <p className="mt-0.5 font-manrope text-[13px] text-[#7A7065]">
-                Plan and assign your tasks for this week.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
+        {/* Weekly roadmap for the selected week */}
+        <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-4 shadow-xs sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-4">
+            <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">
+              Week of {roadmapStart.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </h3>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5DACD] text-[#7A7065] hover:bg-[#FAF7F2]"
+                onClick={() => setSelectedDate(addDays(selectedDate, -7))}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] hover:bg-[#FAF7F2]"
                 aria-label="Previous week"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="rounded-lg border border-[#E5DACD] bg-white px-4 py-1.5 font-manrope text-[13px] font-bold text-[#08182B]">
-                This Week
-              </span>
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5DACD] text-[#7A7065] hover:bg-[#FAF7F2]"
+                onClick={() => setSelectedDate(addDays(selectedDate, 7))}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#7A7065] hover:bg-[#FAF7F2]"
                 aria-label="Next week"
               >
                 <ChevronRight size={16} />
@@ -710,409 +591,187 @@ export default function CalendarPage(): React.JSX.Element {
             </div>
           </div>
 
-          {/* 7 Columns: Mon through Sun */}
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 overflow-x-auto">
-            {initialRoadmapData.map((col, idx) => {
-              const hasCompleted = col.progress?.includes('100%')
-              return (
-                <div
-                  key={idx}
-                  className={`flex flex-col justify-between rounded-[20px] p-4 min-h-[400px] transition-all ${
-                    col.isToday
-                      ? 'border-2 border-[#C06B3E] bg-white shadow-sm'
-                      : 'border border-[#EFECE6] bg-[#FAF8F5]'
-                  }`}
-                >
-                  {/* Day Header */}
-                  <div>
-                    <div className="flex items-center justify-between pb-3.5">
-                      <div>
-                        <span className="block font-manrope text-[11px] font-bold uppercase tracking-wider text-[#A09588]">
-                          {col.dayName}
-                        </span>
-                        <span
-                          className={`font-manrope text-[18px] font-extrabold ${
-                            col.isToday ? 'text-[#C06B3E]' : 'text-[#08182B]'
-                          }`}
-                        >
-                          {col.dateNumber}
-                        </span>
-                      </div>
-
-                      {col.isToday && (
-                        <span className="rounded-full bg-[#FBF0EA] px-2.5 py-0.5 font-manrope text-[10px] font-bold text-[#C06B3E]">
-                          Today
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Tasks List */}
-                    <div className="flex flex-col gap-2.5 pt-1">
-                      {col.tasks.length === 0 ? (
-                        <div className="flex h-32 items-center justify-center text-[12px] text-[#A89D91]">
-                          No tasks
-                        </div>
-                      ) : (
-                        col.tasks.map((task) => {
-                          let borderLeftColor = 'border-l-[#1E293B]'
-                          let taskBg = 'bg-[#F5EFE6]'
-
-                          if (task.type === 'meeting') {
-                            borderLeftColor = 'border-l-[#1E293B]'
-                            taskBg = 'bg-[#F4ECE1]'
-                          } else if (task.type === 'review') {
-                            borderLeftColor = 'border-l-[#C06B3E]'
-                            taskBg = 'bg-[#F9F4EC]'
-                          } else if (task.type === 'deadline') {
-                            borderLeftColor = 'border-l-[#C06B3E]'
-                            taskBg = 'bg-[#F9F4EC]'
-                          } else if (task.type === 'milestone') {
-                            borderLeftColor = 'border-l-[#C06B3E]'
-                            taskBg = 'bg-[#F4ECE1]'
-                          } else if (task.type === 'task') {
-                            borderLeftColor = 'border-l-[#1E293B]'
-                            taskBg = 'bg-[#F4ECE1]'
-                          }
-
-                          if (col.dateNumber === 1 || col.dateNumber === 2) {
-                            taskBg = 'bg-white/80'
-                            borderLeftColor = 'border-l-transparent'
-                          }
-
-                          return (
-                            <div
-                              key={task.id}
-                              onClick={() => {
-                                const dayNum = typeof col.dateNumber === 'number' ? col.dateNumber : 3
-                                openDateModal(new Date(2026, 8, dayNum))
-                              }}
-                              className={`cursor-pointer rounded-[12px] border-l-[3.5px] ${borderLeftColor} ${taskBg} p-3 shadow-2xs transition-all hover:shadow-md hover:scale-[1.01]`}
-                            >
-                              <h4 className="font-manrope text-[12.5px] font-bold leading-snug text-[#08182B]">
-                                {task.title}
-                              </h4>
-                              {task.time && (
-                                <div className="mt-1.5 flex items-center gap-1 font-manrope text-[11px] font-medium text-[#8E8376]">
-                                  <Clock size={11} />
-                                  <span>{task.time}</span>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bottom: Add Task Button & Progress bar */}
-                  <div className="mt-4 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const dayNum = typeof col.dateNumber === 'number' ? col.dateNumber : 3
-                        openDateModal(new Date(2026, 8, dayNum))
-                      }}
-                      className={`flex w-full items-center justify-center gap-1 rounded-[10px] py-1.5 font-manrope text-[11px] font-bold transition-all ${
-                        col.isToday
-                          ? 'border border-[#C06B3E] text-[#C06B3E] bg-[#FFF9F5] hover:bg-[#FDF3EB]'
-                          : 'border border-dashed border-[#DECFBE] text-[#7A7065] hover:border-[#C06B3E] hover:text-[#C06B3E]'
-                      }`}
-                    >
-                      <Plus size={12} />
-                      <span>Add Task</span>
+          <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            <div className="grid min-w-[760px] grid-cols-7 gap-3 lg:min-w-0">
+              {roadmapDays.map((day, idx) => {
+                const dayItems = itemsByDay[dayKey(day)] || []
+                const doneCount = dayItems.filter((i) => i.done).length
+                const isToday = sameDay(day, today)
+                return (
+                  <div
+                    key={dayKey(day)}
+                    className={`flex min-h-[180px] flex-col rounded-[16px] border p-2.5 ${
+                      isToday ? 'border-[#C06B3E]/50 bg-[#FFF9F3]' : 'border-[#F0ECE6] bg-[#FDFBF8]'
+                    }`}
+                  >
+                    <button type="button" onClick={() => openDay(day)} className="mb-2 text-left">
+                      <span className="block text-[10.5px] font-bold uppercase tracking-wider text-[#A09588]">{WEEKDAYS_SHORT[idx]}</span>
+                      <span className={`text-[18px] font-extrabold ${isToday ? 'text-[#C06B3E]' : 'text-[#08182B]'}`}>{day.getDate()}</span>
                     </button>
-
-                    {col.progress ? (
-                      <div className="mt-2.5">
-                        <div className="flex items-center justify-between font-manrope text-[10px] font-bold text-[#8E8376]">
-                          <span>{col.progress.split(' · ')[0]}</span>
-                          <span className={hasCompleted ? 'text-[#16A34A]' : 'text-[#8E8376]'}>
-                            {col.progress.split(' · ')[1]}
-                          </span>
-                        </div>
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#EADDCF]">
-                          <div
-                            className={`h-full rounded-full ${
-                              hasCompleted ? 'bg-[#16A34A]' : 'bg-[#EADDCF]'
-                            }`}
-                            style={{ width: hasCompleted ? '100%' : '0%' }}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      {dayItems.slice(0, 4).map((i) => (
+                        <button
+                          key={i.key}
+                          type="button"
+                          onClick={() => openDay(day)}
+                          className={`rounded-[8px] px-2 py-1.5 text-left text-[11px] font-semibold leading-tight ${TYPE_META[i.type].chip} ${i.done ? 'line-through opacity-60' : ''}`}
+                        >
+                          <span className="block truncate">{i.title}</span>
+                          {!i.allDay && <span className="block font-normal opacity-80">{timeLabel(i)}</span>}
+                        </button>
+                      ))}
+                      {dayItems.length > 4 && (
+                        <button type="button" onClick={() => openDay(day)} className="text-left text-[11px] font-bold text-[#8E8376]">
+                          +{dayItems.length - 4} more
+                        </button>
+                      )}
+                      {dayItems.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => openDay(day)}
+                          className="mt-auto flex items-center justify-center gap-1 rounded-[8px] border border-dashed border-[#E5DACD] py-1.5 text-[11px] font-semibold text-[#B8A99A] hover:border-[#C06B3E] hover:text-[#C06B3E]"
+                        >
+                          <Plus size={11} /> Add
+                        </button>
+                      )}
+                    </div>
+                    {dayItems.length > 0 && (
+                      <span className="mt-2 text-[10.5px] font-semibold text-[#8E8376]">
+                        {doneCount}/{dayItems.length} done
+                      </span>
+                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* POPUP MODAL (Matching User Images 1 & 2)                  */}
-      {/* ========================================================= */}
+      {/* Day modal: list + add / edit */}
       {isModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px] transition-opacity"
-          onClick={() => setIsModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Tasks for ${selectedDate.toDateString()}`}
+          onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
         >
-          <div
-            className="relative flex w-full max-w-[480px] max-h-[88vh] flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.15)] transition-all"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header (Fixed at top with generous top and bottom padding) */}
-            <div className="flex items-center justify-between border-b border-[#F4F4F5] px-7 py-6 shrink-0 bg-white">
-              <h3 className="font-manrope text-[18px] font-bold text-[#08182B]">
-                {existingTasksForModal.length > 0
-                  ? `${modalDayNumber} ${modalMonthName} ${modalYear}`
-                  : `Add Task — ${modalWeekday}, ${modalDayNumber} ${modalMonthName}`}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F4F5] text-[#71717A] transition-colors hover:bg-[#E4E4E7] hover:text-[#18181B] active:scale-95"
-                aria-label="Close modal"
-              >
-                <X size={16} />
+          <div className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[24px] bg-white shadow-2xl sm:max-w-[520px] sm:rounded-[24px]">
+            <div className="flex items-start justify-between border-b border-[#F0ECE6] px-5 py-4">
+              <div>
+                <p className="text-[12px] font-bold uppercase tracking-wider text-[#A09588]">
+                  {selectedDate.toLocaleDateString('en-IN', { weekday: 'long' })}
+                </p>
+                <h3 className="text-[18px] font-extrabold text-[#08182B]">
+                  {selectedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </h3>
+              </div>
+              <button type="button" onClick={() => setIsModalOpen(false)} aria-label="Close" className="rounded-full p-1.5 text-[#7A7065] hover:bg-[#F5F2EC]">
+                <X size={18} />
               </button>
             </div>
 
-            {/* Modal Scrollable Body (Sleek minimalist internal scrollbar) */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 custom-modal-scrollbar">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {selectedItems.length > 0 && <div className="mb-4 flex flex-col gap-2">{selectedItems.map((i) => itemRow(i))}</div>}
 
-            {/* If Already Has Tasks Scheduled (IMAGE 2 DESIGN) */}
-            {existingTasksForModal.length > 0 && (
-              <div className="mb-5 border-b border-[#F0ECE6] pb-4">
-                <span className="block font-manrope text-[11px] font-bold uppercase tracking-wider text-[#A09588] pb-3">
-                  {existingTasksForModal.length} ITEMS SCHEDULED
-                </span>
-
-                <div className="space-y-3">
-                  {existingTasksForModal.map((task) => {
-                    let typeBadgeClass = 'bg-[#EDE9FE] text-[#7C3AED]'
-                    if (task.type === 'Deadline') {
-                      typeBadgeClass = 'bg-[#FEE2E2] text-[#EF4444]'
-                    } else if (task.type === 'Meeting') {
-                      typeBadgeClass = 'bg-[#E0F2FE] text-[#0284C7]'
-                    } else if (task.type === 'Milestone') {
-                      typeBadgeClass = 'bg-[#FEF3C7] text-[#D97706]'
-                    }
-
-                    return (
-                      <div
-                        key={task.id}
-                        className="flex items-start justify-between gap-2"
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleTaskCompleted(task.id)}
-                            className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#CBD5E1] transition-colors hover:border-[#C06B3E]"
-                          >
-                            {task.completed && (
-                              <span className="h-2 w-2 rounded-full bg-[#C06B3E]" />
-                            )}
-                          </button>
-                          <div>
-                            <h4
-                              className={`font-manrope text-[13.5px] font-bold text-[#08182B] ${
-                                task.completed ? 'line-through opacity-60' : ''
-                              }`}
-                            >
-                              {task.title}
-                            </h4>
-                            <p className="font-manrope text-[12px] text-[#8E8376]">
-                              {task.project}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="font-manrope text-[12px] font-medium text-[#8E8376]">
-                            {task.time}
-                          </span>
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 font-manrope text-[11px] font-bold ${typeBadgeClass}`}
-                          >
-                            {task.type}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* NEW TASK FORM (MATCHING IMAGES 1 & 2 EXACTLY) */}
-            <form onSubmit={handleAddNewTask} className="space-y-4">
-              {existingTasksForModal.length > 0 && (
-                <span className="block font-manrope text-[11px] font-bold uppercase tracking-wider text-[#A09588]">
-                  NEW TASK
-                </span>
-              )}
-
-              {/* Task Title */}
-              <div>
-                <input
-                  type="text"
-                  required
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="Task title *"
-                  className="w-full rounded-[14px] border border-[#E4E4E7] bg-[#FAFAFA] px-4 py-3 font-manrope text-[13.5px] text-[#08182B] placeholder-[#A1A1AA] outline-none transition-all focus:border-[#C06B3E] focus:bg-white focus:ring-1 focus:ring-[#C06B3E]/30"
-                />
-              </div>
-
-              {/* Type & Priority Row */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Type */}
-                <div>
-                  <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                    Type
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={taskType}
-                      onChange={(e) => setTaskType(e.target.value)}
-                      className="w-full appearance-none rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 pr-8 font-manrope text-[13px] font-medium text-[#18181B] outline-none focus:border-[#C06B3E]"
-                    >
-                      <option value="Task">Task</option>
-                      <option value="Deadline">Deadline</option>
-                      <option value="Meeting">Meeting</option>
-                      <option value="Milestone">Milestone</option>
-                    </select>
-                    <ChevronDown
-                      size={15}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A]"
-                    />
-                  </div>
-                </div>
-
-                {/* Priority */}
-                <div>
-                  <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                    Priority
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={taskPriority}
-                      onChange={(e) => setTaskPriority(e.target.value)}
-                      className="w-full appearance-none rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 pr-8 font-manrope text-[13px] font-medium text-[#18181B] outline-none focus:border-[#C06B3E]"
-                    >
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                      <option value="Low">Low</option>
-                    </select>
-                    <ChevronDown
-                      size={15}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Time & Project Row */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Time */}
-                <div>
-                  <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                    Time
-                  </label>
-                  <input
-                    type="text"
-                    value={taskTime}
-                    onChange={(e) => setTaskTime(e.target.value)}
-                    placeholder="e.g. 11:00"
-                    className="w-full rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 font-manrope text-[13px] text-[#18181B] placeholder-[#A1A1AA] outline-none focus:border-[#C06B3E]"
-                  />
-                </div>
-
-                {/* Project */}
-                <div>
-                  <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                    Project
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={taskProject}
-                      onChange={(e) => setTaskProject(e.target.value)}
-                      className="w-full appearance-none rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 pr-8 font-manrope text-[13px] font-medium text-[#18181B] outline-none focus:border-[#C06B3E]"
-                    >
-                      <option value="None">None</option>
-                      <option value="Personal">Personal</option>
-                      <option value="Brand Identity">Brand Identity</option>
-                      <option value="Website Redesign">Website Redesign</option>
-                      <option value="Orbit App">Orbit App</option>
-                    </select>
-                    <ChevronDown
-                      size={15}
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                  Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={taskNotes}
-                  onChange={(e) => setTaskNotes(e.target.value)}
-                  placeholder="Add notes..."
-                  className="w-full resize-none rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 font-manrope text-[13px] text-[#18181B] placeholder-[#A1A1AA] outline-none focus:border-[#C06B3E]"
-                />
-              </div>
-
-              {/* Reminder */}
-              <div>
-                <label className="mb-1 block font-manrope text-[12px] font-medium text-[#71717A]">
-                  Reminder
-                </label>
-                <div className="relative">
-                  <select
-                    value={taskReminder}
-                    onChange={(e) => setTaskReminder(e.target.value)}
-                    className="w-full appearance-none rounded-[12px] border border-[#E4E4E7] bg-white px-3.5 py-2.5 pr-8 font-manrope text-[13px] font-medium text-[#18181B] outline-none focus:border-[#C06B3E]"
-                  >
-                    <option value="No reminder">No reminder</option>
-                    <option value="15 minutes before">15 minutes before</option>
-                    <option value="30 minutes before">30 minutes before</option>
-                    <option value="1 hour before">1 hour before</option>
-                    <option value="1 day before">1 day before</option>
-                  </select>
-                  <ChevronDown
-                    size={15}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A]"
-                  />
-                </div>
-              </div>
-
-              {/* Action Buttons: Cancel vs Add Task */}
-              <div className="flex items-center gap-3 pt-2">
+              {!showForm ? (
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 rounded-[12px] border border-[#E4E4E7] bg-white py-3 font-manrope text-[14px] font-semibold text-[#52525B] transition-colors hover:bg-[#F4F4F5] active:scale-98"
+                  onClick={() => {
+                    setForm(emptyForm(selectedDate))
+                    setShowForm(true)
+                  }}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-[12px] border border-dashed border-[#DECFBE] py-3 text-[13px] font-bold text-[#C06B3E] hover:bg-[#FFF9F3]"
                 >
-                  Cancel
+                  <Plus size={15} /> Add a task for this day
                 </button>
-                <button
-                  type="submit"
-                  disabled={!taskTitle.trim()}
-                  className={`flex-1 rounded-[12px] py-3 font-manrope text-[14px] font-bold transition-all shadow-sm active:scale-98 ${
-                    taskTitle.trim()
-                      ? 'bg-[#C06B3E] text-white hover:bg-[#AA572D]'
-                      : 'bg-[#D4D4D8] text-[#71717A] cursor-not-allowed'
-                  }`}
-                >
-                  Add Task
-                </button>
-              </div>
-            </form>
+              ) : (
+                <form onSubmit={saveTask} className="flex flex-col gap-3">
+                  <h4 className="text-[14px] font-bold text-[#08182B]">{form.id ? 'Edit task' : 'New task'}</h4>
+                  <input
+                    className={inputClass}
+                    placeholder="What do you need to do?"
+                    value={form.title}
+                    maxLength={200}
+                    autoFocus
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  />
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <label className="flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065]">
+                      Type
+                      <select className={inputClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as TaskType })}>
+                        {(Object.keys(TYPE_META) as TaskType[]).map((t) => (
+                          <option key={t} value={t}>{TYPE_META[t].label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065]">
+                      Priority
+                      <select className={inputClass} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}>
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065]">
+                      Date
+                      <input className={inputClass} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                    </label>
+                    <label className="flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065]">
+                      Time <span className="font-normal">(empty = all day)</span>
+                      <input className={inputClass} type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
+                    </label>
+                    <label className="col-span-2 flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065] sm:col-span-1">
+                      Project
+                      <select className={inputClass} value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })}>
+                        <option value="">Personal</option>
+                        {activeProjects.map((p) => (
+                          <option key={p.id} value={p.id}>{p.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="col-span-2 flex flex-col gap-1 text-[11.5px] font-bold text-[#7A7065] sm:col-span-1">
+                      Reminder
+                      <select
+                        className={inputClass}
+                        value={form.reminder === null ? '' : String(form.reminder)}
+                        onChange={(e) => setForm({ ...form, reminder: e.target.value === '' ? null : Number(e.target.value) })}
+                      >
+                        {REMINDERS.map((r) => (
+                          <option key={r.label} value={r.minutes === null ? '' : String(r.minutes)}>{r.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <textarea
+                    className={inputClass + ' h-20 py-2'}
+                    placeholder="Notes (optional)"
+                    maxLength={4000}
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                  {form.reminder !== null && (
+                    <p className="text-[11.5px] text-[#8E8376]">You'll get a notification in Hunhar at the reminder time.</p>
+                  )}
+                  {formError && <p className="text-[12px] font-semibold text-red-600">{formError}</p>}
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForm(false)
+                        setFormError('')
+                      }}
+                      className="rounded-full border border-[#E5DACD] px-5 py-2 text-[13px] font-bold text-[#5C5248]"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={saving} className="rounded-full bg-[#C06B3E] px-6 py-2 text-[13px] font-bold text-white disabled:opacity-60">
+                      {saving ? 'Saving…' : form.id ? 'Save changes' : 'Add task'}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

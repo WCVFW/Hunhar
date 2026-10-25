@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -7,36 +7,88 @@ import {
   UploadCloud,
   FileText,
   X,
-  HelpCircle,
-  Info,
   CheckCircle,
 } from 'lucide-react'
+import { projectsApi, bidsApi, creditsApi, filesApi, type Project, type StoredFile } from '../../services/api'
+import { CREDITS_PER_BID, PLATFORM_FEE_RATE, formatBytes, formatINR } from '../../services/format'
+
+const MAX_ATTACHMENTS = 5
+const MIN_LETTER = 30
 
 export default function SubmitProposalPage(): React.JSX.Element {
-  const { projectId = '1' } = useParams<{ projectId: string }>()
+  const { projectId = '' } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
 
+  const [project, setProject] = useState<Project | null>(null)
+  const [loadingProject, setLoadingProject] = useState<boolean>(true)
+  const [loadError, setLoadError] = useState<string>('')
+  const [errorMsg, setErrorMsg] = useState<string>('')
+  const [credits, setCredits] = useState<number | null>(null)
+
   // Form states
-  const [bidAmount, setBidAmount] = useState<string>('2100')
-  const [deliveryTime, setDeliveryTime] = useState<string>('14')
+  const [bidAmount, setBidAmount] = useState<string>('')
+  const [deliveryTime, setDeliveryTime] = useState<string>('')
   const [milestoneType, setMilestoneType] = useState<'by_milestones' | 'by_project'>('by_milestones')
-  const [coverLetter, setCoverLetter] = useState<string>(
-    'Hello Aeris Creative team,\n\nI have extensive experience in creating engaging motion graphics and 2D/3D product animations using After Effects and Premiere Pro. I reviewed your campaign requirements and I am confident I can deliver high-converting, polished visual assets within 2 weeks.\n\nLooking forward to collaborating with you!'
-  )
-  const [attachments, setAttachments] = useState<string[]>([
-    'Showreel_2026_MotionDesign.mp4',
-  ])
+  const [coverLetter, setCoverLetter] = useState<string>('')
+  const [attachments, setAttachments] = useState<StoredFile[]>([])
+  const [uploading, setUploading] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [submittedSuccess, setSubmittedSuccess] = useState<boolean>(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoadingProject(true)
+      const [projectRes, creditsRes] = await Promise.allSettled([
+        projectsApi.getProjectById(projectId),
+        creditsApi.getMyCredits(),
+      ])
+      if (cancelled) return
+      if (projectRes.status === 'fulfilled') {
+        const p = projectRes.value
+        setProject(p)
+        setBidAmount(String(Math.round(Number(p.budget))))
+        setDeliveryTime(String(p.timelineDays || 14))
+      } else {
+        setLoadError(projectRes.reason?.message || 'Could not load this project')
+      }
+      if (creditsRes.status === 'fulfilled') setCredits(creditsRes.value.balance)
+      setLoadingProject(false)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
 
   // Calculations
   const numericBid = Number(bidAmount) || 0
-  const hunharPlatformFee = Math.round(numericBid * 0.05) // 5% fee
+  const hunharPlatformFee = Math.round(numericBid * PLATFORM_FEE_RATE)
   const freelancerReceives = numericBid - hunharPlatformFee
+  const alreadyBid = !!project?.myBidStatus && project.myBidStatus !== 'WITHDRAWN'
+  const closed = !!project && project.status !== 'OPEN'
+  const notEnoughCredits = credits !== null && credits < CREDITS_PER_BID
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAttachments([...attachments, e.target.files[0].name])
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    if (attachments.length + files.length > MAX_ATTACHMENTS) {
+      setErrorMsg(`You can attach up to ${MAX_ATTACHMENTS} files.`)
+      return
+    }
+    setUploading(true)
+    setErrorMsg('')
+    try {
+      for (const file of files) {
+        const stored = await filesApi.upload(file)
+        setAttachments((prev) => [...prev, stored])
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -44,14 +96,55 @@ export default function SubmitProposalPage(): React.JSX.Element {
     setAttachments(attachments.filter((_, idx) => idx !== indexToRemove))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg('')
+    const days = Number(deliveryTime)
+    if (numericBid < 50) return setErrorMsg('Your bid must be at least ₹50.')
+    if (!Number.isInteger(days) || days < 1 || days > 365) return setErrorMsg('Delivery time must be between 1 and 365 days.')
+    if (coverLetter.trim().length < MIN_LETTER) return setErrorMsg(`Please write at least ${MIN_LETTER} characters in your cover letter.`)
+
     setIsSubmitting(true)
-    setTimeout(() => {
-      setIsSubmitting(false)
+    try {
+      const preference = milestoneType === 'by_milestones' ? 'Payment preference: by milestones' : 'Payment preference: full payment on completion'
+      await bidsApi.submitBid(projectId, {
+        proposedCost: numericBid,
+        deliveryTimelineDays: days,
+        proposalMessage: `${coverLetter.trim()}\n\n${preference}`,
+        attachmentUrls: attachments.map((a) => a.url),
+      })
+      setCredits((c) => (c === null ? c : c - CREDITS_PER_BID))
       setSubmittedSuccess(true)
-    }, 900)
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to submit proposal. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  if (loadingProject) {
+    return (
+      <div className="flex min-h-[350px] w-full items-center justify-center rounded-[24px] bg-white p-8">
+        <span className="font-manrope text-[15px] font-semibold text-[#8E8376]">Loading project…</span>
+      </div>
+    )
+  }
+
+  if (loadError || !project) {
+    return (
+      <div className="flex min-h-[350px] w-full flex-col items-center justify-center rounded-[24px] bg-white p-8 text-center font-manrope">
+        <h3 className="text-[18px] font-bold text-[#08182B]">Project unavailable</h3>
+        <p className="mt-1 text-[13px] text-[#7A7065]">{loadError || 'This project could not be found.'}</p>
+        <Link to="/freelancer/browse" className="mt-4 rounded-full bg-[#C06B3E] px-5 py-2 text-[13px] font-bold text-white no-underline">
+          Back to Projects
+        </Link>
+      </div>
+    )
+  }
+
+  const projectTitle = project.title
+  const clientName = project.clientName || 'the client'
+  const projectBudget = formatINR(project.budget)
 
   return (
     <div className="flex w-full flex-col gap-6 pb-16 font-manrope">
@@ -69,7 +162,7 @@ export default function SubmitProposalPage(): React.JSX.Element {
               Submit a Proposal
             </h1>
             <p className="text-[13px] text-[#7A7065]">
-              Project: <span className="font-semibold text-[#08182B]">Motion Graphics Package</span> • Aeris Creative
+              Project: <span className="font-semibold text-[#08182B]">{projectTitle}</span> • {clientName}
             </p>
           </div>
         </div>
@@ -77,7 +170,9 @@ export default function SubmitProposalPage(): React.JSX.Element {
         {/* Required Credits Badge */}
         <div className="hidden sm:flex items-center gap-2 rounded-full border border-[#F2C5A5] bg-[#FCECE0] px-4 py-2 text-[13px] font-bold text-[#A85123] shadow-xs">
           <Coins size={16} className="text-[#C06B3E]" />
-          <span>Cost: 20 Credits</span>
+          <span>
+            Costs {CREDITS_PER_BID} credits{credits !== null ? ` · You have ${credits}` : ''}
+          </span>
         </div>
       </div>
 
@@ -92,16 +187,16 @@ export default function SubmitProposalPage(): React.JSX.Element {
               Proposal Submitted!
             </h3>
             <p className="mt-2 text-[14px] text-[#6E6459]">
-              Your proposal and bid of <span className="font-bold text-[#08182B]">₹{numericBid.toLocaleString()}</span> have been sent to <span className="font-bold text-[#08182B]">Aeris Creative</span>.
+              Your proposal of <span className="font-bold text-[#08182B]">{formatINR(numericBid)}</span> was sent to <span className="font-bold text-[#08182B]">{clientName}</span>. You'll get a notification when they respond.
             </p>
 
             <div className="mt-6 flex flex-col gap-2.5">
               <button
                 type="button"
-                onClick={() => navigate('/freelancer/projects')}
+                onClick={() => navigate('/freelancer/bids')}
                 className="flex h-11 w-full items-center justify-center rounded-[14px] bg-[#C06B3E] font-manrope text-[14px] font-bold text-white shadow-sm transition-all hover:bg-[#AA572D]"
               >
-                View in Active Bids
+                View in My Bids
               </button>
               <button
                 type="button"
@@ -115,6 +210,18 @@ export default function SubmitProposalPage(): React.JSX.Element {
         </div>
       )}
 
+      {(alreadyBid || closed || notEnoughCredits) && (
+        <div className="rounded-[16px] border border-[#F2C5A5] bg-[#FCECE0] p-4 font-manrope text-[13px] font-semibold text-[#8C461F]">
+          {alreadyBid ? (
+            <>You already sent a proposal for this project. <Link to="/freelancer/bids" className="font-bold text-[#C06B3E]">View my bids</Link></>
+          ) : closed ? (
+            'This project is no longer accepting proposals.'
+          ) : (
+            <>You need {CREDITS_PER_BID} credits to send a proposal but have {credits}. <Link to="/freelancer/credits" className="font-bold text-[#C06B3E]">Buy credits</Link></>
+          )}
+        </div>
+      )}
+
       {/* 2. FORM GRID */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* LEFT COLUMN: Proposal Details (lg:col-span-8) */}
@@ -125,7 +232,7 @@ export default function SubmitProposalPage(): React.JSX.Element {
               Proposal Terms
             </h2>
             <p className="mt-1 text-[13px] text-[#786D61]">
-              Client's Budget: <span className="font-bold text-[#C06B3E]">₹1,800 – ₹2,400</span>
+              Client's Estimated Budget: <span className="font-bold text-[#C06B3E]">{projectBudget}</span>
             </p>
 
             {/* Payment Method Selector */}
@@ -195,9 +302,10 @@ export default function SubmitProposalPage(): React.JSX.Element {
                     type="number"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value)}
-                    placeholder="2100"
+                    placeholder="2000"
                     required
-                    min="100"
+                    min="50"
+                    max="10000000"
                     className="h-11 w-full rounded-[14px] border border-[#DECFBE] bg-[#FDFBF7] pl-8 pr-4 font-manrope text-[14px] font-bold text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
                   />
                 </div>
@@ -218,28 +326,26 @@ export default function SubmitProposalPage(): React.JSX.Element {
                     placeholder="14"
                     required
                     min="1"
+                    max="365"
                     className="h-11 w-full rounded-[14px] border border-[#DECFBE] bg-[#FDFBF7] px-4 font-manrope text-[14px] font-bold text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
                   />
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#8E8376]">
                     days
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] text-[#8E8376]">
-                  Client requires delivery in approx. 3 weeks.
-                </p>
               </div>
             </div>
 
             {/* Fee Breakdown Notice */}
             <div className="mt-5 rounded-[16px] border border-[#E7D6C5] bg-[#FBF6EE] p-4 text-[13px]">
               <div className="flex items-center justify-between pb-1.5 border-b border-[#EBDCCF]">
-                <span className="text-[#6B6156]">Hunhar Platform Fee (5%)</span>
-                <span className="font-semibold text-[#8C461F]">- ₹{hunharPlatformFee}</span>
+                <span className="text-[#6B6156]">Hunhar Platform Fee ({Math.round(PLATFORM_FEE_RATE * 100)}%)</span>
+                <span className="font-semibold text-[#8C461F]">- {formatINR(hunharPlatformFee)}</span>
               </div>
               <div className="flex items-center justify-between pt-2">
                 <span className="font-bold text-[#08182B]">You Will Receive</span>
                 <span className="font-manrope text-[16px] font-extrabold text-[#1F874C]">
-                  ₹{freelancerReceives.toLocaleString()}
+                  {formatINR(freelancerReceives)}
                 </span>
               </div>
             </div>
@@ -247,161 +353,114 @@ export default function SubmitProposalPage(): React.JSX.Element {
 
           {/* Card 2: Cover Letter */}
           <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-7 shadow-xs">
-            <div className="flex items-center justify-between">
-              <h2 className="font-manrope text-[16px] font-bold text-[#08182B]">
-                Cover Letter
-              </h2>
-              <span className="text-[12px] font-medium text-[#8E8376]">
-                {coverLetter.length} characters
-              </span>
-            </div>
+            <h2 className="font-manrope text-[16px] font-bold text-[#08182B]">
+              Cover Letter
+            </h2>
             <p className="mt-1 text-[13px] text-[#786D61]">
-              Introduce yourself and explain why you're a great fit for Aeris Creative.
+              Introduce yourself and explain why you're a strong fit for this project.
             </p>
 
             <textarea
               rows={6}
               value={coverLetter}
               onChange={(e) => setCoverLetter(e.target.value)}
-              placeholder="Detail your pitch, past experience, and workflow..."
+              placeholder={`Hi ${clientName}, I'd love to work on "${projectTitle}". Here's how I'd approach it…`}
               required
-              className="mt-3.5 w-full rounded-[16px] border border-[#DECFBE] bg-[#FDFBF7] p-4 font-manrope text-[13px] leading-relaxed text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
+              maxLength={4900}
+              className="mt-4 w-full rounded-[16px] border border-[#DECFBE] bg-[#FDFBF7] p-4 font-manrope text-[14px] leading-relaxed text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
             />
+            <p className={`mt-1 text-right text-[11px] ${coverLetter.trim().length < MIN_LETTER ? 'text-[#B45309]' : 'text-[#8E8376]'}`}>
+              {coverLetter.trim().length < MIN_LETTER
+                ? `${MIN_LETTER - coverLetter.trim().length} more characters needed`
+                : `${coverLetter.length} / 4900`}
+            </p>
           </div>
 
-          {/* Card 3: Attachments & Portfolio Samples */}
+          {/* Card 3: Attachments */}
           <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-7 shadow-xs">
-            <h2 className="font-manrope text-[16px] font-bold text-[#08182B]">
-              Attachments & Portfolio Samples
-            </h2>
-            <p className="mt-1 text-[13px] text-[#786D61]">
-              Upload past motion design showreels, pitch decks, or case studies (max 25MB).
-            </p>
+            <h2 className="font-manrope text-[16px] font-bold text-[#08182B]">Attachments <span className="text-[13px] font-medium text-[#8E8376]">(optional)</span></h2>
+            <p className="mt-1 text-[13px] text-[#786D61]">Add samples of similar work — up to {MAX_ATTACHMENTS} files, 20 MB each.</p>
 
-            {/* Drag & Drop Upload Area */}
-            <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[18px] border-2 border-dashed border-[#DECFBE] bg-[#FAF7F2] p-6 text-center transition-colors hover:border-[#C06B3E] hover:bg-[#FDF9F5]">
-              <UploadCloud size={30} className="text-[#C06B3E]" />
-              <p className="mt-2 text-[13px] font-bold text-[#08182B]">
-                Drag and drop files here, or <span className="text-[#C06B3E] underline">browse files</span>
-              </p>
-              <p className="mt-0.5 text-[11px] text-[#8E8376]">
-                Supports MP4, MOV, PDF, PNG, ZIP
-              </p>
-              <input
-                type="file"
-                className="hidden"
-                onChange={handleFileUpload}
-              />
-            </label>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileUpload} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+              className="mt-4 flex w-full flex-col items-center justify-center gap-1.5 rounded-[16px] border-2 border-dashed border-[#DECFBE] bg-[#FDFBF7] p-5 text-[#786D61] transition-colors hover:border-[#C06B3E] hover:text-[#C06B3E] disabled:opacity-60"
+            >
+              <UploadCloud size={22} />
+              <span className="font-manrope text-[13px] font-bold">{uploading ? 'Uploading…' : 'Click to upload files'}</span>
+            </button>
 
-            {/* Uploaded Files List */}
             {attachments.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2.5">
+              <div className="mt-3 flex flex-col gap-2">
                 {attachments.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 rounded-[12px] border border-[#E5DACD] bg-[#FBF8F3] px-3 py-1.5 text-[12px] font-semibold text-[#54493D]"
-                  >
-                    <FileText size={14} className="text-[#C06B3E]" />
-                    <span className="truncate max-w-[200px]">{file}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(idx)}
-                      className="text-[#998B7C] hover:text-[#DC2626]"
-                    >
-                      <X size={14} />
+                  <div key={file.id} className="flex items-center justify-between rounded-[12px] border border-[#EFE4D7] bg-[#FAF7F2] px-3.5 py-2">
+                    <span className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-[#08182B]">
+                      <FileText size={15} className="shrink-0 text-[#8E8376]" />
+                      <span className="truncate">{file.originalName}</span>
+                      <span className="shrink-0 text-[11px] font-normal text-[#8E8376]">{formatBytes(file.sizeBytes)}</span>
+                    </span>
+                    <button type="button" onClick={() => removeAttachment(idx)} aria-label={`Remove ${file.originalName}`} className="text-[#8E8376] hover:text-red-600">
+                      <X size={15} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </div>
 
-        {/* RIGHT COLUMN: Summary & Submission CTA (lg:col-span-4) */}
-        <div className="flex flex-col gap-5 lg:col-span-4">
-          {/* Proposal Summary Box */}
-          <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
-            <h3 className="font-manrope text-[14px] font-bold uppercase tracking-wider text-[#8A7F73]">
-              BID SUMMARY
-            </h3>
-
-            <div className="mt-4 flex flex-col gap-3.5">
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-[#8E8376]">Bid Amount</span>
-                <span className="font-bold text-[#08182B]">₹{numericBid.toLocaleString()}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-[#8E8376]">Delivery Time</span>
-                <span className="font-bold text-[#08182B]">{deliveryTime || 0} Days</span>
-              </div>
-
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-[#8E8376]">Milestone Type</span>
-                <span className="font-bold text-[#08182B]">
-                  {milestoneType === 'by_milestones' ? 'By Milestones' : 'Single Project'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between border-t border-[#F0F0F0] pt-3 text-[13px]">
-                <span className="text-[#8E8376]">Connect Credits Cost</span>
-                <span className="font-bold text-[#C06B3E]">20 Credits</span>
-              </div>
-
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-[#8E8376]">Remaining Balance</span>
-                <span className="font-bold text-[#1F874C]">660 Credits</span>
-              </div>
+          {/* Error Message Alert */}
+          {errorMsg && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-xs font-semibold text-red-700">
+              {errorMsg}
             </div>
+          )}
 
-            {/* Submit Action Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-6 flex h-[50px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#C06B3E] font-manrope text-[15px] font-bold text-white shadow-[0_4px_14px_rgba(192,107,62,0.35)] transition-all hover:bg-[#AA572D] active:scale-98 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <span>Submitting...</span>
-              ) : (
-                <>
-                  <Send size={16} />
-                  <span>Send Proposal</span>
-                </>
-              )}
-            </button>
-
+          {/* Submit Action */}
+          <div className="flex items-center justify-end gap-3">
             <Link
               to={`/freelancer/browse/${projectId}`}
-              className="mt-3 flex h-10 w-full items-center justify-center text-[13px] font-semibold text-[#786D61] hover:text-[#08182B]"
+              className="rounded-full border border-[#DECFBE] bg-white px-6 py-2.5 font-manrope text-[13px] font-bold text-[#4B3F33] no-underline transition-colors hover:bg-[#F8F4EE]"
             >
-              Cancel and Return
+              Cancel
             </Link>
+            <button
+              type="submit"
+              disabled={isSubmitting || uploading || alreadyBid || closed || notEnoughCredits}
+              className="inline-flex items-center gap-2 rounded-full bg-[#C06B3E] px-8 py-2.5 font-manrope text-[14px] font-bold text-white shadow-md transition-all hover:bg-[#AA572D] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Send size={15} />
+              <span>{isSubmitting ? 'Submitting…' : `Submit Proposal (${CREDITS_PER_BID} credits)`}</span>
+            </button>
           </div>
+        </div>
 
-          {/* Tips for winning the bid */}
-          <div className="w-full rounded-[20px] border border-[#E9DFD3] bg-[#FCFBF8] p-5">
-            <div className="flex items-center gap-2 text-[#C06B3E]">
-              <Info size={16} />
-              <h4 className="font-manrope text-[13px] font-bold">
-                Tips for Winning this Job
-              </h4>
+        {/* RIGHT COLUMN: Project Info Sidebar (lg:col-span-4) */}
+        <div className="flex flex-col gap-5 lg:col-span-4">
+          <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 shadow-xs">
+            <h3 className="font-manrope text-[13px] font-bold uppercase tracking-wider text-[#8A7F73]">
+              PROJECT SUMMARY
+            </h3>
+            <div className="mt-3">
+              <h4 className="font-manrope text-[16px] font-bold text-[#08182B]">{projectTitle}</h4>
+              <p className="mt-1 text-[13px] text-[#786D61]">{clientName}</p>
             </div>
-
-            <ul className="mt-3 space-y-2 text-[12px] leading-relaxed text-[#6E6458]">
-              <li className="flex items-start gap-2">
-                <span className="text-[#C06B3E]">•</span>
-                <span>Highlight relevant motion graphics projects similar to Aeris Creative's scope.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#C06B3E]">•</span>
-                <span>Keep your timeline realistic to build trust.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#C06B3E]">•</span>
-                <span>Propose distinct milestones so the client can approve iterative deliverables.</span>
-              </li>
-            </ul>
+            <div className="mt-4 flex flex-col gap-2 border-t border-[#F0F0F0] pt-3 text-[13px]">
+              <div>
+                <span className="text-[#8E8376]">Client Budget: </span>
+                <span className="font-bold text-[#08182B]">{projectBudget}</span>
+              </div>
+              <div>
+                <span className="text-[#8E8376]">Timeline: </span>
+                <span className="font-bold text-[#08182B]">{project.timelineDays} days</span>
+              </div>
+              <div>
+                <span className="text-[#8E8376]">Proposals so far: </span>
+                <span className="font-bold text-[#08182B]">{project.bidCount}</span>
+              </div>
+            </div>
+            <p className="mt-3 line-clamp-6 whitespace-pre-line text-[12px] leading-relaxed text-[#73685C]">{project.description}</p>
           </div>
         </div>
       </form>

@@ -1,30 +1,55 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Calendar as CalendarIcon,
   Clock,
   ChevronRight,
   Plus,
   Check,
+  Trash2,
 } from 'lucide-react'
 import quoteMascot from '../../assets/Leadership_luna.png'
 import cardDeskMascot from '../../assets/Job_details_image.png'
+import {
+  walletApi,
+  creditsApi,
+  projectsApi,
+  bidsApi,
+  calendarApi,
+  tokenStorage,
+  type BidStatus,
+  type CalendarTask,
+} from '../../services/api'
+import {
+  BID_STATUS_LABEL,
+  BID_STATUS_STYLE,
+  deadlineLabel,
+  formatDate,
+  formatINR,
+  isOverdue,
+  splitList,
+  timeAgo,
+} from '../../services/format'
 
 interface StatCardProps {
   label: string
   value: string | number
-  isHighlighted?: boolean
+  to: string
 }
 
-function StatCard({ label, value }: StatCardProps) {
+function StatCard({ label, value, to }: StatCardProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-[18px] border border-[#DECFBE]/90 bg-[#FBF8F3] px-3 py-4 text-center shadow-[0_2px_8px_rgba(192,107,62,0.04)] transition-all hover:border-[#C06B3E]/40 hover:shadow-md">
+    <Link
+      to={to}
+      className="flex flex-col items-center justify-center rounded-[18px] border border-[#DECFBE]/90 bg-[#FBF8F3] px-3 py-4 text-center no-underline shadow-[0_2px_8px_rgba(192,107,62,0.04)] transition-all hover:border-[#C06B3E]/40 hover:shadow-md"
+    >
       <span className="font-manrope text-[11px] font-bold uppercase tracking-wider text-[#C06B3E]">
         {label}
       </span>
       <span className="mt-1 font-manrope text-[28px] font-extrabold tracking-tight text-[#C06B3E] lg:text-[32px]">
         {value}
       </span>
-    </div>
+    </Link>
   )
 }
 
@@ -38,105 +63,212 @@ interface ProjectCardData {
   description: string
   budget: string
   tags: string[]
+  extraTags: number
   status: string
+  alreadyBid: boolean
 }
-
-const featuredProjects: ProjectCardData[] = [
-  {
-    id: '1',
-    category: 'MOTION DESIGN',
-    timeAgo: '2h ago',
-    title: 'Motion Graphics Package',
-    deadline: 'Sep 05',
-    client: 'Aeris Creative',
-    description:
-      'We need a set of animated graphics for a product launch campaign. We need a set of animated graphics for a product launch campaign.',
-    budget: '₹1,800 – ₹2,400',
-    tags: ['After Effects', 'Motion Design', 'Premiere Pro'],
-    status: 'Bid Open',
-  },
-  {
-    id: '2',
-    category: 'MOTION DESIGN',
-    timeAgo: '2h ago',
-    title: 'Motion Graphics Package',
-    deadline: 'Sep 05',
-    client: 'Aeris Creative',
-    description:
-      'We need a set of animated graphics for a product launch campaign. We need a set of animated graphics for a product launch campaign.',
-    budget: '₹1,800 – ₹2,400',
-    tags: ['After Effects', 'Motion Design', 'Premiere Pro'],
-    status: 'Bid Open',
-  },
-  {
-    id: '3',
-    category: 'MOTION DESIGN',
-    timeAgo: '2h ago',
-    title: 'Motion Graphics Package',
-    deadline: 'Sep 05',
-    client: 'Aeris Creative',
-    description:
-      'We need a set of animated graphics for a product launch campaign. We need a set of animated graphics for a product launch campaign.',
-    budget: '₹1,800 – ₹2,400',
-    tags: ['After Effects', 'Motion Design', 'Premiere Pro'],
-    status: 'Bid Open',
-  },
-]
 
 interface DeadlineItem {
   id: string
   title: string
-  clientCategory: string
+  subtitle: string
   date: string
+  overdue: boolean
+  link: string
 }
-
-const upcomingDeadlines: DeadlineItem[] = [
-  { id: '1', title: 'Final Logo Concepts', clientCategory: 'Acme Studio • Branding', date: 'Aug 28' },
-  { id: '2', title: 'Final Logo Concepts', clientCategory: 'Acme Studio • Branding', date: 'Aug 28' },
-  { id: '3', title: 'Final Logo Concepts', clientCategory: 'Acme Studio • Branding', date: 'Aug 28' },
-  { id: '4', title: 'Final Logo Concepts', clientCategory: 'Acme Studio • Branding', date: 'Aug 28' },
-]
 
 interface RecentBidItem {
   id: string
   title: string
   clientDate: string
   amount: string
-  status: 'Shortlisted' | 'Rejected' | 'Pending'
+  status: BidStatus
 }
 
-const recentBids: RecentBidItem[] = [
-  { id: '1', title: 'UX Audit', clientDate: 'Prisma Health • Aug 19', amount: '$950', status: 'Shortlisted' },
-  { id: '2', title: 'UX Audit', clientDate: 'Prisma Health • Aug 19', amount: '$550', status: 'Rejected' },
-  { id: '3', title: 'UX Audit', clientDate: 'Prisma Health • Aug 19', amount: '$450', status: 'Pending' },
-  { id: '4', title: 'UX Audit', clientDate: 'Prisma Health • Aug 19', amount: '$750', status: 'Pending' },
-]
-
 export default function FreelancerDashboard(): React.JSX.Element {
-  const [todoList, setTodoList] = useState([
-    { id: '1', text: 'Learn something New', completed: true },
-    { id: '2', text: 'Website Redesign Milestone', completed: false },
-    { id: '3', text: 'Website Redesign Milestone', completed: false },
-  ])
+  const [userName, setUserName] = useState<string>(() => tokenStorage.getUser()?.fullName || '')
+  const [stats, setStats] = useState({
+    activeProjects: '–' as string | number,
+    walletBalance: '–',
+    credits: '–' as string | number,
+    pendingBids: '–' as string | number,
+  })
+  const [projects, setProjects] = useState<ProjectCardData[]>([])
+  const [projectsLoading, setProjectsLoading] = useState<boolean>(true)
+  const [projectsError, setProjectsError] = useState<string>('')
+  const [recentBidsList, setRecentBidsList] = useState<RecentBidItem[]>([])
+  const [deadlinesList, setDeadlinesList] = useState<DeadlineItem[]>([])
+
+  // To-dos are undated planner tasks stored on the server (shared with the Calendar page)
+  const [todoList, setTodoList] = useState<CalendarTask[]>([])
+  const [todoError, setTodoError] = useState<string>('')
   const [newTodoText, setNewTodoText] = useState('')
   const [isAddingTodo, setIsAddingTodo] = useState(false)
+  const [savingTodo, setSavingTodo] = useState(false)
 
-  const toggleTodo = (id: string) => {
-    setTodoList((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    )
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDashboardData() {
+      setProjectsLoading(true)
+      const now = new Date()
+      const in30Days = new Date(now.getTime() + 30 * 86_400_000)
+
+      const [walletRes, creditRes, myBidsRes, myProjectsRes, openProjectsRes, todosRes, tasksRes] = await Promise.allSettled([
+        walletApi.getMyWallet(),
+        creditsApi.getMyCredits(),
+        bidsApi.getMyBids(),
+        projectsApi.getFreelancerProjects(),
+        projectsApi.getProjects({ size: 6, sort: 'newest' }),
+        calendarApi.getTodos(),
+        calendarApi.getTasks(new Date(now.getTime() - 7 * 86_400_000), in30Days),
+      ])
+      if (cancelled) return
+
+      setStats({
+        walletBalance: walletRes.status === 'fulfilled' ? formatINR(walletRes.value?.availableBalance) : '–',
+        credits: creditRes.status === 'fulfilled' ? creditRes.value.balance : '–',
+        pendingBids:
+          myBidsRes.status === 'fulfilled'
+            ? myBidsRes.value.filter((b) => b.status === 'SUBMITTED' || b.status === 'SHORTLISTED').length
+            : '–',
+        activeProjects:
+          myProjectsRes.status === 'fulfilled' ? myProjectsRes.value.filter((p) => p.status === 'ACTIVE').length : '–',
+      })
+
+      if (myBidsRes.status === 'fulfilled') {
+        setRecentBidsList(
+          myBidsRes.value.slice(0, 4).map((b) => ({
+            id: b.id,
+            title: b.projectTitle || 'Project',
+            clientDate: `${b.clientName || 'Client'} · ${formatDate(b.createdAt)}`,
+            amount: formatINR(b.proposedCost),
+            status: b.status,
+          }))
+        )
+      }
+
+      // Upcoming deadlines: active project deadlines + dated, unfinished planner tasks
+      const deadlines: (DeadlineItem & { at: number })[] = []
+      if (myProjectsRes.status === 'fulfilled') {
+        myProjectsRes.value
+          .filter((p) => p.status === 'ACTIVE' && p.deadline)
+          .forEach((p) =>
+            deadlines.push({
+              id: 'p-' + p.id,
+              title: p.title,
+              subtitle: `${p.category} · ${p.clientName || 'Client'}`,
+              date: deadlineLabel(p),
+              overdue: isOverdue(p),
+              link: `/freelancer/projects/${p.id}`,
+              at: new Date(p.deadline!).getTime(),
+            })
+          )
+      }
+      if (tasksRes.status === 'fulfilled') {
+        tasksRes.value
+          .filter((t) => t.status !== 'DONE' && t.dueAt)
+          .forEach((t) => {
+            const at = new Date(t.dueAt!).getTime()
+            deadlines.push({
+              id: 't-' + t.id,
+              title: t.title,
+              subtitle: `${t.type.charAt(0) + t.type.slice(1).toLowerCase()}${t.projectTitle ? ' · ' + t.projectTitle : ''}`,
+              date: at < Date.now() ? 'Overdue' : formatDate(t.dueAt),
+              overdue: at < Date.now(),
+              link: '/freelancer/calendar',
+              at,
+            })
+          })
+      }
+      setDeadlinesList(deadlines.sort((a, b) => a.at - b.at).slice(0, 4))
+
+      if (todosRes.status === 'fulfilled') {
+        setTodoList(todosRes.value)
+      } else {
+        setTodoError('Could not load your to-do list.')
+      }
+
+      if (openProjectsRes.status === 'fulfilled') {
+        setProjectsError('')
+        setProjects(
+          openProjectsRes.value.content.map((p) => {
+            const tags = splitList(p.skills)
+            return {
+              id: p.id,
+              category: (p.category || 'General').toUpperCase(),
+              timeAgo: timeAgo(p.createdAt),
+              title: p.title,
+              deadline: `${p.timelineDays} days`,
+              client: p.clientName || 'Client',
+              description: p.description,
+              budget: formatINR(p.budget),
+              tags: tags.slice(0, 3),
+              extraTags: Math.max(0, tags.length - 3),
+              status: `${p.bidCount} proposal${p.bidCount === 1 ? '' : 's'}`,
+              alreadyBid: !!p.myBidStatus && p.myBidStatus !== 'WITHDRAWN',
+            }
+          })
+        )
+      } else {
+        setProjectsError(openProjectsRes.reason?.message || 'Could not load projects.')
+      }
+      setProjectsLoading(false)
+    }
+
+    loadDashboardData()
+    const stored = tokenStorage.getUser()
+    if (stored?.fullName) setUserName(stored.fullName)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggleTodo = async (item: CalendarTask) => {
+    const next = item.status === 'DONE' ? 'TODO' : 'DONE'
+    setTodoList((prev) => prev.map((t) => (t.id === item.id ? { ...t, status: next } : t)))
+    try {
+      await calendarApi.setStatus(item.id, next)
+    } catch (err: any) {
+      setTodoList((prev) => prev.map((t) => (t.id === item.id ? { ...t, status: item.status } : t)))
+      setTodoError(err.message)
+    }
   }
 
-  const handleAddTodo = (e: React.FormEvent) => {
+  const deleteTodo = async (item: CalendarTask) => {
+    setTodoList((prev) => prev.filter((t) => t.id !== item.id))
+    try {
+      await calendarApi.deleteTask(item.id)
+    } catch (err: any) {
+      setTodoList((prev) => [...prev, item])
+      setTodoError(err.message)
+    }
+  }
+
+  const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTodoText.trim()) return
-    setTodoList((prev) => [
-      ...prev,
-      { id: Date.now().toString(), text: newTodoText.trim(), completed: false },
-    ])
-    setNewTodoText('')
-    setIsAddingTodo(false)
+    const title = newTodoText.trim()
+    if (!title || savingTodo) return
+    setSavingTodo(true)
+    setTodoError('')
+    try {
+      const created = await calendarApi.createTask({ title, type: 'TASK', priority: 'MEDIUM', allDay: false })
+      setTodoList((prev) => [...prev, created])
+      setNewTodoText('')
+      setIsAddingTodo(false)
+    } catch (err: any) {
+      setTodoError(err.message)
+    } finally {
+      setSavingTodo(false)
+    }
   }
+
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
 
   return (
     <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-[#FFFFFF] p-5 sm:p-7 lg:p-8 shadow-xs font-manrope">
@@ -145,16 +277,16 @@ export default function FreelancerDashboard(): React.JSX.Element {
         <section className="flex flex-col justify-between gap-2 border-b border-[#F0F0F0] pb-5 sm:flex-row sm:items-end">
           <div>
             <h1 className="font-manrope text-[26px] font-extrabold tracking-tight text-[#C06B3E] sm:text-[30px]">
-              Good afternoon, Rajshankar.M.
+              Welcome back{userName ? `, ${userName.split(' ')[0]}` : ''}
             </h1>
             <p className="mt-0.5 font-manrope text-[14px] text-[#786D61]">
-              Here's what's happening with your work today.
+              Here's what's happening with your work on hunhar.in today.
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-[13px] font-medium text-[#786D61]">
             <CalendarIcon size={16} className="text-[#96897A]" />
-            <span>Wednesday, August 20, 2026</span>
+            <span>{todayFormatted}</span>
           </div>
         </section>
 
@@ -242,157 +374,217 @@ export default function FreelancerDashboard(): React.JSX.Element {
                     value={newTodoText}
                     onChange={(e) => setNewTodoText(e.target.value)}
                     placeholder="Enter task name..."
+                    maxLength={200}
                     className="h-8 flex-1 rounded-lg border border-[#DBCAB8] bg-white px-2.5 text-[12px] focus:outline-none focus:ring-1 focus:ring-[#C06B3E]"
                     autoFocus
                   />
                   <button
                     type="submit"
-                    className="rounded-lg bg-[#C06B3E] px-3 text-[11px] font-bold text-white hover:bg-[#AA572D]"
+                    disabled={savingTodo || !newTodoText.trim()}
+                    className="rounded-lg bg-[#C06B3E] px-3 text-[11px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-50"
                   >
-                    Save
+                    {savingTodo ? 'Saving…' : 'Save'}
                   </button>
                 </form>
               )}
 
               {/* List of To Do Items: Fixed height showing exactly 3 items, scrollable for 4th and beyond */}
               <div className="mt-1 flex max-h-[148px] flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:#DECFBE_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#DECFBE] [&::-webkit-scrollbar-track]:bg-transparent">
-                {todoList.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => toggleTodo(item.id)}
-                    className={`group flex cursor-pointer items-center gap-3 rounded-[12px] border px-3.5 py-2.5 transition-all ${item.completed
-                      ? 'border-[#E7D3C3] bg-[#F7EBE1]/90 text-[#8E7F73]'
-                      : 'border-[#E5D7CA] bg-white text-[#2D241C] hover:border-[#C06B3E]/40 hover:bg-[#FFFDF9]'
-                      }`}
-                  >
+                {todoError && <p className="text-[11px] font-semibold text-red-600">{todoError}</p>}
+                {todoList.length === 0 && !todoError && (
+                  <p className="py-4 text-center font-manrope text-[12px] text-[#8E8376]">
+                    Nothing on your list. Add a task to plan your day.
+                  </p>
+                )}
+                {todoList.map((item) => {
+                  const done = item.status === 'DONE'
+                  return (
                     <div
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${item.completed
-                        ? 'border-[#C06B3E] bg-[#C06B3E] text-white'
-                        : 'border-[#CCAFA0] bg-transparent group-hover:border-[#C06B3E]'
+                      key={item.id}
+                      role="checkbox"
+                      aria-checked={done}
+                      tabIndex={0}
+                      onClick={() => toggleTodo(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault()
+                          toggleTodo(item)
+                        }
+                      }}
+                      className={`group flex cursor-pointer items-center gap-3 rounded-[12px] border px-3.5 py-2.5 transition-all ${done
+                        ? 'border-[#E7D3C3] bg-[#F7EBE1]/90 text-[#8E7F73]'
+                        : 'border-[#E5D7CA] bg-white text-[#2D241C] hover:border-[#C06B3E]/40 hover:bg-[#FFFDF9]'
                         }`}
                     >
-                      {item.completed && <Check size={11} strokeWidth={3} />}
+                      <div
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${done
+                          ? 'border-[#C06B3E] bg-[#C06B3E] text-white'
+                          : 'border-[#CCAFA0] bg-transparent group-hover:border-[#C06B3E]'
+                          }`}
+                      >
+                        {done && <Check size={11} strokeWidth={3} />}
+                      </div>
+                      <span
+                        className={`flex-1 font-manrope text-[13px] font-medium leading-tight ${done ? 'line-through opacity-80' : ''
+                          }`}
+                      >
+                        {item.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteTodo(item)
+                        }}
+                        aria-label={`Delete ${item.title}`}
+                        className="shrink-0 rounded p-0.5 text-[#B8A99A] opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100 focus:opacity-100"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
-                    <span
-                      className={`font-manrope text-[13px] font-medium leading-tight ${item.completed ? 'line-through opacity-80' : ''
-                        }`}
-                    >
-                      {item.text}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
 
           {/* 4 Stat Cards in 2x2 Grid (lg:col-span-4) */}
           <div className="grid grid-cols-2 gap-4 lg:col-span-4">
-            <StatCard label="ACTIVE PROJECTS" value="3" />
-            <StatCard label="WALLET BALANCE" value="₹2,840" />
-            <StatCard label="CREDITS" value="680" />
-            <StatCard label="PENDING BIDS" value="5" />
+            <StatCard label="ACTIVE PROJECTS" value={stats.activeProjects} to="/freelancer/projects" />
+            <StatCard label="WALLET BALANCE" value={stats.walletBalance} to="/freelancer/wallet" />
+            <StatCard label="CREDITS" value={stats.credits} to="/freelancer/credits" />
+            <StatCard label="PENDING BIDS" value={stats.pendingBids} to="/freelancer/bids" />
           </div>
         </section>
 
-        {/* 4. RECOMMENDED / MOTION GRAPHICS CARDS (Horizontal 3 Columns) */}
+        {/* 4. RECOMMENDED / LIVE PROJECTS (Horizontal 3 Columns) */}
         <section className="mt-2">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {featuredProjects.map((project) => (
-              <div
-                key={project.id}
-                className="flex flex-col justify-between overflow-hidden rounded-[20px] border border-[#E7DCCE] bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.03)] transition-all hover:border-[#C06B3E]/50 hover:shadow-lg"
+          {projectsLoading ? (
+            <div className="flex min-h-[180px] w-full items-center justify-center rounded-[20px] border border-[#E7DCCE] bg-[#FBF8F3] p-8 text-center">
+              <span className="font-manrope text-[14px] font-semibold text-[#8E8376]">Loading latest projects…</span>
+            </div>
+          ) : projectsError ? (
+            <div className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[20px] border border-red-200 bg-red-50 p-8 text-center">
+              <p className="font-manrope text-[14px] font-semibold text-red-700">{projectsError}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-3 rounded-full bg-[#08182B] px-4 py-1.5 font-manrope text-[12px] font-bold text-white"
               >
-                <div>
-                  {/* Header Tag + Time */}
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E5DACD] bg-[#FBF8F3] px-3 py-1 font-manrope text-[11px] font-bold tracking-wide text-[#9C5128]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#C06B3E]" />
-                      {project.category}
-                    </span>
-                    <span className="flex items-center gap-1 font-manrope text-[12px] font-medium text-[#9E9284]">
-                      <Clock size={13} />
-                      {project.timeAgo}
-                    </span>
-                  </div>
-
-                  {/* Project Image Banner with Mascot Desk */}
-                  <div className="relative mb-3.5 h-[145px] w-full overflow-hidden rounded-[14px] bg-[#E8DDD0]">
-                    <img
-                      src={cardDeskMascot}
-                      alt={project.title}
-                      className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
-                    />
-                  </div>
-
-                  {/* Title & Deadline */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">
-                        {project.title}
-                      </h4>
-                      <p className="mt-0.5 text-[12px] text-[#918578]">{project.client}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-[11px] font-medium text-[#B8572A]">Deadline :</span>
-                      <span className="font-manrope text-[12px] font-bold text-[#863D1A]">
-                        {project.deadline}
+                Try again
+              </button>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[20px] border border-dashed border-[#DECFBE] bg-[#FAF7F2] p-8 text-center">
+              <div className="h-10 w-10 rounded-full bg-[#F5ECE1] flex items-center justify-center text-[#C06B3E] font-bold text-lg mb-2">📁</div>
+              <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">No open projects right now</h4>
+              <p className="mt-1 font-manrope text-[13px] text-[#8E8376] max-w-[420px]">
+                New projects appear here as soon as clients post them. Check back soon.
+              </p>
+              <Link
+                to="/freelancer/browse"
+                className="mt-3 inline-flex items-center gap-1 rounded-full bg-[#C06B3E] px-4 py-1.5 font-manrope text-[12px] font-bold text-white no-underline shadow-xs hover:bg-[#AA572D]"
+              >
+                Browse All Projects
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  className="flex flex-col justify-between overflow-hidden rounded-[20px] border border-[#E7DCCE] bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.03)] transition-all hover:border-[#C06B3E]/50 hover:shadow-lg"
+                >
+                  <div>
+                    {/* Header Tag + Time */}
+                    <div className="mb-2.5 flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E5DACD] bg-[#FBF8F3] px-3 py-1 font-manrope text-[11px] font-bold tracking-wide text-[#9C5128]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#C06B3E]" />
+                        {project.category}
+                      </span>
+                      <span className="flex items-center gap-1 font-manrope text-[12px] font-medium text-[#9E9284]">
+                        <Clock size={13} />
+                        {project.timeAgo}
                       </span>
                     </div>
-                  </div>
 
-                  {/* Description */}
-                  <p className="mt-2.5 line-clamp-2 font-manrope text-[12px] leading-relaxed text-[#73685C]">
-                    {project.description}
-                  </p>
+                    {/* Project Image Banner with Mascot Desk */}
+                    <div className="relative mb-3.5 h-[145px] w-full overflow-hidden rounded-[14px] bg-[#E8DDD0]">
+                      <img
+                        src={cardDeskMascot}
+                        alt={project.title}
+                        className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                      />
+                    </div>
 
-                  {/* Budget */}
-                  <div className="mt-3">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#A05C35]">
-                      BUDGET{' '}
-                    </span>
-                    <span className="font-manrope text-[13px] font-extrabold text-[#08182B]">
-                      {project.budget}
-                    </span>
-                  </div>
+                    {/* Title & Deadline */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">
+                          {project.title}
+                        </h4>
+                        <p className="mt-0.5 text-[12px] text-[#918578]">{project.client}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-[11px] font-medium text-[#B8572A]">Timeline</span>
+                        <span className="font-manrope text-[12px] font-bold text-[#863D1A]">
+                          {project.deadline}
+                        </span>
+                      </div>
+                    </div>
 
-                  {/* Skill tags */}
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    {project.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-[8px] bg-[#F5ECE1] px-2.5 py-1 font-manrope text-[11px] font-medium text-[#6F6457]"
-                      >
-                        {tag}
+                    {/* Description */}
+                    <p className="mt-2.5 line-clamp-2 font-manrope text-[12px] leading-relaxed text-[#73685C]">
+                      {project.description}
+                    </p>
+
+                    {/* Budget */}
+                    <div className="mt-3">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#A05C35]">
+                        BUDGET{' '}
                       </span>
-                    ))}
-                    <button
-                      type="button"
-                      className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5ECE1] text-[#6F6457] hover:bg-[#EBDDCF]"
-                      aria-label="More tags"
+                      <span className="font-manrope text-[13px] font-extrabold text-[#08182B]">
+                        {project.budget}
+                      </span>
+                    </div>
+
+                    {/* Skill tags */}
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      {project.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-[8px] bg-[#F5ECE1] px-2.5 py-1 font-manrope text-[11px] font-medium text-[#6F6457]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {project.extraTags > 0 && (
+                        <span className="rounded-[8px] bg-[#F5ECE1] px-2 py-1 font-manrope text-[11px] font-bold text-[#6F6457]">
+                          +{project.extraTags}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom Bid Status & Action */}
+                  <div className="mt-4 flex items-center justify-between border-t border-[#F2E8DC] pt-3">
+                    <span className="inline-flex items-center gap-1.5 font-manrope text-[12px] font-bold text-[#1F874C]">
+                      <span className="h-2 w-2 rounded-full bg-[#1F874C]" />
+                      {project.alreadyBid ? 'You applied' : project.status}
+                    </span>
+
+                    <Link
+                      to={`/freelancer/browse/${project.id}`}
+                      className="flex items-center gap-1 font-manrope text-[12px] font-extrabold text-[#08182B] no-underline transition-colors hover:text-[#C06B3E]"
                     >
-                      <ChevronRight size={13} />
-                    </button>
+                      {project.alreadyBid ? 'View' : 'View & Bid'}
+                      <ChevronRight size={14} />
+                    </Link>
                   </div>
                 </div>
-
-                {/* Bottom Bid Status & Action */}
-                <div className="mt-4 flex items-center justify-between border-t border-[#F2E8DC] pt-3">
-                  <span className="inline-flex items-center gap-1.5 font-manrope text-[12px] font-bold text-[#1F874C]">
-                    <span className="h-2 w-2 rounded-full bg-[#1F874C]" />
-                    {project.status}
-                  </span>
-
-                  <a
-                    href={`/freelancer/browse/${project.id}`}
-                    className="flex items-center gap-1 font-manrope text-[12px] font-extrabold text-[#08182B] transition-colors hover:text-[#C06B3E]"
-                  >
-                    View & Bid
-                    <ChevronRight size={14} />
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* 5. BOTTOM ROW: UPCOMING DEADLINES & RECENT BIDS */}
@@ -404,39 +596,44 @@ export default function FreelancerDashboard(): React.JSX.Element {
                 <h3 className="font-manrope text-[18px] font-bold text-[#08182B]">
                   Upcoming Deadlines
                 </h3>
-                <a
-                  href="/freelancer/calendar"
-                  className="flex items-center gap-1 font-manrope text-[13px] font-bold text-[#08182B] hover:text-[#C06B3E]"
+                <Link
+                  to="/freelancer/calendar"
+                  className="flex items-center gap-1 font-manrope text-[13px] font-bold text-[#08182B] no-underline hover:text-[#C06B3E]"
                 >
                   View all <ChevronRight size={15} />
-                </a>
+                </Link>
               </div>
 
               <div className="flex flex-col gap-2.5 pt-1">
-                {upcomingDeadlines.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-3 transition-colors hover:bg-white"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F0D5C3] bg-[#FCF1E8] text-[#C06B3E]">
-                        <Clock size={16} />
+                {deadlinesList.length === 0 ? (
+                  <p className="font-manrope text-[12px] text-[#8E8376] py-3 text-center">No upcoming deadlines. Win a project or add tasks in your calendar.</p>
+                ) : (
+                  deadlinesList.map((item) => (
+                    <Link
+                      key={item.id}
+                      to={item.link}
+                      className="flex items-center justify-between gap-3 rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-3 no-underline transition-colors hover:bg-white"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F0D5C3] bg-[#FCF1E8] text-[#C06B3E]">
+                          <Clock size={16} />
+                        </div>
+                        <div>
+                          <h4 className="font-manrope text-[13px] font-bold text-[#08182B]">
+                            {item.title}
+                          </h4>
+                          <p className="font-manrope text-[11px] text-[#8E8376]">
+                            {item.subtitle}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-manrope text-[13px] font-bold text-[#08182B]">
-                          {item.title}
-                        </h4>
-                        <p className="font-manrope text-[11px] text-[#8E8376]">
-                          {item.clientCategory}
-                        </p>
-                      </div>
-                    </div>
 
-                    <span className="rounded-full bg-[#FFEAE5] px-3 py-1 font-manrope text-[11px] font-bold text-[#D34026]">
-                      {item.date}
-                    </span>
-                  </div>
-                ))}
+                      <span className={`shrink-0 rounded-full px-3 py-1 font-manrope text-[11px] font-bold ${item.overdue ? 'bg-[#FFEAE5] text-[#D34026]' : 'bg-[#FDF3E8] text-[#B4652F]'}`}>
+                        {item.date}
+                      </span>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -446,53 +643,44 @@ export default function FreelancerDashboard(): React.JSX.Element {
             <div>
               <div className="flex items-center justify-between pb-3">
                 <h3 className="font-manrope text-[18px] font-bold text-[#08182B]">Recent Bids</h3>
-                <a
-                  href="/freelancer/projects"
-                  className="flex items-center gap-1 font-manrope text-[13px] font-bold text-[#08182B] hover:text-[#C06B3E]"
+                <Link
+                  to="/freelancer/bids"
+                  className="flex items-center gap-1 font-manrope text-[13px] font-bold text-[#08182B] no-underline hover:text-[#C06B3E]"
                 >
                   View all <ChevronRight size={15} />
-                </a>
+                </Link>
               </div>
 
               <div className="flex flex-col gap-2.5 pt-1">
-                {recentBids.map((bid) => {
-                  let badgeClass = 'bg-[#EDE9FE] text-[#7C3AED]'
-                  let dotClass = 'bg-[#7C3AED]'
-
-                  if (bid.status === 'Rejected') {
-                    badgeClass = 'bg-[#FEE2E2] text-[#DC2626]'
-                    dotClass = 'bg-[#DC2626]'
-                  } else if (bid.status === 'Pending') {
-                    badgeClass = 'bg-[#FEF3C7] text-[#D97706]'
-                    dotClass = 'bg-[#D97706]'
-                  }
-
-                  return (
-                    <div
+                {recentBidsList.length === 0 ? (
+                  <p className="font-manrope text-[12px] text-[#8E8376] py-3 text-center">No bids placed yet. Browse projects to place your first bid!</p>
+                ) : (
+                  recentBidsList.map((bid) => (
+                    <Link
                       key={bid.id}
-                      className="flex items-center justify-between rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-3 transition-colors hover:bg-white"
+                      to="/freelancer/bids"
+                      className="flex items-center justify-between gap-3 rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-3 no-underline transition-colors hover:bg-white"
                     >
-                      <div>
-                        <h4 className="font-manrope text-[13px] font-bold text-[#08182B]">
+                      <div className="min-w-0">
+                        <h4 className="truncate font-manrope text-[13px] font-bold text-[#08182B]">
                           {bid.title}
                         </h4>
-                        <p className="font-manrope text-[11px] text-[#8E8376]">{bid.clientDate}</p>
+                        <p className="truncate font-manrope text-[11px] text-[#8E8376]">{bid.clientDate}</p>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 items-center gap-3">
                         <span className="font-manrope text-[13px] font-bold text-[#08182B]">
                           {bid.amount}
                         </span>
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-manrope text-[11px] font-bold ${badgeClass}`}
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-manrope text-[11px] font-bold ${BID_STATUS_STYLE[bid.status]}`}
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
-                          {bid.status}
+                          {BID_STATUS_LABEL[bid.status]}
                         </span>
                       </div>
-                    </div>
-                  )
-                })}
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </div>
