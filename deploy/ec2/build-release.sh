@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$ROOT/release"
 STAMP="$(date +%Y%m%d-%H%M)"
-NAME="hunhar-release-$STAMP"
+NAME="${RELEASE_NAME:-hunhar-release-$STAMP}"   # Jenkins passes its own name (build number + commit)
 STAGE="$OUT/$NAME"
 SERVICES=(identity-service project-service billing-service engagement-service api-gateway)
 

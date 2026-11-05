@@ -31,6 +31,8 @@ No Git, Maven or Node is needed on the server. Then continue with step 4 (DNS) a
 
 The sections below explain each step, and the alternative of building on the server from a Git clone (`hunhar-deploy`).
 
+**Automatic deploys with Jenkins** (build → "Deploy to live?" → install on this server): [JENKINS.md](JENKINS.md).
+
 | File | What it does |
 |---|---|
 | `setup-server.sh` | One-time server setup: Java 17, Maven, Node 22, MySQL, nginx, certbot, AWS CLI, services, backup timer |
@@ -58,8 +60,10 @@ The sections below explain each step, and the alternative of building on the ser
 
 1. **IAM → Policies → Create policy → JSON**: paste `aws/backup-iam-policy.json`, replace
    `YOUR-BACKUP-BUCKET` with your bucket name. Name it `hunhar-db-backup`.
-2. **IAM → Roles → Create role → AWS service → EC2**, attach `hunhar-db-backup`. Name it `hunhar-ec2`.
-3. If you later use S3 for uploaded project files (`STORAGE_TYPE=s3`), add a second statement for that bucket.
+2. **IAM → Policies → Create policy → JSON**: paste `aws/uploads-iam-policy.json` (bucket `hunhar-uploads`:
+   ListBucket, GetObject, PutObject, DeleteObject). Name it `hunhar-uploads`.
+3. **IAM → Roles → Create role → AWS service → EC2**, attach **both** `hunhar-db-backup` and `hunhar-uploads`. Name it `hunhar-ec2`.
+   (Role already made? IAM → Roles → `hunhar-ec2` → Add permissions → Attach policies → `hunhar-uploads`.)
 
 ## 3. Launch the EC2 instance
 
@@ -186,6 +190,56 @@ sudo hunhar-db-restore hunhar-db-2026-11-04_0200.sql.gz   # restore one (asks to
 ```
 Change the time in `/etc/systemd/system/hunhar-db-backup.timer` (`OnCalendar=*-*-* 02:00:00 Asia/Kolkata`;
 for 2 PM use `14:00:00`), then `sudo systemctl daemon-reload`. Change the retention with `RETENTION_DAYS` in `/etc/hunhar/backup.env`.
+
+## Uploaded files and images in S3 (`hunhar-uploads`)
+
+Every upload — profile photos, company logos, portfolio images, project files, proposal attachments,
+chat attachments — goes through `project-service` into **`s3://hunhar-uploads/uploads/<date>/<id>.<ext>`**
+(server-side encrypted, private; the site reads them through `/api/v1/projects/files/<id>`).
+New servers are set up this way automatically (`STORAGE_TYPE=s3`, `S3_BUCKET=hunhar-uploads`, IAM role, no keys).
+
+**Bucket settings (S3 console → `hunhar-uploads`):**
+- Block all public access: **on**. Default encryption: SSE-S3.
+- **Versioning: Enable** (Properties → Bucket Versioning). A deleted or overwritten file can then be restored.
+- Keep old versions for 30 days only:
+  ```bash
+  aws s3api put-bucket-lifecycle-configuration --bucket hunhar-uploads \
+    --lifecycle-configuration file://deploy/ec2/aws/uploads-lifecycle.json
+  ```
+
+**Server set up before this (uploads on disk)?** One command checks access, copies the old files to S3,
+switches the service and repoints the database records — no image breaks during the switch:
+```bash
+sudo hunhar-uploads-to-s3
+```
+Check: `sudo hunhar-doctor` shows `uploads stored in S3: hunhar-uploads`.
+
+Restore a deleted upload: S3 console → `hunhar-uploads` → **Show versions** → select the previous version → Download / copy back.
+
+## Troubleshooting
+
+Start with the check-up — it tests everything and says what to fix:
+```bash
+sudo hunhar-doctor
+```
+It checks memory/disk, MySQL, each service's health, uploads bucket, nginx config, HTTPS expiry,
+the live URLs, the latest DB backup in S3, risky `.env` values (test Razorpay key, example values,
+`PAYMENTS_ALLOW_MOCK`) and errors in the last hour. Jenkins prints it after every live deploy.
+
+| Symptom | Look at | Usual fix |
+|---|---|---|
+| Site shows "Could not connect" / login fails | `sudo hunhar-doctor` → Backend services | `journalctl -u hunhar@<service> -n 100 --no-pager`; often a wrong `.env` value → fix → `sudo systemctl restart hunhar.target` |
+| A service keeps restarting | `systemctl status hunhar@<service>` | "Access denied for user" → DB password in `.env` changed; re-run `setup-server.sh` (refreshes it) |
+| Images/files fail to upload or show | doctor → `uploads S3 bucket not usable: …` | the message names it: bucket name, region, or the `hunhar-uploads` policy missing on the role |
+| `502 Bad Gateway` | `curl localhost:8080/actuator/health` | gateway down → `sudo systemctl restart hunhar@api-gateway` |
+| Emails (OTP) not arriving | `journalctl -u hunhar@identity-service | grep -i mail` | `MAIL_*` values; sender domain verified at the mail provider |
+| Payments fail | `journalctl -u hunhar@billing-service -n 100` | Razorpay keys; webhook URL + secret in the Razorpay dashboard |
+| Server slow / out of memory | `free -m`, doctor → Server | `sudo systemctl restart hunhar.target`; move to t3.large |
+| Disk full | `df -h /` | `sudo journalctl --vacuum-size=200M`; remove old `~/releases/*` |
+| HTTPS expired | doctor → certificate | `sudo certbot renew && sudo systemctl reload nginx` |
+| Backup missing | `journalctl -u hunhar-db-backup -n 50` | bucket name in `/etc/hunhar/backup.env`; `hunhar-db-backup` policy on the role |
+
+Live logs: `journalctl -u 'hunhar@*' -f` (all services) · `sudo tail -f /var/log/nginx/error.log`.
 
 ## Everyday commands
 

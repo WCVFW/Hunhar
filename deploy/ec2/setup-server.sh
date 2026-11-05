@@ -5,7 +5,7 @@
 #   AWS CLI, systemd services for the 5 backend services, nightly DB backup to S3.
 #
 # Usage (from the repo checkout on the server):
-#   sudo bash deploy/ec2/setup-server.sh --bucket <s3-backup-bucket> [--region ap-south-1]
+#   sudo bash deploy/ec2/setup-server.sh --bucket <s3-backup-bucket> [--uploads-bucket hunhar-uploads] [--region ap-south-1]
 #
 # Safe to run again: existing passwords and /opt/hunhar/.env are kept.
 # =============================================================================
@@ -13,11 +13,13 @@ set -euo pipefail
 
 BUCKET=""
 REGION="ap-south-1"
+UPLOADS_BUCKET="hunhar-uploads"
 PREBUILT=0   # --prebuilt: installing a release file, so no Maven/Node build tools on the server
 while [ $# -gt 0 ]; do
   case "$1" in
     --bucket) BUCKET="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
+    --uploads-bucket) UPLOADS_BUCKET="$2"; shift 2 ;;
     --prebuilt) PREBUILT=1; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -119,7 +121,11 @@ if [ ! -f "$APP/.env" ]; then
   set_env JWT_SECRET "$(openssl rand -hex 32)"
   set_env INTERNAL_API_KEY "$(openssl rand -hex 24)"
   set_env PAYMENTS_ALLOW_MOCK false
-  set_env STORAGE_TYPE local
+  # Uploaded files and images go to S3 (IAM role, no keys); UPLOADS_DIR is only the local fallback
+  set_env STORAGE_TYPE s3
+  set_env S3_BUCKET "$UPLOADS_BUCKET"
+  set_env AWS_ACCESS_KEY_ID ""
+  set_env AWS_SECRET_ACCESS_KEY ""
   set_env UPLOADS_DIR "$APP/uploads"
   set_env S3_REGION "$REGION"
   ADMIN_PASS="$(openssl rand -base64 18 | tr -d '/+=')"
@@ -142,6 +148,8 @@ install -m 644 "$HERE/systemd/hunhar-db-backup.service" /etc/systemd/system/hunh
 install -m 644 "$HERE/systemd/hunhar-db-backup.timer" /etc/systemd/system/hunhar-db-backup.timer
 install -m 755 "$HERE/backup/hunhar-db-backup.sh" /usr/local/bin/hunhar-db-backup
 install -m 755 "$HERE/backup/hunhar-db-restore.sh" /usr/local/bin/hunhar-db-restore
+install -m 755 "$HERE/uploads-to-s3.sh" /usr/local/bin/hunhar-uploads-to-s3
+install -m 755 "$HERE/doctor.sh" /usr/local/bin/hunhar-doctor
 install -m 755 "$HERE/deploy.sh" /usr/local/bin/hunhar-deploy
 systemctl daemon-reload
 systemctl enable hunhar.target

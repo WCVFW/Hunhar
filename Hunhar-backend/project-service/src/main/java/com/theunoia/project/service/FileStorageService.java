@@ -15,6 +15,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
@@ -37,7 +39,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -97,6 +101,65 @@ public class FileStorageService {
                 .httpClientBuilder(ApacheHttpClient.builder())
                 .build();
         log.info("File storage: Amazon S3 bucket {} ({})", bucket, region);
+        String problem = checkS3();
+        if (problem != null) {
+            // Keep running (health shows DOWN) so the reason is visible instead of a restart loop
+            log.error("S3 bucket {} is not usable: {}. Uploads will fail until this is fixed.", bucket, problem);
+        }
+    }
+
+    /** null when the bucket answers; otherwise a short reason (bad name, no permission, no IAM role...). */
+    private String checkS3() {
+        try {
+            s3.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+            return null;
+        } catch (S3Exception e) {
+            int status = e.statusCode();
+            if (status == 404) return "bucket does not exist";
+            if (status == 403) return "access denied (IAM role/policy needs s3:ListBucket, GetObject, PutObject, DeleteObject)";
+            if (status == 301) return "bucket is in another region than " + region;
+            return e.awsErrorDetails() != null ? e.awsErrorDetails().errorMessage() : e.getMessage();
+        } catch (SdkException e) {
+            String msg = String.valueOf(e.getMessage());
+            if (msg.contains("Unable to load credentials")) {
+                return "no AWS credentials: attach the hunhar-ec2 IAM role to this EC2 instance (or set AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)";
+            }
+            return msg.length() > 300 ? msg.substring(0, 300) : msg;
+        }
+    }
+
+    private volatile long healthCheckedAt;
+    private volatile Map<String, Object> healthDetails;
+
+    /** For /actuator/health: where files go and whether that place works. Checked at most every 30 s. */
+    public Map<String, Object> health() {
+        long now = System.currentTimeMillis();
+        if (healthDetails != null && now - healthCheckedAt < 30_000) return healthDetails;
+        Map<String, Object> d = new LinkedHashMap<>();
+        if (s3 != null) {
+            String problem = checkS3();
+            d.put("type", "s3");
+            d.put("bucket", bucket);
+            d.put("region", region);
+            d.put("ok", problem == null);
+            if (problem != null) d.put("error", problem);
+        } else {
+            Path dir = root();
+            boolean ok;
+            try {
+                Files.createDirectories(dir);
+                ok = Files.isWritable(dir);
+            } catch (IOException e) {
+                ok = false;
+            }
+            d.put("type", "local");
+            d.put("dir", dir.toString());
+            d.put("ok", ok);
+            if (!ok) d.put("error", "uploads folder is not writable");
+        }
+        healthDetails = d;
+        healthCheckedAt = now;
+        return d;
     }
 
     @PreDestroy

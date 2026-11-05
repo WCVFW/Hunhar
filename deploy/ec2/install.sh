@@ -19,7 +19,7 @@ SETUP_ARGS=(--prebuilt)
 while [ $# -gt 0 ]; do
   case "$1" in
     --setup) SETUP=1 ;;
-    --bucket|--region) SETUP=1; SETUP_ARGS+=("$1" "$2"); shift ;;
+    --bucket|--region|--uploads-bucket) SETUP=1; SETUP_ARGS+=("$1" "$2"); shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
   shift
@@ -44,4 +44,6 @@ fi
 install -m 755 "$HERE/deploy/ec2/deploy.sh" /usr/local/bin/hunhar-deploy
 install -m 755 "$HERE/deploy/ec2/backup/hunhar-db-backup.sh" /usr/local/bin/hunhar-db-backup
 install -m 755 "$HERE/deploy/ec2/backup/hunhar-db-restore.sh" /usr/local/bin/hunhar-db-restore
+install -m 755 "$HERE/deploy/ec2/uploads-to-s3.sh" /usr/local/bin/hunhar-uploads-to-s3
+install -m 755 "$HERE/deploy/ec2/doctor.sh" /usr/local/bin/hunhar-doctor
 bash "$HERE/deploy/ec2/deploy.sh" --release "$HERE"

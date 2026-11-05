@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "keep-deleted-or-replaced-uploads-30-days",
+      "Filter": { "Prefix": "uploads/" },
+      "Status": "Enabled",
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 30 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}

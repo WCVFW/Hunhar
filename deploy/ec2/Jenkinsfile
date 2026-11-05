@@ -1,0 +1,128 @@
+// =============================================================================
+// Hunhar LIVE deploy: every push to GitHub main -> build -> deploy to the EC2 server -> check the live site
+//
+//   GitHub push (webhook, or the 2-minute poll as fallback)
+//     -> Checkout -> Build release (5 JARs + website, one .tar.gz)
+//     -> [Approve "Deploy to live?" only when REQUIRE_APPROVAL is ticked]
+//     -> Upload over SSH + install.sh on the server -> hunhar-doctor -> Check https://www.hunhar.in
+//
+// Jenkins job: Pipeline script from SCM, Script Path = deploy/ec2/Jenkinsfile
+// Credentials: hunhar-ec2-ssh (SSH Username with private key), hunhar-ec2-host (Secret text: Elastic IP)
+// Setup and usage: deploy/ec2/JENKINS.md
+// The root Jenkinsfile is separate: it builds and runs everything on the Jenkins machine (test only).
+// =============================================================================
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '3'))
+        timeout(time: 90, unit: 'MINUTES')
+    }
+
+    triggers {
+        // Instant: GitHub webhook -> https://jenkins.hunhar.in/github-webhook/ (needs the GitHub plugin)
+        githubPush()
+        // Fallback when the webhook cannot reach Jenkins (e.g. Jenkins on a home PC): look for new commits every 2 minutes
+        pollSCM('H/2 * * * *')
+    }
+
+    parameters {
+        booleanParam(name: 'REQUIRE_APPROVAL', defaultValue: false, description: 'Pause and ask "Deploy to live?" before deploying (off = every push to main goes live automatically)')
+        booleanParam(name: 'CHECK_PUBLIC_URLS', defaultValue: true, description: 'After deploying, check https://www.hunhar.in and https://api.hunhar.in (untick until DNS and HTTPS are set up)')
+        string(name: 'GIT_BASH', defaultValue: 'C:\\Program Files\\Git\\bin\\bash.exe', description: 'Windows Jenkins only: Git Bash used to run the build and deploy scripts')
+    }
+
+    environment {
+        MAVEN_OPTS = '-Xmx1024m'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    def commit = env.GIT_COMMIT ? env.GIT_COMMIT.substring(0, 7) : 'local'
+                    env.RELEASE_NAME = "hunhar-release-b${env.BUILD_NUMBER}-${commit}"
+                    currentBuild.description = "${env.RELEASE_NAME}"
+                }
+                echo "Live build #${env.BUILD_NUMBER} of commit ${env.GIT_COMMIT ?: 'local'} on ${isUnix() ? 'Linux' : 'Windows'}"
+            }
+        }
+
+        stage('Build release') {
+            steps {
+                // Backend (Maven) + website (Vite, calls https://api.hunhar.in) + server scripts -> one file
+                bashRun('bash deploy/ec2/build-release.sh')
+                archiveArtifacts artifacts: "release/${env.RELEASE_NAME}.tar.gz*", fingerprint: true
+            }
+        }
+
+        stage('Approve') {
+            when { expression { params.REQUIRE_APPROVAL } }
+            steps {
+                timeout(time: 2, unit: 'HOURS') {
+                    input message: "Deploy ${env.RELEASE_NAME} to LIVE (www.hunhar.in)?", ok: 'Deploy to live'
+                }
+            }
+        }
+
+        stage('Deploy to EC2') {
+            // Only main goes live; any other branch is built and archived but never deployed
+            when { expression { def b = env.GIT_BRANCH ?: 'main'; b == 'main' || b.endsWith('/main') } }
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'hunhar-ec2-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER'),
+                    string(credentialsId: 'hunhar-ec2-host', variable: 'EC2_HOST')
+                ]) {
+                    withEnv([
+                        "RELEASE_FILE=release/${env.RELEASE_NAME}.tar.gz",
+                        "CHECK_PUBLIC=${params.CHECK_PUBLIC_URLS ? '1' : '0'}"
+                    ]) {
+                        bashRun('bash deploy/ec2/jenkins-deploy.sh')
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo """
+==========================================================
+ LIVE: ${env.RELEASE_NAME}
+   Website : https://www.hunhar.in
+   API     : https://api.hunhar.in
+ Rollback: ssh to the server and run
+   ls -1dt ~/releases/hunhar-release-*/
+   sudo bash ~/releases/<previous-release>/install.sh
+=========================================================="""
+        }
+        failure {
+            echo '''
+Live deploy FAILED. The previous version keeps running unless "Installing on the server" had started.
+On the server:  systemctl status 'hunhar@*'   and   journalctl -u hunhar@<service> -n 100 --no-pager'''
+        }
+        always {
+            // Release files are archived in Jenkins; no need to keep them in the workspace
+            script {
+                if (isUnix()) {
+                    sh 'rm -f release/*.tar.gz release/*.sha256 || true'
+                } else {
+                    bat 'del /q release\\*.tar.gz release\\*.sha256 2>nul & exit /b 0'
+                }
+            }
+        }
+    }
+}
+
+/** Runs a bash command on Linux agents, or through Git Bash on Windows agents. */
+def bashRun(String cmd) {
+    if (isUnix()) {
+        sh cmd
+    } else {
+        bat "\"${params.GIT_BASH}\" -c \"${cmd}\""
+    }
+}

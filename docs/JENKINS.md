@@ -1,5 +1,9 @@
 # Jenkins: build and run Hunhar
 
+> This job builds and runs everything **on the Jenkins machine** (testing).
+> To deploy to the **live EC2 server** (www.hunhar.in), use the separate job in
+> [deploy/ec2/JENKINS.md](../deploy/ec2/JENKINS.md) (Script Path `deploy/ec2/Jenkinsfile`).
+
 The pipeline is defined in [`Jenkinsfile`](../Jenkinsfile) at the repository root. One run:
 
 1. **Checkout** — pulls the repo.
