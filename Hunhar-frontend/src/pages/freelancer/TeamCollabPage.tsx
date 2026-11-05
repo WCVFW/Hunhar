@@ -12,6 +12,7 @@ import {
   type TeamMember,
 } from '../../services/api'
 import { formatDate, formatINR, initials, timeAgo } from '../../services/format'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 type Tab = 'find' | 'invites' | 'sent'
 type ModalStep = 'invite-form' | 'invitation-sent' | 'view-profile'
@@ -39,7 +40,7 @@ const ratingLabel = (p: FreelancerProfile) => (p.completedProjects > 0 && p.rati
 
 export default function TeamCollabPage(): React.JSX.Element {
   const [searchParams] = useSearchParams()
-  const preselectProject = searchParams.get('project') || ''
+  const preselectProject = fromRouteId(searchParams.get('project'))
   const [tab, setTab] = useState<Tab>('find')
   const [searchQuery, setSearchQuery] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -164,7 +165,7 @@ export default function TeamCollabPage(): React.JSX.Element {
   const messageInviter = async (invite: TeamMember) => {
     try {
       const conv = await messagesApi.startConversation(invite.primaryFreelancerId, invite.projectId)
-      window.location.href = `/freelancer/messages?c=${conv.id}`
+      window.location.href = `/freelancer/messages?c=${toRouteId(conv.id)}`
     } catch (err: any) {
       setError(err.message)
     }
@@ -363,7 +364,7 @@ export default function TeamCollabPage(): React.JSX.Element {
                         <button type="button" onClick={() => messageInviter(inv)} className="rounded-full border border-[#E5DACD] px-4 py-2 text-[12.5px] font-bold text-[#08182B]">
                           Message
                         </button>
-                        <Link to={`/freelancer/projects/${inv.projectId}`} className="rounded-full bg-[#08182B] px-4 py-2 text-[12.5px] font-bold text-white no-underline">
+                        <Link to={`/freelancer/projects/${toRouteId(inv.projectId)}`} className="rounded-full bg-[#08182B] px-4 py-2 text-[12.5px] font-bold text-white no-underline">
                           Open workspace
                         </Link>
                       </>
@@ -400,7 +401,7 @@ export default function TeamCollabPage(): React.JSX.Element {
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <Link to={`/freelancer/projects/${inv.projectId}`} className="rounded-full border border-[#E5DACD] px-4 py-2 text-[12.5px] font-bold text-[#08182B] no-underline">
+                    <Link to={`/freelancer/projects/${toRouteId(inv.projectId)}`} className="rounded-full border border-[#E5DACD] px-4 py-2 text-[12.5px] font-bold text-[#08182B] no-underline">
                       Workspace
                     </Link>
                     {inv.status !== 'DECLINED' && (
@@ -692,7 +693,7 @@ export default function TeamCollabPage(): React.JSX.Element {
                   </div>
 
                   <Link
-                    to={`/freelancer/projects/${lastInvite.projectId}`}
+                    to={`/freelancer/projects/${toRouteId(lastInvite.projectId)}`}
                     className="flex h-12 w-full items-center justify-center rounded-[14px] bg-[#C06B3E] font-manrope text-[14px] font-bold text-white no-underline shadow-sm transition-all hover:bg-[#AA572D]"
                   >
                     Go to Project Workspace

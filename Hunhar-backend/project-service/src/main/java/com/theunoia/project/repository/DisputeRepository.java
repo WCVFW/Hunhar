@@ -10,4 +10,7 @@ import java.util.UUID;
 @Repository
 public interface DisputeRepository extends JpaRepository<Dispute, UUID> {
     List<Dispute> findByProjectId(UUID projectId);
+    List<Dispute> findAllByOrderByCreatedAtDesc();
+    boolean existsByProjectIdAndRaisedByIdAndStatus(UUID projectId, UUID raisedById, String status);
+    long countByStatus(String status);
 }

@@ -71,6 +71,18 @@ public class WorkspaceController {
         return ResponseEntity.ok(ApiResponse.ok("Deliverable review recorded", null));
     }
 
+    @PostMapping("/milestones/{milestoneId}/fund")
+    public ResponseEntity<ApiResponse<Milestone>> fundMilestone(@CurrentUser AuthUser user, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(ApiResponse.ok("Milestone funded — the amount is held in escrow",
+                workspaceService.fundMilestone(milestoneId, requireUser(user))));
+    }
+
+    @PostMapping("/milestones/{milestoneId}/release")
+    public ResponseEntity<ApiResponse<Milestone>> releaseMilestone(@CurrentUser AuthUser user, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(ApiResponse.ok("Payment released to the freelancer",
+                workspaceService.releaseMilestone(milestoneId, requireUser(user))));
+    }
+
     @PatchMapping("/projects/{projectId}/progress")
     public ResponseEntity<ApiResponse<Project>> updateProgress(
             @CurrentUser AuthUser user,

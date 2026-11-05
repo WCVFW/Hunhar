@@ -78,7 +78,7 @@ public class CalendarController {
                 req.getStartTime() != null ? req.getStartTime() : Instant.now(),
                 req.getEndTime() != null ? req.getEndTime() : Instant.now().plusSeconds(3600)
         );
-        return ResponseEntity.ok(ApiResponse.ok("Google Calendar event created", eventLink));
+        return ResponseEntity.ok(ApiResponse.ok("Open the link to add this event to Google Calendar", eventLink));
     }
 
     private static AuthUser requireUser(AuthUser user) {

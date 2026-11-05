@@ -25,6 +25,19 @@ public class UserController {
 
     private final UserService userService;
     private final FreelancerProfileService profileService;
+    private final com.theunoia.identity.service.ClientProfileService clientProfileService;
+
+    // ------------------------------------------------------------ client company profile
+
+    @GetMapping("/me/client-profile")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMyClientProfile(@CurrentUser AuthUser user) {
+        return ResponseEntity.ok(ApiResponse.ok(clientProfileService.get(requireUser(user).id())));
+    }
+
+    @PutMapping("/me/client-profile")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateMyClientProfile(@CurrentUser AuthUser user, @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(ApiResponse.ok("Profile saved", clientProfileService.update(requireUser(user).id(), body)));
+    }
 
     // ------------------------------------------------------------ own freelancer profile
 
@@ -110,19 +123,31 @@ public class UserController {
     // ------------------------------------------------------------ admin
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getAllUsers(@CurrentUser AuthUser user) {
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getAllUsers(
+            @CurrentUser AuthUser user,
+            @RequestParam(required = false) com.theunoia.identity.domain.UserRole role,
+            @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "200") int limit) {
         requireAdmin(user);
-        return ResponseEntity.ok(ApiResponse.ok(userService.getAllUsers()));
+        return ResponseEntity.ok(ApiResponse.ok(userService.searchUsers(role, status, search, limit)));
+    }
+
+    @GetMapping("/admin/stats")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> userStats(@CurrentUser AuthUser user) {
+        requireAdmin(user);
+        return ResponseEntity.ok(ApiResponse.ok(userService.stats()));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<Void>> updateUserStatus(
             @CurrentUser AuthUser user,
             @PathVariable UUID id,
-            @RequestParam UserStatus status
+            @RequestParam UserStatus status,
+            @RequestParam(required = false) String reason
     ) {
         requireAdmin(user);
-        userService.updateUserStatus(id, status);
+        userService.updateUserStatus(user.id(), id, status, reason);
         return ResponseEntity.ok(ApiResponse.ok("User status updated to " + status, null));
     }
 

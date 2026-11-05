@@ -20,6 +20,9 @@ public class PaymentGatewayConfig {
                 && keySecret != null && !keySecret.isBlank() && !keySecret.contains("placeholder");
         if (configured) {
             log.info("Payments: Razorpay gateway enabled ({} mode)", keyId.startsWith("rzp_live_") ? "LIVE" : "TEST");
+            if (webhookSecret == null || webhookSecret.isBlank()) {
+                log.warn("Payments: RAZORPAY_WEBHOOK_SECRET is not set - Razorpay webhooks will be rejected (checkout verification still works).");
+            }
             return new RazorpayPaymentGateway(keyId, keySecret, webhookSecret);
         }
         if (!allowMock) {

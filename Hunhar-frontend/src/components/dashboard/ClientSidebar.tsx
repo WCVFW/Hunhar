@@ -148,12 +148,13 @@ export default function ClientSidebar({
                 className="h-14 w-14 -mr-1 object-contain drop-shadow-md select-none"
               />
             </div>
-            <button
-              type="button"
-              className="mt-2 w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] shadow-sm transition-all hover:bg-white active:scale-98"
+            <NavLink
+              to="/client/create-project"
+              onClick={() => setMobileOpen(false)}
+              className="mt-2 block w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] no-underline shadow-sm transition-all hover:bg-white active:scale-98"
             >
-              Upgrade Plan
-            </button>
+              Post a Project
+            </NavLink>
           </div>
         </div>
       )}

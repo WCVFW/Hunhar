@@ -12,9 +12,11 @@ import java.util.List;
 public class CreateProjectDto {
 
     @NotBlank(message = "Title is required")
+    @jakarta.validation.constraints.Size(min = 5, max = 150, message = "Title must be 5-150 characters")
     private String title;
 
     @NotBlank(message = "Description is required")
+    @jakarta.validation.constraints.Size(min = 30, max = 8000, message = "Description must be 30-8000 characters")
     private String description;
 
     @NotBlank(message = "Category is required")
@@ -25,9 +27,14 @@ public class CreateProjectDto {
     private BigDecimal budget;
 
     @NotNull(message = "Timeline in days is required")
+    @jakarta.validation.constraints.Min(value = 1, message = "Timeline must be at least 1 day")
+    @jakarta.validation.constraints.Max(value = 365, message = "Timeline can be at most 365 days")
     private Integer timelineDays;
 
     private List<String> skills;
 
     private List<String> attachmentUrls;
+
+    /** false = save as a draft (not visible to freelancers until published). Defaults to publishing. */
+    private Boolean publish;
 }

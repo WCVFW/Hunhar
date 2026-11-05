@@ -18,6 +18,7 @@ import leftBannerImage from '../../assets/BrowseProject_left_image.png'
 import rightBannerImage from '../../assets/BrowseProject_Right_image.png'
 import { projectsApi, type Project, type ProjectSearchParams } from '../../services/api'
 import { CATEGORY_GROUPS, KNOWN_CLIENT_CATEGORIES, formatINR, splitList, timeAgo } from '../../services/format'
+import { toRouteId } from '../../services/routeIds'
 
 interface CategoryItem {
   id: string
@@ -567,7 +568,7 @@ export default function BrowseProjectsPage(): React.JSX.Element {
                 </span>
 
                 <Link
-                  to={`/freelancer/browse/${project.id}`}
+                  to={`/freelancer/browse/${toRouteId(project.id)}`}
                   className="flex items-center gap-1 font-manrope text-[12px] font-extrabold text-[#08182B] no-underline transition-colors hover:text-[#C06B3E]"
                 >
                   {project.alreadyBid ? 'View' : 'View & Bid'}

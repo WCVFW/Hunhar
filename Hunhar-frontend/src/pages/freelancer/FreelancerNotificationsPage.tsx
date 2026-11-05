@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { notificationsApi, type AppNotification } from '../../services/api'
 import { timeAgo } from '../../services/format'
+import { useRoleBase } from '../../services/useRoleBase'
+import { hideIdsInPath } from '../../services/routeIds'
 
 export type NotificationCategory = 'all' | 'bids' | 'payments' | 'projects' | 'system'
 
@@ -32,40 +34,50 @@ export interface FreelancerNotificationItem {
 }
 
 /** Maps backend notification types to the page's filter tabs, icons and buttons. */
-const describe = (type: string): Pick<FreelancerNotificationItem, 'category' | 'iconType' | 'actionLabel'> & { fallbackUrl: string } => {
+const describe = (type: string, base: string): Pick<FreelancerNotificationItem, 'category' | 'iconType' | 'actionLabel'> & { fallbackUrl: string } => {
   switch (type) {
     case 'PROJECT_AWARDED':
-      return { category: 'bids', iconType: 'bid_accepted', actionLabel: 'Open workspace', fallbackUrl: '/freelancer/projects' }
+      return { category: 'bids', iconType: 'bid_accepted', actionLabel: 'Open workspace', fallbackUrl: base + '/projects' }
+    case 'BID_RECEIVED':
+      return { category: 'bids', iconType: 'invite', actionLabel: 'Review proposals', fallbackUrl: base + '/projects' }
     case 'BID_SHORTLISTED':
     case 'BID_REJECTED':
-    case 'BID_RECEIVED':
-      return { category: 'bids', iconType: type === 'BID_SHORTLISTED' ? 'review' : 'default', actionLabel: 'View my bids', fallbackUrl: '/freelancer/bids' }
+      return { category: 'bids', iconType: type === 'BID_SHORTLISTED' ? 'review' : 'default', actionLabel: 'View my bids', fallbackUrl: base + '/bids' }
+    case 'MILESTONE_FUNDED':
+    case 'DISPUTE_RAISED':
+    case 'DISPUTE_RESOLVED':
+    case 'DISPUTE_DISMISSED':
+    case 'DELIVERABLE_SUBMITTED':
+      return { category: 'projects', iconType: type === 'MILESTONE_FUNDED' ? 'payment_received' : 'milestone', actionLabel: 'Open project', fallbackUrl: base + '/projects' }
+    case 'KYC_APPROVED':
+    case 'KYC_REJECTED':
+      return { category: 'system', iconType: type === 'KYC_APPROVED' ? 'bid_accepted' : 'default', actionLabel: 'Open settings', fallbackUrl: base + '/settings' }
     case 'PAYMENT_RECEIVED':
     case 'PAYOUT_COMPLETED':
     case 'PAYOUT_REJECTED':
-      return { category: 'payments', iconType: 'payment_received', actionLabel: 'Open wallet', fallbackUrl: '/freelancer/wallet' }
+      return { category: 'payments', iconType: 'payment_received', actionLabel: 'Open wallet', fallbackUrl: base + '/wallet' }
     case 'TEAM_INVITE':
     case 'TEAM_INVITE_ACCEPTED':
     case 'TEAM_INVITE_DECLINED':
-      return { category: 'projects', iconType: 'invite', actionLabel: type === 'TEAM_INVITE' ? 'View invitation' : 'View project', fallbackUrl: '/freelancer/team' }
+      return { category: 'projects', iconType: 'invite', actionLabel: type === 'TEAM_INVITE' ? 'View invitation' : 'View project', fallbackUrl: base + '/team' }
     case 'MILESTONE_ADDED':
     case 'DELIVERABLE_APPROVED':
     case 'DELIVERABLE_CHANGES':
     case 'PROJECT_COMPLETED':
-      return { category: 'projects', iconType: 'milestone', actionLabel: 'Open project', fallbackUrl: '/freelancer/projects' }
+      return { category: 'projects', iconType: 'milestone', actionLabel: 'Open project', fallbackUrl: base + '/projects' }
     case 'DEADLINE_REMINDER':
-      return { category: 'projects', iconType: 'milestone', actionLabel: 'Open calendar', fallbackUrl: '/freelancer/calendar' }
+      return { category: 'projects', iconType: 'milestone', actionLabel: 'Open calendar', fallbackUrl: base + '/calendar' }
     case 'NEW_MESSAGE':
-      return { category: 'projects', iconType: 'message', actionLabel: 'Open messages', fallbackUrl: '/freelancer/messages' }
+      return { category: 'projects', iconType: 'message', actionLabel: 'Open messages', fallbackUrl: base + '/messages' }
     case 'CREDITS_PURCHASED':
-      return { category: 'system', iconType: 'credit_refill', actionLabel: 'View credits', fallbackUrl: '/freelancer/credits' }
+      return { category: 'system', iconType: 'credit_refill', actionLabel: 'View credits', fallbackUrl: base + '/credits' }
     default:
-      return { category: 'system', iconType: 'default', actionLabel: 'View details', fallbackUrl: '/freelancer/dashboard' }
+      return { category: 'system', iconType: 'default', actionLabel: 'View details', fallbackUrl: base + '/dashboard' }
   }
 }
 
-const toItem = (n: AppNotification): FreelancerNotificationItem => {
-  const meta = describe(n.type)
+const toItem = (n: AppNotification, base: string): FreelancerNotificationItem => {
+  const meta = describe(n.type, base)
   return {
     id: n.id,
     title: n.title,
@@ -73,14 +85,15 @@ const toItem = (n: AppNotification): FreelancerNotificationItem => {
     time: timeAgo(n.createdAt),
     category: meta.category,
     read: n.read,
-    // Links are produced by the server for the recipient's role; only follow freelancer pages here
-    actionUrl: n.link && n.link.startsWith('/freelancer/') ? n.link : meta.fallbackUrl,
+    // Links are produced by the server for the recipient's role; only follow pages of this dashboard
+    actionUrl: n.link && n.link.startsWith(base + '/') ? hideIdsInPath(n.link) : meta.fallbackUrl,
     actionLabel: meta.actionLabel,
     iconType: meta.iconType,
   }
 }
 
 export default function FreelancerNotificationsPage(): React.JSX.Element {
+  const base = useRoleBase()
   const [notifications, setNotifications] = useState<FreelancerNotificationItem[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
@@ -89,7 +102,7 @@ export default function FreelancerNotificationsPage(): React.JSX.Element {
   useEffect(() => {
     notificationsApi
       .getNotifications()
-      .then((res) => setNotifications(res.map(toItem)))
+      .then((res) => setNotifications(res.map((x) => toItem(x, base))))
       .catch((err) => setError(err.message || 'Could not load notifications'))
       .finally(() => setLoading(false))
   }, [])
@@ -382,7 +395,7 @@ export default function FreelancerNotificationsPage(): React.JSX.Element {
             </span>
           </div>
           <Link
-            to="/freelancer/settings"
+            to={`${base}/settings`}
             className="text-[12.5px] font-bold text-[#C06B3E] hover:underline shrink-0"
           >
             Notification Preferences →

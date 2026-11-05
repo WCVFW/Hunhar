@@ -44,6 +44,16 @@ public class BidController {
         return ResponseEntity.ok(ApiResponse.ok(bidService.getBidsForFreelancer(requireUser(currentUser).id())));
     }
 
+    @GetMapping("/client/recent")
+    public ResponseEntity<ApiResponse<List<Bid>>> recentForClient(@CurrentUser AuthUser currentUser) {
+        return ResponseEntity.ok(ApiResponse.ok(bidService.getRecentBidsForClient(requireUser(currentUser).id())));
+    }
+
+    @PatchMapping("/{bidId}/reject")
+    public ResponseEntity<ApiResponse<Bid>> rejectBid(@CurrentUser AuthUser currentUser, @PathVariable UUID bidId) {
+        return ResponseEntity.ok(ApiResponse.ok("Proposal declined", bidService.rejectBid(bidId, requireUser(currentUser))));
+    }
+
     @PatchMapping("/{bidId}/withdraw")
     public ResponseEntity<ApiResponse<Bid>> withdrawBid(@CurrentUser AuthUser currentUser, @PathVariable UUID bidId) {
         return ResponseEntity.ok(ApiResponse.ok("Proposal withdrawn", bidService.withdrawBid(bidId, requireUser(currentUser))));

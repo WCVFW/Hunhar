@@ -31,6 +31,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final List<String> PUBLIC_PATH_PREFIXES = List.of(
             "/api/v1/auth/",
+            "/api/v1/crypto/",
             "/api/v1/content/",
             "/api/v1/webhooks/",
             "/api/v1/projects/public",
@@ -43,6 +44,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     public JwtAuthenticationFilter(@Value("${theunoia.gateway.jwt-secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}") String secret) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        if (secret.startsWith("404E635266556A586E32")) {
+            org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class)
+                    .warn("JWT_SECRET is not set - using the development secret. Set it in Hunhar-backend/.env before going live.");
+        }
     }
 
     @Override

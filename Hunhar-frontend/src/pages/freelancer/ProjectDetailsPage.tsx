@@ -14,7 +14,6 @@ import { fileUrl, projectsApi, type Project } from '../../services/api'
 import {
   BID_STATUS_LABEL,
   BID_STATUS_STYLE,
-  CREDITS_PER_BID,
   PROJECT_STATUS_LABEL,
   formatDate,
   formatINR,
@@ -22,9 +21,13 @@ import {
   splitList,
   timeAgo,
 } from '../../services/format'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 export default function ProjectDetailsPage(): React.JSX.Element {
-  const { projectId = '' } = useParams<{ projectId: string }>()
+  const { creditsPerBid: CREDITS_PER_BID } = usePlatformSettings()
+  const { projectId: projectToken = '' } = useParams<{ projectId: string }>()
+  const projectId = fromRouteId(projectToken)
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
@@ -201,7 +204,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
           {/* Submit Bid Button (Terracotta solid pill/card) */}
           {isMine ? (
             <Link
-              to={`/freelancer/projects/${project.id}`}
+              to={`/freelancer/projects/${toRouteId(project.id)}`}
               className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[16px] bg-[#08182B] font-manrope text-[15px] font-bold text-white no-underline shadow-sm transition-all hover:bg-[#12294A]"
             >
               <CheckCircle2 size={18} /> Open project workspace
@@ -218,7 +221,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
           ) : canBid ? (
             <div className="flex flex-col gap-1.5">
               <Link
-                to={`/freelancer/browse/${project.id}/bid`}
+                to={`/freelancer/browse/${toRouteId(project.id)}/bid`}
                 className="flex h-[52px] w-full items-center justify-center rounded-[16px] bg-[#C06B3E] font-manrope text-[15px] font-bold text-white no-underline shadow-[0_4px_14px_rgba(192,107,62,0.35)] transition-all hover:bg-[#AA572D] hover:shadow-[0_6px_18px_rgba(192,107,62,0.45)] active:scale-98"
               >
                 Submit Proposal

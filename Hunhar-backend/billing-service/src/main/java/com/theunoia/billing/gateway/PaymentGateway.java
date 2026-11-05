@@ -15,6 +15,11 @@ public interface PaymentGateway {
     /** True when no real gateway is configured and payments are simulated (local development only). */
     boolean isMock();
 
+    /** True only for Razorpay live keys (real money). */
+    default boolean isLive() {
+        return false;
+    }
+
     record GatewayOrder(
             String orderId,
             BigDecimal amount,

@@ -54,6 +54,29 @@ public class InternalClient {
         return restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(body, headers()), type).getBody();
     }
 
+    /**
+     * Like {@link #post} but a 4xx from the other service becomes a BadRequestException carrying
+     * that service's message, so the user sees e.g. "Insufficient wallet balance" instead of a generic error.
+     */
+    public <T> T postChecked(String url, Object body, ParameterizedTypeReference<T> type) {
+        try {
+            return post(url, body, type);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            String message = "Request was rejected";
+            try {
+                var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(e.getResponseBodyAsString());
+                if (node.hasNonNull("message")) message = node.get("message").asText();
+            } catch (Exception ignored) {
+                // non-JSON body
+            }
+            throw new com.theunoia.common.exception.BadRequestException(message);
+        } catch (org.springframework.web.client.RestClientException e) {
+            log.error("Internal call to {} failed: {}", url, e.getMessage());
+            throw new com.theunoia.common.exception.ApiException("A required service is temporarily unavailable. Please try again.",
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
     public <T> T get(String url, ParameterizedTypeReference<T> type) {
         return restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers()), type).getBody();
     }

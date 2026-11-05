@@ -67,8 +67,8 @@ public class NotificationController {
         if (!requireUser(currentUser).hasRole("ADMIN")) {
             throw new ForbiddenException("Admin access required");
         }
-        notificationService.triggerWhatsAppAlert(req.getMobileNumber(), req.getTemplateName(), req.getParams());
-        return ResponseEntity.ok(ApiResponse.ok("WhatsApp notification triggered", null));
+        boolean sent = notificationService.triggerWhatsAppAlert(req.getMobileNumber(), req.getTemplateName(), req.getParams());
+        return ResponseEntity.ok(ApiResponse.ok(sent ? "WhatsApp message sent" : "WhatsApp message not sent (not configured or rejected by Meta)", null));
     }
 
     private static AuthUser requireUser(AuthUser user) {

@@ -22,7 +22,11 @@ public class UserDirectoryClient {
     private final InternalClient internalClient;
     private final Map<UUID, CachedUser> cache = new ConcurrentHashMap<>();
 
-    public record UserInfo(UUID id, String fullName, String avatarUrl, String role, String professionalTitle) {}
+    public record UserInfo(UUID id, String fullName, String avatarUrl, String role, String professionalTitle, String email) {
+        public UserInfo(UUID id, String fullName, String avatarUrl, String role, String professionalTitle) {
+            this(id, fullName, avatarUrl, role, professionalTitle, null);
+        }
+    }
 
     private record CachedUser(UserInfo info, long loadedAt) {}
 

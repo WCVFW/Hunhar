@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { bidsApi, type Bid, type BidStatus } from '../../services/api'
 import { FileText, ArrowRight } from 'lucide-react'
 import { BID_STATUS_LABEL, BID_STATUS_STYLE, formatDate, formatINR } from '../../services/format'
+import { toRouteId } from '../../services/routeIds'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
 
 type FilterKey = 'ALL' | BidStatus
 
@@ -52,6 +54,7 @@ const toItem = (b: Bid): BidItem => ({
 
 export default function MyBidsPage(): React.JSX.Element {
   const [bids, setBids] = useState<BidItem[]>([])
+  const { creditsPerBid } = usePlatformSettings()
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
   const [filter, setFilter] = useState<FilterKey>('ALL')
@@ -192,7 +195,7 @@ export default function MyBidsPage(): React.JSX.Element {
               </div>
               <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">No proposals submitted yet</h3>
               <p className="mt-1 font-manrope text-[13px] text-[#8E8376] max-w-[400px]">
-                Browse open projects and send your first proposal. Each proposal uses 2 credits.
+                Browse open projects and send your first proposal. Each proposal uses {creditsPerBid} credit{creditsPerBid === 1 ? '' : 's'}.
               </p>
               <Link
                 to="/freelancer/browse"
@@ -213,7 +216,7 @@ export default function MyBidsPage(): React.JSX.Element {
                     <div className="flex flex-col">
                       {/* Title & Badge */}
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <Link to={`/freelancer/browse/${bid.projectId}`} className="font-manrope text-[15px] font-bold text-[#111827] no-underline hover:text-[#C06B3E]">
+                        <Link to={`/freelancer/browse/${toRouteId(bid.projectId)}`} className="font-manrope text-[15px] font-bold text-[#111827] no-underline hover:text-[#C06B3E]">
                           {bid.title}
                         </Link>
                         {/* Status Badge */}
@@ -255,7 +258,7 @@ export default function MyBidsPage(): React.JSX.Element {
                   {bid.actionType === 'workspace' && (
                     <div className="mt-3 flex justify-end">
                       <Link
-                        to={`/freelancer/projects/${bid.projectId}`}
+                        to={`/freelancer/projects/${toRouteId(bid.projectId)}`}
                         className="inline-flex items-center gap-1 rounded-lg bg-[#C06B3E] px-4 py-1.5 font-manrope text-[12px] font-bold text-white no-underline transition-colors hover:bg-[#A95A30]"
                       >
                         Open Workspace

@@ -3,7 +3,10 @@
  * Connects frontend to Spring Cloud Gateway on hunhar.in / http://localhost:8080
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+import { secureFetch } from './secureTransport'
+
+// Production builds talk to the EC2 backend at api.hunhar.in unless VITE_API_BASE_URL says otherwise
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://api.hunhar.in' : 'http://localhost:8080')
 
 export interface ApiResponse<T> {
   success: boolean
@@ -22,19 +25,28 @@ export interface PagedResponse<T> {
 }
 
 // Token management in secure localStorage
+// "Remember me" keeps the session in localStorage; otherwise it lives in sessionStorage and ends with the tab.
+const sessionStore = (): Storage => (localStorage.getItem('hunhar_token') || !sessionStorage.getItem('hunhar_token') ? localStorage : sessionStorage)
+
 export const tokenStorage = {
-  getToken: (): string | null => localStorage.getItem('hunhar_token'),
-  setToken: (token: string): void => localStorage.setItem('hunhar_token', token),
-  removeToken: (): void => {
+  getToken: (): string | null => localStorage.getItem('hunhar_token') || sessionStorage.getItem('hunhar_token'),
+  setToken: (token: string, remember = true): void => {
     localStorage.removeItem('hunhar_token')
-    localStorage.removeItem('hunhar_user')
+    sessionStorage.removeItem('hunhar_token')
+    ;(remember ? localStorage : sessionStorage).setItem('hunhar_token', token)
+  },
+  removeToken: (): void => {
+    for (const store of [localStorage, sessionStorage]) {
+      store.removeItem('hunhar_token')
+      store.removeItem('hunhar_user')
+    }
   },
   getUser: (): any => {
-    const u = localStorage.getItem('hunhar_user')
+    const u = localStorage.getItem('hunhar_user') || sessionStorage.getItem('hunhar_user')
     return u ? JSON.parse(u) : null
   },
-  setUser: (user: any): void => localStorage.setItem('hunhar_user', JSON.stringify(user)),
-  isAuthenticated: (): boolean => !!localStorage.getItem('hunhar_token'),
+  setUser: (user: any): void => sessionStore().setItem('hunhar_user', JSON.stringify(user)),
+  isAuthenticated: (): boolean => !!tokenStorage.getToken(),
 }
 
 export type UserRole = 'FREELANCER' | 'CLIENT' | 'ADMIN'
@@ -77,7 +89,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   const token = tokenStorage.getToken()
   const headers = new Headers(options.headers || {})
 
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+  if (!headers.has('Content-Type') && typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -87,11 +99,21 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`
 
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('hunhar:loading-start'))
+  }
+
   let res: Response
   try {
-    res = await fetch(url, { ...options, headers })
-  } catch {
+    // Every JSON API call is end-to-end encrypted (see secureTransport.ts / gateway PayloadEncryptionFilter)
+    res = await secureFetch(API_BASE_URL, url, { ...options, headers })
+  } catch (e: any) {
+    if (e instanceof Error && e.message.startsWith('A secure (HTTPS)')) throw e
     throw new Error('Cannot reach the server. Please check your internet connection and try again.')
+  } finally {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('hunhar:loading-end'))
+    }
   }
 
   // Expired / invalid session: clear it and send the user to login (but not for a failed login attempt)
@@ -133,6 +155,26 @@ export const fileUrl = (path?: string | null): string => {
 // =============================================================================
 // 1. Authentication & KYC
 // =============================================================================
+export interface AuthResult {
+  token?: string
+  refreshToken?: string
+  userId?: string
+  email: string
+  fullName: string
+  role?: 'FREELANCER' | 'CLIENT' | 'ADMIN'
+  status?: string
+  kycStatus?: string
+  avatarUrl?: string
+  needsRole?: boolean
+}
+
+/** Stores the session from a login/register/Google response and returns the dashboard path for the role. */
+export const startSession = (res: AuthResult, remember = true): string => {
+  tokenStorage.setToken(res.token!, remember)
+  tokenStorage.setUser({ id: res.userId, userId: res.userId, fullName: res.fullName, email: res.email, role: res.role, avatarUrl: res.avatarUrl, kycStatus: res.kycStatus })
+  return DASHBOARD_BY_ROLE[res.role || 'FREELANCER']
+}
+
 export const authApi = {
   registerFreelancer: (data: {
     fullName: string
@@ -176,6 +218,24 @@ export const authApi = {
     }),
 
   getMe: () => apiRequest<any>('/api/v1/auth/me'),
+
+  sendMobileOtp: (mobile: string) =>
+    apiRequest<void>('/api/v1/auth/mobile-otp/send', { method: 'POST', body: JSON.stringify({ mobile }) }),
+
+  verifyMobileOtp: (mobile: string, otp: string) =>
+    apiRequest<void>('/api/v1/auth/mobile-otp/verify', { method: 'POST', body: JSON.stringify({ mobile, otp }) }),
+
+  googleConfig: () => apiRequest<{ enabled: boolean; clientId: string | null }>('/api/v1/auth/google/config'),
+
+  /** Sign in / sign up with Google. A new email returns { needsRole: true } until a role is sent. */
+  google: (data: { accessToken: string; role?: 'FREELANCER' | 'CLIENT'; companyName?: string }) =>
+    apiRequest<AuthResult>('/api/v1/auth/google', { method: 'POST', body: JSON.stringify(data) }),
+
+  forgotPassword: (email: string) =>
+    apiRequest<void>('/api/v1/auth/password/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
+
+  resetPassword: (email: string, otp: string, newPassword: string) =>
+    apiRequest<void>('/api/v1/auth/password/reset', { method: 'POST', body: JSON.stringify({ email, otp, newPassword }) }),
 
 
   submitAadhaarKyc: (aadhaarNumber: string) =>
@@ -237,6 +297,7 @@ export interface Bid {
   clientId?: string
   clientName?: string
   freelancerName?: string
+  freelancerAvatarUrl?: string
 }
 
 export interface StoredFile {
@@ -259,6 +320,11 @@ export interface Milestone {
   amount: number
   dueDate?: string | null
   status: MilestoneStatus
+  funded: boolean
+  fundedAt?: string | null
+  paidAt?: string | null
+  submittedAt?: string | null
+  invoiceNumber?: string | null
   createdAt: string
 }
 
@@ -595,6 +661,9 @@ export const paymentsApi = {
 
   verify: (orderId: string, paymentId: string, signature: string) =>
     apiRequest<any>(`/api/v1/payments/orders/${orderId}/verify`, json('POST', { paymentId, signature })),
+
+  /** RAZORPAY = real checkout (live=true means real money); SIMULATOR = no Razorpay keys on the server yet. */
+  gatewayInfo: () => apiRequest<{ provider: 'RAZORPAY' | 'SIMULATOR'; live: boolean }>('/api/v1/payments/gateway'),
 }
 
 export const walletApi = {
@@ -614,6 +683,10 @@ export const creditsApi = {
   getPackages: () => apiRequest<{ id: string; name: string; credits: number; priceInInr: number; active: boolean }[]>('/api/v1/credits/packages'),
 
   getHistory: () => apiRequest<{ id: string; delta: number; reason: string; balanceAfter?: number; projectId?: string; createdAt: string }[]>('/api/v1/credits/history'),
+
+  /** Pays for a credit pack from the wallet balance (no checkout window). */
+  buyWithWallet: (packageId: string) =>
+    apiRequest<{ credits: number; walletBalance: number; transactionId: string }>('/api/v1/credits/buy-with-wallet', json('POST', { packageId })),
 }
 
 // =============================================================================
@@ -679,4 +752,310 @@ export const calendarApi = {
     apiRequest<CalendarTask>(`/api/v1/calendar/tasks/${id}/status` + qs({ status }), json('PATCH')),
 
   deleteTask: (id: string) => apiRequest<void>(`/api/v1/calendar/tasks/${id}`, json('DELETE')),
+}
+
+// =============================================================================
+// 11. Client: company profile, project management, invoices
+// =============================================================================
+export interface ClientProfile {
+  id: string
+  fullName: string
+  email: string
+  mobile?: string
+  avatarUrl?: string
+  kycStatus: FreelancerProfile['kycStatus']
+  emailVerified: boolean
+  memberSince?: string
+  companyName: string
+  industry?: string
+  companySize?: string
+  location?: string
+  website?: string
+  companyDescription?: string
+  gstin?: string
+  billingAddress?: string
+  notificationPrefs: Record<string, boolean>
+}
+
+export interface Invoice {
+  id: string
+  invoiceNumber: string
+  clientId: string
+  freelancerId: string
+  projectId?: string
+  milestoneId?: string
+  description: string
+  grossAmount: number
+  commissionAmount: number
+  gstAmount: number
+  netPayoutToFreelancer: number
+  createdAt: string
+}
+
+export interface ProjectInput {
+  title: string
+  description: string
+  category: string
+  budget: number
+  timelineDays: number
+  skills?: string[]
+  attachmentUrls?: string[]
+  publish?: boolean
+}
+
+export const clientApi = {
+  getProfile: () => apiRequest<ClientProfile>('/api/v1/users/me/client-profile'),
+
+  updateProfile: (data: Partial<Omit<ClientProfile, 'id' | 'email' | 'kycStatus' | 'emailVerified' | 'memberSince'>>) =>
+    apiRequest<ClientProfile>('/api/v1/users/me/client-profile', json('PUT', data)),
+
+  createProject: (data: ProjectInput) => apiRequest<Project>('/api/v1/projects', json('POST', data)),
+
+  updateProject: (id: string, data: ProjectInput) => apiRequest<Project>(`/api/v1/projects/${id}`, json('PUT', data)),
+
+  publishProject: (id: string) => apiRequest<Project>(`/api/v1/projects/${id}/publish`, json('POST')),
+
+  cancelProject: (id: string) => apiRequest<Project>(`/api/v1/projects/${id}/cancel`, json('POST')),
+
+  recentBids: () => apiRequest<Bid[]>('/api/v1/bids/client/recent'),
+
+  shortlistBid: (bidId: string, shortlist: boolean) =>
+    apiRequest<Bid>(`/api/v1/bids/${bidId}/shortlist` + qs({ shortlist }), json('PATCH')),
+
+  rejectBid: (bidId: string) => apiRequest<Bid>(`/api/v1/bids/${bidId}/reject`, json('PATCH')),
+
+  fundMilestone: (milestoneId: string) => apiRequest<Milestone>(`/api/v1/workspace/milestones/${milestoneId}/fund`, json('POST')),
+
+  releaseMilestone: (milestoneId: string) => apiRequest<Milestone>(`/api/v1/workspace/milestones/${milestoneId}/release`, json('POST')),
+
+  reviewDeliverable: (deliverableId: string, approve: boolean) =>
+    apiRequest<void>(`/api/v1/workspace/deliverables/${deliverableId}/review` + qs({ approve }), json('POST')),
+
+  invoices: () => apiRequest<Invoice[]>('/api/v1/invoices/client/my-invoices'),
+}
+
+export const invoicesApi = {
+  freelancerInvoices: () => apiRequest<Invoice[]>('/api/v1/invoices/freelancer/my-invoices'),
+
+  /** Downloads the PDF with the auth header (a plain link would not send the token). */
+  download: async (invoiceNumber: string): Promise<void> => {
+    const res = await fetch(`${API_BASE_URL}/api/v1/invoices/${encodeURIComponent(invoiceNumber)}/pdf`, {
+      headers: { Authorization: `Bearer ${tokenStorage.getToken() || ''}` },
+    })
+    if (!res.ok) throw new Error(res.status === 403 ? 'You cannot download this invoice' : 'Could not download the invoice')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${invoiceNumber}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  },
+}
+
+// =============================================================================
+// 12. Disputes & KYC (all roles)
+// =============================================================================
+export interface Dispute {
+  id: string
+  projectId: string
+  raisedById: string
+  reason: string
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED'
+  resolutionNotes?: string
+  resolvedAt?: string
+  createdAt: string
+  projectTitle?: string
+  projectBudget?: number
+  raisedByName?: string
+  raisedByRole?: string
+  clientId?: string
+  clientName?: string
+  freelancerId?: string
+  freelancerName?: string
+}
+
+export interface KycInfo {
+  kycStatus: FreelancerProfile['kycStatus']
+  aadhaarLast4?: string
+  documentUrl?: string
+  submittedAt?: string
+  reviewedAt?: string
+  rejectionReason?: string
+}
+
+export const disputesApi = {
+  raise: (projectId: string, reason: string) => apiRequest<Dispute>(`/api/v1/disputes/project/${projectId}`, json('POST', { reason })),
+
+  forProject: (projectId: string) => apiRequest<Dispute[]>(`/api/v1/disputes/project/${projectId}`),
+}
+
+export const kycApi = {
+  me: () => apiRequest<KycInfo>('/api/v1/kyc/me'),
+
+  submit: (aadhaarNumber: string, documentUrl: string) =>
+    apiRequest<KycInfo>('/api/v1/kyc/aadhaar', json('POST', { aadhaarNumber, documentUrl })),
+}
+
+// =============================================================================
+// 13. Platform settings (admin-controlled, readable by everyone signed in)
+// =============================================================================
+export interface PlatformSettings {
+  commissionPercent: string
+  creditsPerBid: string
+  starterCredits: string
+  minPayout: string
+  kycRequiredForPayout: string
+  autoApproveDays: string
+}
+
+export const settingsApi = {
+  get: () => apiRequest<PlatformSettings>('/api/v1/payments/settings'),
+}
+
+// =============================================================================
+// 14. Admin
+// =============================================================================
+export interface AdminUser {
+  id: string
+  email: string
+  fullName: string
+  mobile?: string
+  role: UserRole
+  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED'
+  kycStatus: FreelancerProfile['kycStatus']
+  emailVerified: boolean
+  avatarUrl?: string
+  createdAt: string
+}
+
+export interface KycApplication extends KycInfo {
+  userId: string
+  fullName: string
+  email: string
+  mobile?: string
+  role: UserRole
+  avatarUrl?: string
+  memberSince?: string
+}
+
+export interface AdminTransaction {
+  id: string
+  userId: string
+  userName?: string
+  userRole?: string
+  type: string
+  status: string
+  amount: number
+  description?: string
+  projectId?: string
+  gatewayRefId?: string
+  createdAt: string
+}
+
+export interface AdminPayout {
+  id: string
+  freelancerId: string
+  freelancerName?: string
+  amount: number
+  payoutMethod: 'UPI' | 'BANK_TRANSFER'
+  accountDetails: string
+  status: 'REQUESTED' | 'PROCESSING' | 'APPROVED' | 'REJECTED' | 'COMPLETED'
+  adminNotes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreditPackageAdmin {
+  id: string
+  name: string
+  credits: number
+  priceInInr: number
+  active: boolean
+}
+
+export type MonthlyPoint = { month: string } & Record<string, number | string>
+
+export interface PlatformAnalytics {
+  users: {
+    totalUsers?: number
+    freelancers?: number
+    clients?: number
+    activeUsers?: number
+    suspendedUsers?: number
+    pendingKyc?: number
+    verifiedKyc?: number
+    newThisMonth?: number
+    monthly?: MonthlyPoint[]
+  }
+  projects: {
+    totalProjects?: number
+    draftProjects?: number
+    openProjects?: number
+    activeProjects?: number
+    completedProjects?: number
+    cancelledProjects?: number
+    openDisputes?: number
+    monthly?: MonthlyPoint[]
+  }
+  payments: {
+    gmv?: number
+    commissionEarned?: number
+    escrowHeld?: number
+    walletTopups?: number
+    creditSales?: number
+    pendingPayoutsCount?: number
+    pendingPayoutsAmount?: number
+    monthly?: MonthlyPoint[]
+  }
+  engagement: { conversations: number; messages: number }
+  unavailable: string[]
+  generatedAt: string
+}
+
+export const adminApi = {
+  analytics: () => apiRequest<PlatformAnalytics>('/api/v1/analytics/summary'),
+
+  users: (params: { role?: UserRole; status?: AdminUser['status']; search?: string; limit?: number } = {}) =>
+    apiRequest<AdminUser[]>('/api/v1/users' + qs(params)),
+
+  setUserStatus: (userId: string, status: AdminUser['status'], reason?: string) =>
+    apiRequest<void>(`/api/v1/users/${userId}/status` + qs({ status, reason }), json('PATCH')),
+
+  kycList: (status?: FreelancerProfile['kycStatus']) => apiRequest<KycApplication[]>('/api/v1/kyc/admin' + qs({ status })),
+
+  reviewKyc: (userId: string, approved: boolean, reason?: string) =>
+    apiRequest<void>(`/api/v1/kyc/${userId}/approve` + qs({ approved, reason }), json('POST')),
+
+  projects: (params: { status?: ProjectStatus; search?: string } = {}) =>
+    apiRequest<Project[]>('/api/v1/projects/admin/all' + qs(params)),
+
+  cancelProject: (projectId: string, reason: string) =>
+    apiRequest<Project>(`/api/v1/projects/admin/${projectId}/cancel` + qs({ reason }), json('POST')),
+
+  disputes: (status?: Dispute['status']) => apiRequest<Dispute[]>('/api/v1/disputes' + qs({ status })),
+
+  resolveDispute: (disputeId: string, status: 'RESOLVED' | 'DISMISSED', resolutionNotes: string) =>
+    apiRequest<Dispute>(`/api/v1/disputes/${disputeId}/resolve`, json('POST', { status, resolutionNotes })),
+
+  transactions: (type?: string) => apiRequest<AdminTransaction[]>('/api/v1/payments/admin/transactions' + qs({ type })),
+
+  payouts: (status?: AdminPayout['status']) => apiRequest<AdminPayout[]>('/api/v1/wallets/admin/payouts' + qs({ status })),
+
+  processPayout: (payoutId: string, approve: boolean, notes: string) =>
+    apiRequest<void>(`/api/v1/wallets/payouts/${payoutId}/process` + qs({ approve, notes }), json('POST')),
+
+  getSettings: () => apiRequest<PlatformSettings>('/api/v1/payments/settings'),
+
+  updateSettings: (changes: Partial<Record<keyof PlatformSettings, string | number | boolean>>) =>
+    apiRequest<PlatformSettings>('/api/v1/payments/settings', json('PUT', changes)),
+
+  packages: () => apiRequest<CreditPackageAdmin[]>('/api/v1/credits/admin/packages'),
+
+  savePackage: (pkg: Omit<CreditPackageAdmin, 'id'> & { id?: string }) =>
+    pkg.id
+      ? apiRequest<CreditPackageAdmin>(`/api/v1/credits/admin/packages/${pkg.id}`, json('PUT', pkg))
+      : apiRequest<CreditPackageAdmin>('/api/v1/credits/admin/packages', json('POST', pkg)),
 }

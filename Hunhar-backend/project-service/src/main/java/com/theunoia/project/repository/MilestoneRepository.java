@@ -11,4 +11,5 @@ import java.util.UUID;
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID> {
     List<Milestone> findByProjectId(UUID projectId);
     List<Milestone> findByProjectIdOrderByCreatedAtAsc(UUID projectId);
+    List<Milestone> findByStatusAndSubmittedAtBefore(com.theunoia.project.domain.MilestoneStatus status, java.time.Instant before);
 }

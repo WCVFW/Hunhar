@@ -30,8 +30,11 @@ public class ProjectController {
             @CurrentUser AuthUser currentUser,
             @Valid @RequestBody CreateProjectDto dto
     ) {
-        Project project = projectService.createProject(requireUser(currentUser).id(), dto);
-        return ResponseEntity.ok(ApiResponse.ok("Project created successfully", project));
+        AuthUser user = requireUser(currentUser);
+        if (!user.hasRole("CLIENT")) throw new com.theunoia.common.exception.ForbiddenException("Only clients can post projects");
+        Project project = projectService.createProject(user.id(), dto);
+        return ResponseEntity.ok(ApiResponse.ok(project.getStatus() == com.theunoia.project.domain.ProjectStatus.DRAFT
+                ? "Draft saved" : "Project published", project));
     }
 
     @GetMapping("/{id}")
@@ -73,6 +76,49 @@ public class ProjectController {
     @GetMapping("/freelancer/my-projects")
     public ResponseEntity<ApiResponse<List<Project>>> getFreelancerProjects(@CurrentUser AuthUser currentUser) {
         return ResponseEntity.ok(ApiResponse.ok(projectService.getFreelancerProjects(requireUser(currentUser).id())));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Project>> updateProject(@CurrentUser AuthUser currentUser, @PathVariable UUID id,
+                                                              @Valid @RequestBody CreateProjectDto dto) {
+        return ResponseEntity.ok(ApiResponse.ok("Project updated", projectService.updateProject(id, requireUser(currentUser), dto)));
+    }
+
+    @PostMapping("/{id}/publish")
+    public ResponseEntity<ApiResponse<Project>> publish(@CurrentUser AuthUser currentUser, @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok("Project published", projectService.publish(id, requireUser(currentUser))));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<Project>> cancel(@CurrentUser AuthUser currentUser, @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok("Project cancelled", projectService.cancelByClient(id, requireUser(currentUser))));
+    }
+
+    // ------------------------------------------------------------ admin
+
+    @GetMapping("/admin/all")
+    public ResponseEntity<ApiResponse<List<Project>>> adminList(@CurrentUser AuthUser currentUser,
+                                                                @RequestParam(required = false) com.theunoia.project.domain.ProjectStatus status,
+                                                                @RequestParam(required = false) String search) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(ApiResponse.ok(projectService.adminList(status, search)));
+    }
+
+    @PostMapping("/admin/{id}/cancel")
+    public ResponseEntity<ApiResponse<Project>> adminCancel(@CurrentUser AuthUser currentUser, @PathVariable UUID id,
+                                                            @RequestParam(required = false) String reason) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(ApiResponse.ok("Project cancelled", projectService.cancelByAdmin(id, reason)));
+    }
+
+    @GetMapping("/admin/stats")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> adminStats(@CurrentUser AuthUser currentUser) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(ApiResponse.ok(projectService.stats()));
+    }
+
+    private static void requireAdmin(AuthUser user) {
+        if (!requireUser(user).hasRole("ADMIN")) throw new com.theunoia.common.exception.ForbiddenException("Admin access required");
     }
 
     @PostMapping("/{id}/complete")

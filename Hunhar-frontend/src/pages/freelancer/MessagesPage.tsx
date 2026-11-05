@@ -12,6 +12,8 @@ import {
   type StoredFile,
 } from '../../services/api'
 import { formatDate, formatTime, initials, timeAgo } from '../../services/format'
+import { useRoleBase } from '../../services/useRoleBase'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 type ConversationTab = 'Client' | 'Hustlers'
 
@@ -37,11 +39,12 @@ function Avatar({ name, url, id, size = 'h-10 w-10' }: { name?: string; url?: st
 }
 
 export default function MessagesPage(): React.JSX.Element {
+  const base = useRoleBase()
   const me = tokenStorage.getUser()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState<ConversationTab>('Client')
+  const [activeTab, setActiveTab] = useState<ConversationTab>(base === '/client' ? 'Hustlers' : 'Client')
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [selectedId, setSelectedId] = useState<string>(searchParams.get('c') || '')
+  const [selectedId, setSelectedId] = useState<string>(fromRouteId(searchParams.get('c')))
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [inputText, setInputText] = useState('')
@@ -213,6 +216,10 @@ export default function MessagesPage(): React.JSX.Element {
                 <div className="p-6 text-center text-xs leading-relaxed text-[#8E8376]">
                   {searchQuery
                     ? 'No chats match your search.'
+                    : base === '/client'
+                    ? activeTab === 'Client'
+                      ? 'No conversations here.'
+                      : 'No freelancer conversations yet. A chat opens automatically when you hire someone, or use "Message" on a proposal.'
                     : activeTab === 'Client'
                     ? 'No client conversations yet. A chat opens automatically when a client hires you, or use "Send Message" in a project workspace.'
                     : 'No conversations with other freelancers yet. Team invites open chats here.'}
@@ -284,7 +291,7 @@ export default function MessagesPage(): React.JSX.Element {
                   </div>
                   {active.projectId && (
                     <Link
-                      to={`/freelancer/projects/${active.projectId}`}
+                      to={`${base}/projects/${toRouteId(active.projectId)}`}
                       className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#DECFBE] px-3 py-1.5 text-[12px] font-bold text-[#08182B] no-underline hover:bg-[#FAF4EE]"
                     >
                       <Briefcase size={13} /> <span className="hidden sm:inline">Project</span>

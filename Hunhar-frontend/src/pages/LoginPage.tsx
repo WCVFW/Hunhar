@@ -1,10 +1,13 @@
 import React, { useState } from 'react'
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import hunharLogo from '../assets/hunhar-Black.svg'
 import mascotBeanbag from '../assets/Signup_Mascot.png'
 
 import { useNavigate } from 'react-router-dom'
-import { authApi, tokenStorage } from '../services/api'
+import { authApi, startSession } from '../services/api'
+import GoogleAuthButton from '../components/auth/GoogleAuthButton'
+
+type Mode = 'login' | 'forgot' | 'reset'
 
 const labelClass =
   'mb-[clamp(2px,0.5vh,6px)] block text-[11px] font-semibold text-[#334155]'
@@ -18,11 +21,21 @@ export default function LoginPage(): React.JSX.Element {
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
   const [errorMsg, setErrorMsg] = useState<string>('')
+  const [notice, setNotice] = useState<string>('')
+  const [mode, setMode] = useState<Mode>('login')
+  const [resetOtp, setResetOtp] = useState('')
+  const [newPassword, setNewPassword] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    rememberMe: false,
+    rememberMe: true,
   })
+
+  const switchMode = (m: Mode) => {
+    setMode(m)
+    setErrorMsg('')
+    setNotice('')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,27 +43,35 @@ export default function LoginPage(): React.JSX.Element {
     setLoading(true)
 
     try {
-      const res = await authApi.login({
-        email: formData.email,
-        password: formData.password,
-      })
-
-      tokenStorage.setToken(res.token)
-      tokenStorage.setUser(res)
-
-      if (res.role === 'CLIENT') {
-        navigate('/client/dashboard')
-      } else if (res.role === 'ADMIN') {
-        navigate('/admin/dashboard')
+      if (mode === 'login') {
+        const res = await authApi.login({ email: formData.email.trim(), password: formData.password })
+        navigate(startSession(res, formData.rememberMe), { replace: true })
+      } else if (mode === 'forgot') {
+        await authApi.forgotPassword(formData.email.trim())
+        setMode('reset')
+        setNotice(`If ${formData.email.trim()} has an account, we sent a 6-digit code to it. Check your inbox and spam folder.`)
       } else {
-        navigate('/freelancer/dashboard')
+        if (!/^\d{6}$/.test(resetOtp)) throw new Error('Enter the 6-digit code from your email.')
+        if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+          throw new Error('New password must be at least 8 characters and include a letter and a number.')
+        }
+        await authApi.resetPassword(formData.email.trim(), resetOtp, newPassword)
+        setFormData({ ...formData, password: '' })
+        setResetOtp('')
+        setNewPassword('')
+        setMode('login')
+        setNotice('Password updated. Log in with your new password.')
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid email or password. Please try again.')
+      setErrorMsg(err.message || 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
   }
+
+  const title = mode === 'login' ? 'Login to your account' : mode === 'forgot' ? 'Reset your password' : 'Enter code and new password'
+  const submitLabel =
+    mode === 'login' ? (loading ? 'Logging in...' : 'Login') : mode === 'forgot' ? (loading ? 'Sending code...' : 'Send reset code') : loading ? 'Saving...' : 'Set new password'
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden bg-[#F4EFE6] font-manrope lg:h-screen lg:overflow-hidden">
@@ -105,7 +126,7 @@ export default function LoginPage(): React.JSX.Element {
 
             {/* Title */}
             <h1 className="m-0 mb-[clamp(10px,2.2vh,22px)] font-makira text-xl font-bold text-[#0F1B3D] lg:text-[clamp(17px,2.5vh,22px)]">
-              Login to your account
+              {title}
             </h1>
 
             <form
@@ -118,6 +139,8 @@ export default function LoginPage(): React.JSX.Element {
                 <input
                   type="email"
                   placeholder="user@gmail.com"
+                  autoComplete="email"
+                  disabled={mode === 'reset'}
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
@@ -125,6 +148,8 @@ export default function LoginPage(): React.JSX.Element {
                 />
               </div>
 
+              {mode === 'login' && (
+                <>
               {/* Password */}
               <div>
                 <label className={labelClass}>Password</label>
@@ -132,6 +157,7 @@ export default function LoginPage(): React.JSX.Element {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
+                    autoComplete="current-password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required
@@ -159,17 +185,70 @@ export default function LoginPage(): React.JSX.Element {
                   />
                   Remember Me
                 </label>
-                <a
-                  href="#forgot"
-                  className="font-medium text-[#2F6FED] no-underline hover:underline"
+                <button
+                  type="button"
+                  onClick={() => switchMode('forgot')}
+                  className="cursor-pointer border-none bg-transparent p-0 text-[11px] font-medium text-[#2F6FED] hover:underline"
                 >
                   Forgot ?
-                </a>
+                </button>
               </div>
+
+                </>
+              )}
+
+              {mode === 'reset' && (
+                <>
+                  <div>
+                    <label className={labelClass}>Reset Code</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="6-digit code from your email"
+                      value={resetOtp}
+                      onChange={(e) => setResetOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                      required
+                      className={`${inputClass} font-mono tracking-widest`}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>New Password</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Min 8 characters, letters and numbers"
+                        autoComplete="new-password"
+                        minLength={8}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                        className={`${inputClass} pr-10`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-3 cursor-pointer border-none bg-transparent p-0 text-[#94A3B8] transition-colors hover:text-[#475569]"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {notice && (
+                <div role="status" className="flex items-start gap-1.5 rounded-lg border border-green-200 bg-green-50 p-2 text-left text-xs font-semibold text-green-700">
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+                  <span>{notice}</span>
+                </div>
+              )}
 
               {/* Error Message */}
               {errorMsg && (
-                <div className="rounded-lg bg-red-50 p-2 text-center text-xs font-semibold text-red-600 border border-red-200">
+                <div role="alert" className="rounded-lg bg-red-50 p-2 text-center text-xs font-semibold text-red-600 border border-red-200">
                   {errorMsg}
                 </div>
               )}
@@ -180,8 +259,27 @@ export default function LoginPage(): React.JSX.Element {
                 disabled={loading}
                 className="h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer rounded-lg border-none bg-[#08182B] text-xs font-bold text-white shadow-sm transition-colors duration-200 hover:bg-[#12294A] disabled:opacity-60"
               >
-                {loading ? 'Logging in...' : 'Login'}
+                {submitLabel}
               </button>
+
+              {mode === 'login' ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-[#E2E8F0]" />
+                    <span className="text-[10px] text-[#64748B]">or</span>
+                    <div className="h-px flex-1 bg-[#E2E8F0]" />
+                  </div>
+                  <GoogleAuthButton onError={setErrorMsg} />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="cursor-pointer border-none bg-transparent p-0 text-center text-[11px] font-bold text-[#0F1B3D] hover:underline"
+                >
+                  Back to login
+                </button>
+              )}
 
               {/* Sign Up Link */}
               <p className="m-0 mt-1 text-center text-[11px] text-[#94A3B8]">

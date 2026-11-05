@@ -10,13 +10,17 @@ import {
   CheckCircle,
 } from 'lucide-react'
 import { projectsApi, bidsApi, creditsApi, filesApi, type Project, type StoredFile } from '../../services/api'
-import { CREDITS_PER_BID, PLATFORM_FEE_RATE, formatBytes, formatINR } from '../../services/format'
+import { formatBytes, formatINR } from '../../services/format'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 const MAX_ATTACHMENTS = 5
 const MIN_LETTER = 30
 
 export default function SubmitProposalPage(): React.JSX.Element {
-  const { projectId = '' } = useParams<{ projectId: string }>()
+  const { creditsPerBid: CREDITS_PER_BID, commissionRate: PLATFORM_FEE_RATE } = usePlatformSettings()
+  const { projectId: projectToken = '' } = useParams<{ projectId: string }>()
+  const projectId = fromRouteId(projectToken)
   const navigate = useNavigate()
 
   const [project, setProject] = useState<Project | null>(null)
@@ -152,7 +156,7 @@ export default function SubmitProposalPage(): React.JSX.Element {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            to={`/freelancer/browse/${projectId}`}
+            to={`/freelancer/browse/${toRouteId(projectId)}`}
             className="flex h-10 w-10 items-center justify-center rounded-full border border-[#DECFBE] bg-white text-[#5C5248] shadow-2xs transition-colors hover:bg-[#F8F4EE] hover:text-[#C06B3E]"
           >
             <ArrowLeft size={18} />
@@ -420,7 +424,7 @@ export default function SubmitProposalPage(): React.JSX.Element {
           {/* Submit Action */}
           <div className="flex items-center justify-end gap-3">
             <Link
-              to={`/freelancer/browse/${projectId}`}
+              to={`/freelancer/browse/${toRouteId(projectId)}`}
               className="rounded-full border border-[#DECFBE] bg-white px-6 py-2.5 font-manrope text-[13px] font-bold text-[#4B3F33] no-underline transition-colors hover:bg-[#F8F4EE]"
             >
               Cancel

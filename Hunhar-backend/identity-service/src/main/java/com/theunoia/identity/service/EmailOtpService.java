@@ -44,24 +44,7 @@ public class EmailOtpService {
             throw new BadRequestException("Email is already registered. Please log in instead.");
         }
 
-        Instant now = Instant.now();
-        EmailOtp record = emailOtpRepository.findByEmail(email).orElse(null);
-        if (record != null && record.getLastSentAt().plusSeconds(resendCooldownSeconds).isAfter(now)) {
-            long wait = Duration.between(now, record.getLastSentAt().plusSeconds(resendCooldownSeconds)).getSeconds() + 1;
-            throw new BadRequestException("Please wait " + wait + " seconds before requesting a new code.");
-        }
-
-        String otp = String.format("%06d", RANDOM.nextInt(1_000_000));
-        if (record == null) {
-            record = EmailOtp.builder().email(email).build();
-        }
-        record.setOtpHash(passwordEncoder.encode(otp));
-        record.setExpiresAt(now.plus(Duration.ofMinutes(expiryMinutes)));
-        record.setLastSentAt(now);
-        record.setAttempts(0);
-        record.setVerified(false);
-        record.setVerifiedAt(null);
-        emailOtpRepository.save(record);
+        String otp = issueCode(email);
 
         // Throws if SMTP fails, rolling back the saved record so the user can retry immediately.
         emailService.sendSignupOtp(email, otp, expiryMinutes);
@@ -76,6 +59,58 @@ public class EmailOtpService {
         if (record.isVerified()) {
             return;
         }
+        checkCode(record, otp);
+        record.setVerified(true);
+        record.setVerifiedAt(Instant.now());
+        emailOtpRepository.save(record);
+    }
+
+    /**
+     * Forgot password: emails a reset code to a registered address. Unknown addresses get the same
+     * response (no email) so the endpoint cannot be used to discover who has an account.
+     */
+    @Transactional
+    public void sendPasswordResetOtp(String rawEmail) {
+        String email = normalize(rawEmail);
+        if (!userRepository.existsByEmail(email)) {
+            return;
+        }
+        String otp = issueCode(email);
+        emailService.sendPasswordResetOtp(email, otp, expiryMinutes);
+    }
+
+    /** Checks the reset code and returns normally if it is correct; the record is removed so it cannot be reused. */
+    @Transactional(noRollbackFor = BadRequestException.class)
+    public void consumePasswordResetOtp(String rawEmail, String otp) {
+        String email = normalize(rawEmail);
+        EmailOtp record = emailOtpRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("Invalid or expired code. Please request a new one."));
+        checkCode(record, otp);
+        emailOtpRepository.delete(record);
+    }
+
+    private String issueCode(String email) {
+        Instant now = Instant.now();
+        EmailOtp record = emailOtpRepository.findByEmail(email).orElse(null);
+        if (record != null && record.getLastSentAt().plusSeconds(resendCooldownSeconds).isAfter(now)) {
+            long wait = Duration.between(now, record.getLastSentAt().plusSeconds(resendCooldownSeconds)).getSeconds() + 1;
+            throw new BadRequestException("Please wait " + wait + " seconds before requesting a new code.");
+        }
+        String otp = String.format("%06d", RANDOM.nextInt(1_000_000));
+        if (record == null) {
+            record = EmailOtp.builder().email(email).build();
+        }
+        record.setOtpHash(passwordEncoder.encode(otp));
+        record.setExpiresAt(now.plus(Duration.ofMinutes(expiryMinutes)));
+        record.setLastSentAt(now);
+        record.setAttempts(0);
+        record.setVerified(false);
+        record.setVerifiedAt(null);
+        emailOtpRepository.save(record);
+        return otp;
+    }
+
+    private void checkCode(EmailOtp record, String otp) {
         if (record.getExpiresAt().isBefore(Instant.now())) {
             throw new BadRequestException("Verification code has expired. Please request a new code.");
         }
@@ -91,10 +126,6 @@ public class EmailOtpService {
                     ? "Incorrect code. " + left + " attempt(s) left."
                     : "Too many incorrect attempts. Please request a new code.");
         }
-
-        record.setVerified(true);
-        record.setVerifiedAt(Instant.now());
-        emailOtpRepository.save(record);
     }
 
     /**

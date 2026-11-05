@@ -39,6 +39,10 @@ public class StoredFile extends BaseEntity {
     @Column(nullable = false, length = 300)
     private String storagePath;
 
+    /** Where the bytes live: "S3" or "LOCAL" (null = LOCAL, for files uploaded before S3 was added). */
+    @Column(length = 10)
+    private String storage;
+
     @Transient
     private String ownerName;
 

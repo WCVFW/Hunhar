@@ -37,6 +37,7 @@ public class BidService {
     private final ProjectViewEnricher enricher;
     private final NotificationPublisher notifications;
     private final InternalClient internalClient;
+    private final com.theunoia.common.internal.PlatformSettingsClient settings;
 
     @Transactional
     public Bid submitBid(AuthUser freelancer, UUID projectId, SubmitBidDto dto) {
@@ -59,7 +60,7 @@ public class BidService {
         });
 
         if (!creditClient.consumeCreditsForBid(freelancerId, projectId)) {
-            throw new BadRequestException("Not enough credits. Each proposal costs " + CreditClient.CREDITS_PER_BID
+            throw new BadRequestException("Not enough credits. Each proposal costs " + settings.getInt("creditsPerBid", 2)
                     + " credits — please top up on the Credits page.");
         }
 
@@ -110,6 +111,29 @@ public class BidService {
     public List<Bid> getBidsForProject(UUID projectId, AuthUser user) {
         access.requireClient(projectId, user);
         return enricher.bids(bidRepository.findByProjectIdOrderByCreatedAtDesc(projectId));
+    }
+
+    /** Latest proposals across all of the client's projects (dashboard). */
+    @Transactional(readOnly = true)
+    public List<Bid> getRecentBidsForClient(UUID clientId) {
+        List<UUID> projectIds = projectRepository.findByClientId(clientId).stream().map(Project::getId).toList();
+        if (projectIds.isEmpty()) return List.of();
+        return enricher.bids(bidRepository.findTop20ByProjectIdInOrderByCreatedAtDesc(projectIds));
+    }
+
+    @Transactional
+    public Bid rejectBid(UUID bidId, AuthUser user) {
+        Bid bid = bidRepository.findById(bidId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bid not found"));
+        Project project = access.requireClient(bid.getProjectId(), user);
+        if (bid.getStatus() != BidStatus.SUBMITTED && bid.getStatus() != BidStatus.SHORTLISTED) {
+            throw new BadRequestException("This proposal can no longer be declined");
+        }
+        bid.setStatus(BidStatus.REJECTED);
+        bidRepository.save(bid);
+        notifications.notify(bid.getFreelancerId(), "BID_REJECTED", "Proposal not selected",
+                "The client declined your proposal for \"" + project.getTitle() + "\".", "/freelancer/bids");
+        return enricher.bids(List.of(bid)).get(0);
     }
 
     @Transactional(readOnly = true)

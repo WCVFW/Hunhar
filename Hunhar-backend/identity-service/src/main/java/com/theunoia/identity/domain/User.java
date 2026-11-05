@@ -51,7 +51,27 @@ public class User extends BaseEntity {
     @Column(length = 4)
     private String aadhaarLast4;
 
+    /** Full Aadhaar number, AES-GCM encrypted. Only the last 4 digits are ever shown. */
+    @Column(length = 512)
+    private String aadhaarNumberEnc;
+
+    @Column(length = 500)
+    private String kycDocumentUrl;
+
+    private java.time.Instant kycSubmittedAt;
+
+    private java.time.Instant kycReviewedAt;
+
+    @Column(length = 500)
+    private String kycRejectionReason;
+
     private boolean emailVerified;
 
+    private boolean mobileVerified;
+
     private String avatarUrl;
+
+    /** Google account id ("sub") for users who signed up or linked with Google. */
+    @Column(length = 64, unique = true)
+    private String googleId;
 }

@@ -1,219 +1,206 @@
 import React, { useState } from 'react'
-import {
-  Scale,
-} from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Scale, Check } from 'lucide-react'
+import { adminApi, type Dispute } from '../../services/api'
+import { formatDate, formatINR } from '../../services/format'
+import { useAdminData, LoadingBlock, ErrorBanner, EmptyBlock, ROLE_LABEL } from './adminUi'
 
-
-
-interface DisputeCase {
-  id: string
-  project: string
-  amount: string
-  client: string
-  freelancer: string
-  reason: string
-  status: 'Under Investigation' | 'Client Evidence Needed' | 'Resolved'
-  openedDate: string
-  clientClaim: string
-  freelancerClaim: string
-}
-
-const mockDisputes: DisputeCase[] = [
-  {
-    id: 'DSP-104',
-    project: 'E-commerce React Migration',
-    amount: '₹ 45,000',
-    client: 'TechNova Labs (Rakesh)',
-    freelancer: 'Rohan Mehra',
-    reason: 'Code quality does not meet milestone specifications; broken cart checkout.',
-    status: 'Under Investigation',
-    openedDate: 'Oct 22, 2026',
-    clientClaim: 'We specified Next.js 14 App router with Tailwind and Jest tests. The delivered milestone has zero test coverage and breaking runtime crashes in cart.',
-    freelancerClaim: 'The client updated API schema midway without revision budget. Cart backend was returning 500 status from client server.',
-  },
-  {
-    id: 'DSP-103',
-    project: 'Mobile Fintech Branding',
-    amount: '₹ 22,000',
-    client: 'PayPulse Inc',
-    freelancer: 'Vikram Sethi',
-    reason: 'Client became unresponsive after receiving high resolution vector assets.',
-    status: 'Client Evidence Needed',
-    openedDate: 'Oct 19, 2026',
-    clientClaim: 'Waiting for stakeholder feedback meeting scheduled for Friday.',
-    freelancerClaim: 'Asset delivery was acknowledged in chat 14 days ago. Approval has been intentionally delayed beyond auto-release window.',
-  },
+const FILTERS: { label: string; value?: Dispute['status'] }[] = [
+  { label: 'Open', value: 'OPEN' },
+  { label: 'Resolved', value: 'RESOLVED' },
+  { label: 'Dismissed', value: 'DISMISSED' },
+  { label: 'All' },
 ]
 
-export default function AdminDisputesPage(): React.JSX.Element {
-  const [selectedDispute, setSelectedDispute] = useState<DisputeCase>(mockDisputes[0])
-  const [resolutionNote, setResolutionNote] = useState('')
-  const [disputeList, setDisputeList] = useState<DisputeCase[]>(mockDisputes)
+const STATUS_STYLE: Record<Dispute['status'], string> = {
+  OPEN: 'bg-rose-50 text-rose-700 border border-rose-200',
+  RESOLVED: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  DISMISSED: 'bg-gray-100 text-gray-700 border border-gray-200',
+}
 
-  const handleResolve = (action: 'Release to Freelancer' | 'Refund Client' | 'Split 50/50') => {
-    alert(`Dispute ${selectedDispute.id} marked as resolved via: ${action}`)
-    setDisputeList((prev) =>
-      prev.map((d) => (d.id === selectedDispute.id ? { ...d, status: 'Resolved' } : d))
-    )
-    setSelectedDispute((prev) => ({ ...prev, status: 'Resolved' }))
+const statusLabel = (s: Dispute['status']) => s.charAt(0) + s.slice(1).toLowerCase()
+
+export default function AdminDisputesPage(): React.JSX.Element {
+  const [filter, setFilter] = useState<Dispute['status'] | undefined>('OPEN')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [resolutionNote, setResolutionNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const { data: list, loading, error, reload } = useAdminData(() => adminApi.disputes(filter), [filter])
+
+  // The clicked dispute, or the first one when nothing (or something no longer listed) is selected
+  const selected = list?.find((d) => d.id === selectedId) || list?.[0] || null
+
+  const handleResolve = async (status: 'RESOLVED' | 'DISMISSED') => {
+    if (!selected) return
+    if (resolutionNote.trim().length < 10) {
+      setActionError('Write the decision (at least 10 characters) — both parties will see it.')
+      return
+    }
+    setBusy(true)
+    setActionError('')
+    try {
+      await adminApi.resolveDispute(selected.id, status, resolutionNote.trim())
+      setNotice(`Dispute on "${selected.projectTitle || 'project'}" was ${status.toLowerCase()}. Both parties were notified.`)
+      setResolutionNote('')
+      await reload()
+    } catch (err: any) {
+      setActionError(err.message || 'Could not save the decision')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[#08182B]">
-          Dispute Arbitration & Resolution Tribunal
-        </h1>
-        <p className="text-sm text-[#8E8376]">
-          Impartial moderation between clients and freelancers to ensure trust and fair escrow outcomes.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: List of cases */}
-        <div className="lg:col-span-5 space-y-3">
-          <div className="rounded-[20px] bg-white p-3 border border-[#E5DACD] shadow-xs">
-            <span className="text-xs font-bold text-[#08182B] px-1">
-              Active Disputes ({disputeList.filter((d) => d.status !== 'Resolved').length})
-            </span>
-          </div>
-
-          {disputeList.map((dsp) => (
-            <div
-              key={dsp.id}
-              onClick={() => setSelectedDispute(dsp)}
-              className={`cursor-pointer rounded-[20px] bg-white p-4 border transition-all ${
-                selectedDispute.id === dsp.id
-                  ? 'border-[#C06B3E] shadow-sm ring-2 ring-[#C06B3E]/10'
-                  : 'border-[#E5DACD] hover:border-[#C06B3E]/40'
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#08182B]">Dispute Arbitration & Resolution</h1>
+          <p className="text-sm text-[#8E8376]">Review disputes raised by clients and freelancers and record a decision.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+          {FILTERS.map((f) => (
+            <button
+              key={f.label}
+              type="button"
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filter === f.value ? 'bg-[#08182B] text-white font-bold' : 'bg-white border border-[#E5DACD] text-[#8E8376] hover:text-[#08182B]'
               }`}
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded font-bold border border-rose-200">
-                      {dsp.id}
-                    </span>
-                    <h3 className="font-bold text-sm text-[#08182B]">{dsp.project}</h3>
-                  </div>
-                  <p className="text-xs text-[#8E8376] mt-1 line-clamp-1">{dsp.reason}</p>
-                </div>
-                <span className="text-sm font-bold text-[#08182B] shrink-0">{dsp.amount}</span>
-              </div>
-
-              <div className="mt-3 pt-2 border-t border-[#F0EAE1] flex items-center justify-between text-xs text-[#8E8376]">
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    dsp.status === 'Resolved'
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-rose-50 text-rose-700 border border-rose-200'
-                  }`}
-                >
-                  {dsp.status}
-                </span>
-                <span>Opened {dsp.openedDate}</span>
-              </div>
-            </div>
+              {f.label}
+            </button>
           ))}
         </div>
+      </div>
 
-        {/* Right Column: Case Deep Dive */}
-        <div className="lg:col-span-7 rounded-[24px] bg-white p-6 border border-[#E5DACD] shadow-xs flex flex-col justify-between">
-          <div className="space-y-6">
-            <div className="flex items-start justify-between border-b border-[#F0EAE1] pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-rose-100 text-rose-800 text-[11px] font-mono px-2 py-0.5 font-bold">
-                    {selectedDispute.id}
-                  </span>
-                  <h2 className="text-lg font-bold text-[#08182B]">{selectedDispute.project}</h2>
-                </div>
-                <p className="text-xs text-[#8E8376] mt-1">Dispute Amount at stake: <strong className="text-rose-600 font-bold">{selectedDispute.amount}</strong></p>
-              </div>
+      <ErrorBanner message={error} onRetry={reload} />
+      <ErrorBanner message={actionError} />
+      {notice && (
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs font-bold text-emerald-800 flex items-center gap-2">
+          <Check size={15} /> {notice}
+        </div>
+      )}
 
-              <span
-                className={`text-xs font-bold px-3 py-1 rounded-full ${
-                  selectedDispute.status === 'Resolved'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+      {loading && !list ? (
+        <LoadingBlock label="Loading disputes…" />
+      ) : !list?.length ? (
+        <EmptyBlock title="No disputes here" hint={filter === 'OPEN' ? 'No open disputes right now.' : undefined} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: List of cases */}
+          <div className="lg:col-span-5 space-y-3">
+            {list.map((dsp) => (
+              <div
+                key={dsp.id}
+                onClick={() => setSelectedId(dsp.id)}
+                className={`cursor-pointer rounded-[20px] bg-white p-4 border transition-all ${
+                  selected?.id === dsp.id ? 'border-[#C06B3E] shadow-sm ring-2 ring-[#C06B3E]/10' : 'border-[#E5DACD] hover:border-[#C06B3E]/40'
                 }`}
               >
-                {selectedDispute.status}
-              </span>
-            </div>
-
-            {/* Testimony side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Client Statement */}
-              <div className="p-4 rounded-2xl bg-[#F8F4EE] border border-[#E5DACD]">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-6 w-6 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center">
-                    C
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-[#08182B] truncate">{dsp.projectTitle || 'Project'}</h3>
+                    <p className="text-xs text-[#8E8376] mt-1 line-clamp-1">{dsp.reason}</p>
                   </div>
-                  <span className="text-xs font-bold text-[#08182B]">{selectedDispute.client}</span>
+                  {dsp.projectBudget != null && <span className="text-sm font-bold text-[#08182B] shrink-0">{formatINR(dsp.projectBudget)}</span>}
                 </div>
-                <p className="text-xs text-[#524B42] leading-relaxed italic">
-                  "{selectedDispute.clientClaim}"
-                </p>
-              </div>
 
-              {/* Freelancer Statement */}
-              <div className="p-4 rounded-2xl bg-[#F8F4EE] border border-[#E5DACD]">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-6 w-6 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                    F
-                  </div>
-                  <span className="text-xs font-bold text-[#08182B]">{selectedDispute.freelancer}</span>
+                <div className="mt-3 pt-2 border-t border-[#F0EAE1] flex items-center justify-between text-xs text-[#8E8376]">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[dsp.status]}`}>{statusLabel(dsp.status)}</span>
+                  <span>Opened {formatDate(dsp.createdAt, true)}</span>
                 </div>
-                <p className="text-xs text-[#524B42] leading-relaxed italic">
-                  "{selectedDispute.freelancerClaim}"
-                </p>
               </div>
-            </div>
-
-            {/* Admin Arbitration Form */}
-            <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5DACD] space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#08182B]">
-                <Scale size={16} className="text-[#C06B3E]" />
-                Hunhar Escrow Ruling Officer Action
-              </div>
-
-              <textarea
-                rows={3}
-                value={resolutionNote}
-                onChange={(e) => setResolutionNote(e.target.value)}
-                placeholder="Enter mandatory arbitration decision rationale for permanent audit logs..."
-                className="w-full rounded-xl border border-[#E5DACD] bg-white p-3 text-xs text-[#08182B] placeholder-[#9D9183] focus:border-[#C06B3E] focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
-              />
-
-              <div className="flex flex-wrap items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleResolve('Release to Freelancer')}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors"
-                >
-                  Rule in Favor of Freelancer (Release Funds)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResolve('Refund Client')}
-                  className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition-colors"
-                >
-                  Rule in Favor of Client (Refund)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResolve('Split 50/50')}
-                  className="rounded-xl border border-[#E5DACD] bg-white px-4 py-2 text-xs font-bold text-[#08182B] hover:bg-[#F8F4EE] transition-colors"
-                >
-                  Mutual 50% Compromise Split
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
+
+          {/* Right Column: Case detail */}
+          {selected && (
+            <div className="lg:col-span-7 rounded-[24px] bg-white p-6 border border-[#E5DACD] shadow-xs space-y-6">
+              <div className="flex items-start justify-between border-b border-[#F0EAE1] pb-4 gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-[#08182B]">{selected.projectTitle || 'Project'}</h2>
+                  <p className="text-xs text-[#8E8376] mt-1">
+                    Project budget: <strong className="text-[#08182B]">{formatINR(selected.projectBudget)}</strong> · Opened{' '}
+                    {formatDate(selected.createdAt, true)}
+                  </p>
+                </div>
+                <span className={`text-xs font-bold px-3 py-1 rounded-full shrink-0 ${STATUS_STYLE[selected.status]}`}>{statusLabel(selected.status)}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-[#F8F4EE] border border-[#E5DACD]">
+                  <span className="text-[11px] text-[#8E8376] font-medium">Client</span>
+                  <p className="text-sm font-bold text-[#08182B]">{selected.clientName || '—'}</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-[#F8F4EE] border border-[#E5DACD]">
+                  <span className="text-[11px] text-[#8E8376] font-medium">Freelancer</span>
+                  <p className="text-sm font-bold text-[#08182B]">{selected.freelancerName || 'Not hired yet'}</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[#F8F4EE] border border-[#E5DACD]">
+                <p className="text-xs font-bold text-[#08182B] mb-1">
+                  Raised by {selected.raisedByName || 'user'}
+                  {selected.raisedByRole ? ` (${ROLE_LABEL[selected.raisedByRole] || selected.raisedByRole})` : ''}
+                </p>
+                <p className="text-xs text-[#524B42] leading-relaxed whitespace-pre-line">"{selected.reason}"</p>
+              </div>
+
+              {selected.status === 'OPEN' ? (
+                <div className="p-4 rounded-2xl bg-[#FAFAF8] border border-[#E5DACD] space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#08182B]">
+                    <Scale size={16} className="text-[#C06B3E]" />
+                    Decision
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={resolutionNote}
+                    onChange={(e) => setResolutionNote(e.target.value)}
+                    placeholder="Write the decision and what each party should do next. Both parties are notified with this text."
+                    className="w-full rounded-xl border border-[#E5DACD] bg-white p-3 text-xs text-[#08182B] placeholder-[#9D9183] focus:border-[#C06B3E] focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
+                  />
+                  <p className="text-[11px] text-[#8E8376]">
+                    Money is not moved automatically. To refund the client, take the project down from{' '}
+                    <Link to="/admin/projects" className="font-bold text-[#C06B3E] hover:underline">
+                      Project Moderation
+                    </Link>{' '}
+                    (funded milestones go back to the client's wallet).
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleResolve('RESOLVED')}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    >
+                      {busy ? 'Saving…' : 'Mark Resolved'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleResolve('DISMISSED')}
+                      className="rounded-xl border border-[#E5DACD] bg-white px-4 py-2 text-xs font-bold text-[#08182B] hover:bg-[#F8F4EE] transition-colors disabled:opacity-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200">
+                  <p className="text-xs font-bold text-[#08182B]">
+                    Decision{selected.resolvedAt ? ` · ${formatDate(selected.resolvedAt, true)}` : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-[#524B42] whitespace-pre-line">{selected.resolutionNotes || '—'}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

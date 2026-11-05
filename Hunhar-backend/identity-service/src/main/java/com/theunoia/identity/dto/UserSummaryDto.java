@@ -25,4 +25,5 @@ public class UserSummaryDto {
     private boolean emailVerified;
     private String avatarUrl;
     private Object profile;
+    private java.time.Instant createdAt;
 }

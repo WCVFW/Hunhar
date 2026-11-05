@@ -33,4 +33,32 @@ public class Dispute extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String resolutionNotes;
+
+    private java.time.Instant resolvedAt;
+
+    // ----- Read-only view fields (not persisted) -----
+
+    @Transient
+    private String projectTitle;
+
+    @Transient
+    private String raisedByName;
+
+    @Transient
+    private String raisedByRole;
+
+    @Transient
+    private UUID clientId;
+
+    @Transient
+    private String clientName;
+
+    @Transient
+    private UUID freelancerId;
+
+    @Transient
+    private String freelancerName;
+
+    @Transient
+    private java.math.BigDecimal projectBudget;
 }

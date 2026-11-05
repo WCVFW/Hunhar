@@ -1,5 +1,6 @@
 package com.theunoia.billing.service;
 
+import com.theunoia.billing.domain.Invoice;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.theunoia.billing.domain.CreditPackage;
@@ -37,6 +38,8 @@ public class PaymentService {
     private final WalletService walletService;
     private final NotificationPublisher notifications;
     private final ObjectMapper objectMapper;
+    private final BillingEmailNotifier billingEmailNotifier;
+    private final InvoiceService invoiceService;
 
     /** Starts a payment. The browser then opens the gateway checkout with the returned order id. */
     @Transactional
@@ -81,6 +84,32 @@ public class PaymentService {
         if (paymentGateway.isMock()) {
             res.put("mockSignature", MockPaymentGateway.MOCK_SIGNATURE);
         }
+        return res;
+    }
+
+    /** Buys a credit pack with the wallet balance (no gateway): debit and credit happen in one transaction. */
+    @Transactional
+    public Map<String, Object> buyCreditsWithWallet(UUID userId, UUID packageId) {
+        if (packageId == null) throw new BadRequestException("Choose a credit package");
+        CreditPackage pkg = packageRepository.findById(packageId)
+                .filter(CreditPackage::isActive)
+                .orElseThrow(() -> new ResourceNotFoundException("Credit package not found"));
+        var tx = walletService.debitForPurchase(userId, pkg.getPriceInInr(), pkg.getName() + " — " + pkg.getCredits() + " credits");
+        var credits = creditService.addPurchasedCredits(userId, pkg.getId(), "WALLET-" + tx.getId());
+        var wallet = walletService.getOrCreateWallet(userId);
+        String what = pkg.getName() + " - " + pkg.getCredits() + " credits";
+        Invoice inv = invoiceService.generatePaymentInvoice(userId, InvoiceService.TYPE_CREDITS, what, pkg.getPriceInInr(),
+                "WALLET-" + tx.getId().toString().substring(0, 8).toUpperCase(), "WALLET");
+        billingEmailNotifier.sendInvoice(userId, inv, "Payment successful - " + what + " (" + inv.getInvoiceNumber() + ")",
+                "You bought " + what + " using your Hunhar wallet balance. Credit balance: " + credits.getBalance() + ".", pkg.getPriceInInr());
+        notifications.notify(userId, "CREDITS_PURCHASED", "Credits added",
+                pkg.getCredits() + " credits bought with your wallet for ₹" + pkg.getPriceInInr().toPlainString()
+                        + ". Credit balance: " + credits.getBalance() + ".", "/freelancer/credits");
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("credits", credits.getBalance());
+        res.put("walletBalance", wallet.getAvailableBalance());
+        res.put("transactionId", tx.getId());
         return res;
     }
 
@@ -130,16 +159,29 @@ public class PaymentService {
         order.setGatewayPaymentId(paymentId);
         orderRepository.saveAndFlush(order); // optimistic lock prevents double fulfilment
 
+        String method = paymentGateway.isMock() ? "SIMULATED" : "RAZORPAY";
         if (order.getPurpose() == PaymentOrder.Purpose.CREDIT_PACKAGE) {
             var wallet = creditService.addPurchasedCredits(order.getUserId(), order.getPackageId(), paymentId);
+            CreditPackage pkg = packageRepository.findById(order.getPackageId()).orElse(null);
+            String what = pkg != null ? pkg.getName() + " - " + pkg.getCredits() + " credits" : "Credit pack";
+            Invoice inv = invoiceService.generatePaymentInvoice(order.getUserId(), InvoiceService.TYPE_CREDITS, what,
+                    order.getAmount(), paymentId, method);
+            billingEmailNotifier.sendInvoice(order.getUserId(), inv, "Payment successful - " + what + " (" + inv.getInvoiceNumber() + ")",
+                    "Your payment for " + what + " was successful. The credits are already in your account (balance: "
+                            + wallet.getBalance() + " credits).", order.getAmount());
             notifications.notify(order.getUserId(), "CREDITS_PURCHASED", "Credits added",
                     "Payment of ₹" + order.getAmount().toPlainString() + " received. Your balance is now "
                             + wallet.getBalance() + " credits.", "/freelancer/credits");
         } else {
             walletService.depositFunds(order.getUserId(), order.getAmount(), paymentId);
+            Invoice inv = invoiceService.generatePaymentInvoice(order.getUserId(), InvoiceService.TYPE_TOPUP, "Wallet top-up",
+                    order.getAmount(), paymentId, method);
+            billingEmailNotifier.sendInvoice(order.getUserId(), inv, "Payment successful - wallet top-up (" + inv.getInvoiceNumber() + ")",
+                    "Your wallet top-up was successful and the money is ready to use.", order.getAmount());
             notifications.notify(order.getUserId(), "PAYMENT_RECEIVED", "Wallet topped up",
                     "₹" + order.getAmount().toPlainString() + " was added to your wallet.", "/freelancer/wallet");
         }
+
         return order;
     }
 }

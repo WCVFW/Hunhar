@@ -1,0 +1,7 @@
+# All Hunhar backend services: `systemctl restart hunhar.target` restarts every one of them.
+[Unit]
+Description=Hunhar backend (all services)
+Wants=hunhar@identity-service.service hunhar@project-service.service hunhar@billing-service.service hunhar@engagement-service.service hunhar@api-gateway.service
+
+[Install]
+WantedBy=multi-user.target

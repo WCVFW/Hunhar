@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, CheckCircle2, ShieldCheck, RefreshCw, UserRound, Briefcase } from 'lucide-react'
 import hunharLogo from '../assets/hunhar-Black.svg'
 import mascotBeanbag from '../assets/Signup_Mascot.png'
 
-import { useNavigate } from 'react-router-dom'
-import { authApi, tokenStorage } from '../services/api'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { authApi, startSession } from '../services/api'
+import GoogleAuthButton from '../components/auth/GoogleAuthButton'
 
 const labelClass =
   'mb-[clamp(2px,0.5vh,6px)] block text-[11px] font-semibold text-[#334155]'
@@ -28,7 +29,18 @@ export default function SignUpPage(): React.JSX.Element {
   const [otpNotice, setOtpNotice] = useState<string>('')
   const [otpError, setOtpError] = useState<string>('')
 
+  // Mobile (SMS) OTP Verification States
+  const [mOtpSent, setMOtpSent] = useState<boolean>(false)
+  const [mSending, setMSending] = useState<boolean>(false)
+  const [mVerifying, setMVerifying] = useState<boolean>(false)
+  const [mOtp, setMOtp] = useState<string>('')
+  const [mVerified, setMVerified] = useState<boolean>(false)
+  const [mCountdown, setMCountdown] = useState<number>(0)
+  const [mNotice, setMNotice] = useState<string>('')
+  const [mError, setMError] = useState<string>('')
+
   const [formData, setFormData] = useState({
+    companyName: '',
     firstName: '',
     lastName: '',
     phone: '',
@@ -37,10 +49,16 @@ export default function SignUpPage(): React.JSX.Element {
     rememberMe: false,
   })
 
-  // Read URL search params (e.g. ?role=client&domain=it)
-  const params = new URLSearchParams(window.location.search)
-  const role = params.get('role') || 'freelancer'
-  const domain = params.get('domain') || 'it'
+  // Role comes from the URL (?role=client) so landing-page links preselect it; the switch below updates it
+  const [params, setParams] = useSearchParams()
+  const role: 'freelancer' | 'client' = params.get('role') === 'client' ? 'client' : 'freelancer'
+  const domain = params.get('domain') || ''
+  const setRole = (r: 'freelancer' | 'client') => {
+    const next = new URLSearchParams(params)
+    next.set('role', r)
+    setParams(next, { replace: true })
+    setErrorMsg('')
+  }
 
   // Countdown timer for Resend OTP
   useEffect(() => {
@@ -52,6 +70,67 @@ export default function SignUpPage(): React.JSX.Element {
     }
     return () => clearInterval(timer)
   }, [countdown])
+
+  useEffect(() => {
+    if (mCountdown <= 0) return
+    const t = setInterval(() => setMCountdown((prev) => prev - 1), 1000)
+    return () => clearInterval(t)
+  }, [mCountdown])
+
+  const isValidMobile = (m: string) => /^[6-9][0-9]{9}$/.test(m)
+
+  const handleSendMobileOtp = async () => {
+    setMError('')
+    setErrorMsg('')
+    setMNotice('')
+    if (!isValidMobile(formData.phone)) {
+      setMError('Enter a valid 10-digit Indian mobile number first.')
+      return
+    }
+    setMSending(true)
+    try {
+      await authApi.sendMobileOtp(formData.phone)
+      setMOtpSent(true)
+      setMOtp('')
+      setMCountdown(30)
+      setMNotice(`We sent a 6-digit code by SMS to +91 ${formData.phone}.`)
+    } catch (err: any) {
+      setMError(err.message || 'Could not send the SMS. Please try again.')
+    } finally {
+      setMSending(false)
+    }
+  }
+
+  const handleVerifyMobileOtp = async () => {
+    setMError('')
+    if (!/^\d{6}$/.test(mOtp)) {
+      setMError('Enter the 6-digit code from the SMS.')
+      return
+    }
+    setMVerifying(true)
+    try {
+      await authApi.verifyMobileOtp(formData.phone, mOtp)
+      setMVerified(true)
+      setMNotice('')
+    } catch (err: any) {
+      setMError(err.message || 'Incorrect code. Please try again.')
+    } finally {
+      setMVerifying(false)
+    }
+  }
+
+  // Changing the number after sending a code restarts the SMS flow
+  const handlePhoneChange = (value: string) => {
+    setFormData({ ...formData, phone: value.replace(/[^0-9]/g, '').slice(0, 10) })
+    if (mOtpSent || mVerified) {
+      setMOtpSent(false)
+      setMVerified(false)
+      setMOtp('')
+      setMNotice('')
+      setMError('')
+      setMCountdown(0)
+    }
+  }
 
   const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
@@ -115,14 +194,26 @@ export default function SignUpPage(): React.JSX.Element {
     e.preventDefault()
     setErrorMsg('')
 
+    if (!mVerified) {
+      setErrorMsg('Please verify your mobile number with the SMS code before creating your account.')
+      return
+    }
     if (!isVerified) {
       setErrorMsg('Please verify your email address with OTP before creating your account.')
       return
     }
 
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '')
-    if (cleanPhone.length !== 10) {
-      setErrorMsg('Please enter a valid 10-digit mobile number.')
+    if (!/^[6-9][0-9]{9}$/.test(cleanPhone)) {
+      setErrorMsg('Please enter a valid 10-digit Indian mobile number.')
+      return
+    }
+    if (role === 'client' && !formData.companyName.trim()) {
+      setErrorMsg('Please enter your company name.')
+      return
+    }
+    if (formData.password.length < 8 || !/[A-Za-z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
+      setErrorMsg('Password must be at least 8 characters and include a letter and a number.')
       return
     }
 
@@ -134,7 +225,7 @@ export default function SignUpPage(): React.JSX.Element {
 
       if (role === 'client') {
         res = await authApi.registerClient({
-          companyName: fullName || 'Client Company',
+          companyName: formData.companyName.trim(),
           contactPerson: fullName,
           email: formData.email.trim(),
           mobile: cleanPhone,
@@ -146,27 +237,12 @@ export default function SignUpPage(): React.JSX.Element {
           email: formData.email.trim(),
           mobile: cleanPhone,
           password: formData.password,
-          skills: [domain],
+          skills: domain ? [domain] : [],
         })
       }
 
-      if (res && res.token) {
-        tokenStorage.setToken(res.token)
-        tokenStorage.setUser({
-          id: res.userId,
-          fullName: res.fullName || fullName,
-          email: res.email || formData.email,
-          role: res.role || (role === 'client' ? 'CLIENT' : 'FREELANCER'),
-        })
-      }
-
-      if (role === 'client') {
-        navigate('/client/dashboard')
-      } else {
-        navigate('/freelancer/dashboard')
-      }
+      navigate(startSession(res, formData.rememberMe), { replace: true })
     } catch (err: any) {
-      console.error('Registration API error:', err)
       setErrorMsg(err.message || 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
@@ -227,10 +303,48 @@ export default function SignUpPage(): React.JSX.Element {
               Create an account on hunhar.in
             </h1>
 
+            {/* Role switch */}
+            <div className="mb-[clamp(8px,1.6vh,16px)] grid grid-cols-2 gap-1 rounded-xl bg-[#F1F5F9] p-1" role="tablist" aria-label="Account type">
+              {(
+                [
+                  { value: 'freelancer', label: 'I am a Freelancer', icon: UserRound },
+                  { value: 'client', label: 'I want to Hire', icon: Briefcase },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={role === opt.value}
+                  onClick={() => setRole(opt.value)}
+                  className={`flex h-[clamp(30px,4.6vh,40px)] cursor-pointer items-center justify-center gap-1.5 rounded-lg border-none text-[11.5px] font-bold transition-all ${role === opt.value ? 'bg-[#08182B] text-white shadow-sm' : 'bg-transparent text-[#64748B] hover:text-[#0F1B3D]'}`}
+                >
+                  <opt.icon size={14} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <form
               onSubmit={handleSubmit}
               className="flex flex-col gap-3 lg:gap-[clamp(6px,1.4vh,14px)]"
             >
+              {/* Company (clients only) */}
+              {role === 'client' && (
+                <div>
+                  <label className={labelClass}>Company Name</label>
+                  <input
+                    type="text"
+                    placeholder="Your company or brand"
+                    maxLength={150}
+                    value={formData.companyName}
+                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                    required
+                    className={inputClass}
+                  />
+                </div>
+              )}
+
               {/* First Name & Last Name */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -257,20 +371,88 @@ export default function SignUpPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Mobile Number */}
+              {/* Mobile Number + Send OTP */}
               <div>
-                <label className={labelClass}>Mobile Number</label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  placeholder="10-digit Mobile Number"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/[^0-9]/g, '') })}
-                  required
-                  className={inputClass}
-                />
+                <div className="flex items-center justify-between">
+                  <label className={labelClass}>Mobile Number</label>
+                  {mVerified && (
+                    <span className="mb-1 inline-flex items-center gap-1 text-[11px] font-bold text-green-600">
+                      <CheckCircle2 size={13} className="text-green-600" />
+                      Verified
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#64748B]">+91</span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel-national"
+                      maxLength={10}
+                      placeholder="10-digit Mobile Number"
+                      value={formData.phone}
+                      disabled={mVerified}
+                      onChange={(e) => handlePhoneChange(e.target.value)}
+                      required
+                      className={`${inputClass} pl-10 ${mVerified ? 'bg-green-50/50 border-green-300 font-semibold' : ''}`}
+                    />
+                  </div>
+                  {!mVerified && (
+                    <button
+                      type="button"
+                      onClick={handleSendMobileOtp}
+                      disabled={mCountdown > 0 || mSending}
+                      className="h-[clamp(32px,5vh,44px)] shrink-0 cursor-pointer rounded-lg border border-[#D6DCE5] bg-white px-3 text-[11px] font-bold text-[#C06B3E] transition-all hover:border-[#C06B3E] hover:bg-[#FAF4EE] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {mSending ? (
+                        <span className="inline-flex items-center gap-1">
+                          <RefreshCw size={12} className="animate-spin" /> Sending
+                        </span>
+                      ) : mCountdown > 0 ? `Resend (${mCountdown}s)` : mOtpSent ? 'Resend OTP' : 'Send OTP'}
+                    </button>
+                  )}
+                </div>
+                {mError && !mOtpSent && <p className="mt-1.5 text-[11px] font-bold text-red-600">{mError}</p>}
               </div>
+
+              {mOtpSent && !mVerified && (
+                <div className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-3 text-left shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-[#C06B3E]" />
+                    <span className="text-[12px] font-bold text-[#9A3412]">SMS Code Sent</span>
+                  </div>
+                  {mNotice && <p className="mt-1 text-[11px] text-[#7C2D12]">{mNotice}</p>}
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      placeholder="Enter 6-digit code"
+                      aria-label="SMS verification code"
+                      value={mOtp}
+                      onChange={(e) => setMOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleVerifyMobileOtp()
+                        }
+                      }}
+                      className="h-10 min-w-0 flex-1 rounded-lg border border-[#D6DCE5] bg-white px-3 font-mono text-sm font-bold tracking-widest text-[#0F1B3D] outline-none focus:border-[#C06B3E] focus:ring-1 focus:ring-[#C06B3E]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyMobileOtp}
+                      disabled={mVerifying}
+                      className="h-10 shrink-0 cursor-pointer rounded-lg bg-[#08182B] px-4 text-xs font-bold text-white transition-all hover:bg-[#C06B3E] active:scale-95 disabled:opacity-60"
+                    >
+                      {mVerifying ? 'Verifying...' : 'Verify OTP'}
+                    </button>
+                  </div>
+                  {mError && <p className="mt-1.5 text-[11px] font-bold text-red-600">{mError}</p>}
+                </div>
+              )}
 
               {/* Email + Send OTP */}
               <div>
@@ -368,7 +550,9 @@ export default function SignUpPage(): React.JSX.Element {
                 <div className="relative flex items-center">
                   <input
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Create secure password"
+                    placeholder="Min 8 characters, letters and numbers"
+                    minLength={8}
+                    autoComplete="new-password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required
@@ -425,30 +609,11 @@ export default function SignUpPage(): React.JSX.Element {
               </div>
 
               {/* Google Button */}
-              <button
-                type="button"
-                className="flex h-[clamp(34px,5.4vh,46px)] w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-none bg-[#CFE4FF] text-xs font-semibold text-[#1A56C4] transition-colors hover:bg-[#BFDAFB]"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                Continue with Google
-              </button>
+              <GoogleAuthButton
+                role={role === 'client' ? 'CLIENT' : 'FREELANCER'}
+                label={role === 'client' ? 'Sign up as Client with Google' : 'Sign up as Freelancer with Google'}
+                onError={setErrorMsg}
+              />
 
               {/* Login Link */}
               <p className="m-0 text-center text-[11px] text-[#94A3B8]">

@@ -6,11 +6,12 @@ import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import { RoleRoute, GuestRoute } from './components/auth/RoleRoute'
 import DashboardLayout from './components/dashboard/DashboardLayout'
+import { PageLoader, LoaderProvider } from './components/common/Loader'
 
 /** Old deep links (submit / chat / milestones / review) all live inside the project workspace now. */
 function WorkspaceRedirect(): React.JSX.Element {
   const { projectId = '' } = useParams<{ projectId: string }>()
-  return <Navigate to={`/freelancer/projects/${projectId}`} replace />
+  return <Navigate to={`/freelancer/projects/${toRouteId(projectId)}`} replace />
 }
 import FreelancerDashboard from './pages/freelancer/FreelancerDashboard'
 import BrowseProjectsPage from './pages/freelancer/BrowseProjectsPage'
@@ -33,8 +34,7 @@ import ClientDashboardLayout from './components/dashboard/ClientDashboardLayout'
 import ClientDashboardPage from './pages/client/ClientDashboardPage'
 import CreateProjectPage from './pages/client/CreateProjectPage'
 import ClientProjectsPage from './pages/client/ClientProjectsPage'
-import ClientMessagesPage from './pages/client/ClientMessagesPage'
-import ClientCalendarPage from './pages/client/ClientCalendarPage'
+import ClientProjectDetailPage from './pages/client/ClientProjectDetailPage'
 import ClientPaymentsPage from './pages/client/ClientPaymentsPage'
 import ClientSettingsPage from './pages/client/ClientSettingsPage'
 
@@ -47,74 +47,81 @@ import AdminTransactionsPage from './pages/admin/AdminTransactionsPage'
 import AdminDisputesPage from './pages/admin/AdminDisputesPage'
 import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
+import { toRouteId } from './services/routeIds'
 
 export default function App(): React.JSX.Element {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public Landing & Auth Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/signup" element={<GuestRoute><SignUpPage /></GuestRoute>} />
-        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+      <LoaderProvider>
+        <React.Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Public Landing & Auth Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/signup" element={<GuestRoute><SignUpPage /></GuestRoute>} />
+            <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
 
-        {/* Freelancer Dashboard Shell & Subroutes */}
-        <Route element={<RoleRoute allow={['FREELANCER', 'ADMIN']} />}>
-          <Route path="/freelancer" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<FreelancerDashboard />} />
-            <Route path="browse" element={<BrowseProjectsPage />} />
-            <Route path="browse/:projectId" element={<ProjectDetailsPage />} />
-            <Route path="browse/:projectId/bid" element={<SubmitProposalPage />} />
-            <Route path="bids" element={<MyBidsPage />} />
-            <Route path="credits" element={<CreditsPage />} />
-            <Route path="wallet" element={<WalletPage />} />
-            <Route path="leaderboard" element={<LeadershipBoardPage />} />
-            <Route path="profile" element={<FreelancerProfilePage />} />
-            <Route path="projects" element={<ActiveProjectsPage />} />
-            <Route path="projects/:projectId" element={<WorkspaceOverviewPage />} />
-            <Route path="projects/:projectId/submit" element={<WorkspaceRedirect />} />
-            <Route path="projects/:projectId/chat" element={<WorkspaceRedirect />} />
-            <Route path="projects/:projectId/milestones" element={<WorkspaceRedirect />} />
-            <Route path="projects/:projectId/review" element={<WorkspaceRedirect />} />
-            <Route path="messages" element={<MessagesPage />} />
-            <Route path="team" element={<TeamCollabPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
-            <Route path="notifications" element={<FreelancerNotificationsPage />} />
-            <Route path="settings" element={<FreelancerSettingsPage />} />
-          </Route>
-        </Route>
+            {/* Freelancer Dashboard Shell & Subroutes */}
+            <Route element={<RoleRoute allow={['FREELANCER', 'ADMIN']} />}>
+              <Route path="/freelancer" element={<DashboardLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<FreelancerDashboard />} />
+                <Route path="browse" element={<BrowseProjectsPage />} />
+                <Route path="browse/:projectId" element={<ProjectDetailsPage />} />
+                <Route path="browse/:projectId/bid" element={<SubmitProposalPage />} />
+                <Route path="bids" element={<MyBidsPage />} />
+                <Route path="credits" element={<CreditsPage />} />
+                <Route path="wallet" element={<WalletPage />} />
+                <Route path="leaderboard" element={<LeadershipBoardPage />} />
+                <Route path="profile" element={<FreelancerProfilePage />} />
+                <Route path="projects" element={<ActiveProjectsPage />} />
+                <Route path="projects/:projectId" element={<WorkspaceOverviewPage />} />
+                <Route path="projects/:projectId/submit" element={<WorkspaceRedirect />} />
+                <Route path="projects/:projectId/chat" element={<WorkspaceRedirect />} />
+                <Route path="projects/:projectId/milestones" element={<WorkspaceRedirect />} />
+                <Route path="projects/:projectId/review" element={<WorkspaceRedirect />} />
+                <Route path="messages" element={<MessagesPage />} />
+                <Route path="team" element={<TeamCollabPage />} />
+                <Route path="calendar" element={<CalendarPage />} />
+                <Route path="notifications" element={<FreelancerNotificationsPage />} />
+                <Route path="settings" element={<FreelancerSettingsPage />} />
+              </Route>
+            </Route>
 
-        {/* Client Dashboard Shell & Subroutes */}
-        <Route element={<RoleRoute allow={['CLIENT', 'ADMIN']} />}>
-          <Route path="/client" element={<ClientDashboardLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<ClientDashboardPage />} />
-            <Route path="create-project" element={<CreateProjectPage />} />
-            <Route path="projects" element={<ClientProjectsPage />} />
-            <Route path="messages" element={<ClientMessagesPage />} />
-            <Route path="calendar" element={<ClientCalendarPage />} />
-            <Route path="payments" element={<ClientPaymentsPage />} />
-            <Route path="settings" element={<ClientSettingsPage />} />
-          </Route>
-        </Route>
+            {/* Client Dashboard Shell & Subroutes */}
+            <Route element={<RoleRoute allow={['CLIENT', 'ADMIN']} />}>
+              <Route path="/client" element={<ClientDashboardLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<ClientDashboardPage />} />
+                <Route path="create-project" element={<CreateProjectPage />} />
+                <Route path="projects" element={<ClientProjectsPage />} />
+                <Route path="projects/:projectId" element={<ClientProjectDetailPage />} />
+                <Route path="messages" element={<MessagesPage />} />
+                <Route path="calendar" element={<CalendarPage />} />
+                <Route path="notifications" element={<FreelancerNotificationsPage />} />
+                <Route path="payments" element={<ClientPaymentsPage />} />
+                <Route path="settings" element={<ClientSettingsPage />} />
+              </Route>
+            </Route>
 
-        {/* Admin Dashboard Shell & Subroutes */}
-        <Route element={<RoleRoute allow={['ADMIN']} />}>
-          <Route path="/admin" element={<AdminDashboardLayout />}>
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboardPage />} />
-            <Route path="users" element={<AdminUsersPage />} />
-            <Route path="projects" element={<AdminProjectsPage />} />
-            <Route path="verifications" element={<AdminVerificationsPage />} />
-            <Route path="transactions" element={<AdminTransactionsPage />} />
-            <Route path="disputes" element={<AdminDisputesPage />} />
-            <Route path="analytics" element={<AdminAnalyticsPage />} />
-            <Route path="settings" element={<AdminSettingsPage />} />
-          </Route>
-        </Route>
+            {/* Admin Dashboard Shell & Subroutes */}
+            <Route element={<RoleRoute allow={['ADMIN']} />}>
+              <Route path="/admin" element={<AdminDashboardLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<AdminDashboardPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="projects" element={<AdminProjectsPage />} />
+                <Route path="verifications" element={<AdminVerificationsPage />} />
+                <Route path="transactions" element={<AdminTransactionsPage />} />
+                <Route path="disputes" element={<AdminDisputesPage />} />
+                <Route path="analytics" element={<AdminAnalyticsPage />} />
+                <Route path="settings" element={<AdminSettingsPage />} />
+              </Route>
+            </Route>
 
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </React.Suspense>
+      </LoaderProvider>
     </BrowserRouter>
   )
 }

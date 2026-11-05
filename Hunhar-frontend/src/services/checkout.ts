@@ -33,6 +33,16 @@ export class PaymentCancelledError extends Error {
 
 export async function payForOrder(order: PaymentOrder): Promise<void> {
   if (order.mock) {
+    // No Razorpay keys on the server: never "pay" silently, ask first and say clearly that it is simulated
+    const ok = window.confirm(
+      `TEST MODE - Razorpay is not connected yet.
+
+` +
+        `Simulate a successful payment of ₹${Number(order.amount).toLocaleString('en-IN')} for "${order.description}"?
+` +
+        `No real money is charged. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to Hunhar-backend/.env for real UPI / card checkout.`
+    )
+    if (!ok) throw new PaymentCancelledError()
     await paymentsApi.verify(order.id, 'pay_mock_' + Date.now(), order.mockSignature || '')
     return
   }

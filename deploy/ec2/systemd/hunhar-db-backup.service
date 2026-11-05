@@ -1,0 +1,10 @@
+[Unit]
+Description=Hunhar MySQL backup to S3
+After=mysql.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hunhar-db-backup
+Nice=10
+IOSchedulingClass=idle

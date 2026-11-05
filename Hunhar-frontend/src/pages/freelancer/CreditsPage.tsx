@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Sparkles, AlertCircle, Loader2 } from 'lucide-react'
-import { creditsApi, paymentsApi } from '../../services/api'
+import { Check, Sparkles, AlertCircle, Loader2, Wallet, CreditCard, X } from 'lucide-react'
+import { creditsApi, paymentsApi, walletApi } from '../../services/api'
 import { payForOrder, PaymentCancelledError } from '../../services/checkout'
-import { CREDITS_PER_BID, formatDate, formatINR } from '../../services/format'
+import { formatDate, formatINR } from '../../services/format'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
 
 interface CreditPackage {
   id: string
@@ -21,6 +22,8 @@ interface LedgerEntry {
 }
 
 export default function CreditsPage(): React.JSX.Element {
+  const { creditsPerBid } = usePlatformSettings()
+  const CREDITS_PER_BID = Math.max(creditsPerBid, 1)
   const [balance, setBalance] = useState<number | null>(null)
   const [totals, setTotals] = useState({ purchased: 0, consumed: 0 })
   const [packages, setPackages] = useState<CreditPackage[]>([])
@@ -28,8 +31,17 @@ export default function CreditsPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [walletBalance, setWalletBalance] = useState<number | null>(null)
+  const [gateway, setGateway] = useState<{ provider: 'RAZORPAY' | 'SIMULATOR'; live: boolean } | null>(null)
+  const [checkoutPkg, setCheckoutPkg] = useState<CreditPackage | null>(null)
+  const [method, setMethod] = useState<'wallet' | 'razorpay'>('razorpay')
 
   const load = async () => {
+    walletApi
+      .getMyWallet()
+      .then((wl) => setWalletBalance(Number(wl.availableBalance)))
+      .catch(() => setWalletBalance(null))
+    paymentsApi.gatewayInfo().then(setGateway).catch(() => {})
     const [w, p, h] = await Promise.allSettled([creditsApi.getMyCredits(), creditsApi.getPackages(), creditsApi.getHistory()])
     if (w.status === 'fulfilled') {
       setBalance(w.value.balance)
@@ -52,16 +64,34 @@ export default function CreditsPage(): React.JSX.Element {
     null
   )?.id
 
+  const openCheckout = (pkg: CreditPackage) => {
+    setNotice(null)
+    // Default to the wallet when it can cover the price, otherwise UPI / card
+    setMethod(walletBalance != null && walletBalance >= pkg.priceInInr ? 'wallet' : 'razorpay')
+    setCheckoutPkg(pkg)
+  }
+
   const buy = async (pkg: CreditPackage) => {
     setBuyingId(pkg.id)
     setNotice(null)
     try {
-      const order = await paymentsApi.createOrder({ purpose: 'CREDIT_PACKAGE', packageId: pkg.id })
-      await payForOrder(order)
-      setNotice({
-        type: 'success',
-        message: `Payment successful — ${pkg.credits} credits added.${order.mock ? ' (Test mode: no real money was charged.)' : ''}`,
-      })
+      if (method === 'wallet') {
+        const res = await creditsApi.buyWithWallet(pkg.id)
+        setCheckoutPkg(null)
+        setNotice({
+          type: 'success',
+          message: `${pkg.credits} credits added. ${formatINR(pkg.priceInInr)} was paid from your wallet (balance ${formatINR(res.walletBalance, { decimals: true })}).`,
+        })
+      } else {
+        const order = await paymentsApi.createOrder({ purpose: 'CREDIT_PACKAGE', packageId: pkg.id })
+        setCheckoutPkg(null)
+        await payForOrder(order)
+        setNotice({
+          type: 'success',
+          message: `Payment successful — ${pkg.credits} credits added.${order.mock ? ' (Test mode: no real money was charged.)' : ''}`,
+        })
+      }
+      window.dispatchEvent(new Event('hunhar:balances-changed'))
       await load()
     } catch (err: any) {
       if (err instanceof PaymentCancelledError) {
@@ -169,7 +199,7 @@ export default function CreditsPage(): React.JSX.Element {
                 <button
                   type="button"
                   disabled={buyingId !== null}
-                  onClick={() => buy(pkg)}
+                  onClick={() => openCheckout(pkg)}
                   className={`mt-7 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 font-manrope text-[12.5px] font-semibold shadow-xs transition-all disabled:opacity-50 ${
                     best ? 'bg-[#C06B3E] text-white hover:bg-[#A95A30]' : 'bg-[#0A1629] text-white hover:bg-[#152640]'
                   }`}
@@ -214,6 +244,79 @@ export default function CreditsPage(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {checkoutPkg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="pay-title">
+          <div className="w-full max-w-md rounded-[20px] bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="pay-title" className="text-[17px] font-bold text-[#08182B]">
+                  Buy {checkoutPkg.credits} credits
+                </h3>
+                <p className="mt-0.5 text-[13px] text-[#64748B]">
+                  {checkoutPkg.name} · {formatINR(checkoutPkg.priceInInr)}
+                </p>
+              </div>
+              <button type="button" onClick={() => setCheckoutPkg(null)} disabled={buyingId !== null} aria-label="Close" className="rounded-full p-1 text-[#94A3B8] hover:bg-[#F1F5F9]">
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="mt-5 text-[11px] font-bold uppercase tracking-wider text-[#A0AEC0]">Pay with</p>
+            <div className="mt-2 flex flex-col gap-2.5">
+              {(() => {
+                const enough = walletBalance != null && walletBalance >= checkoutPkg.priceInInr
+                return (
+                  <label
+                    className={`flex cursor-pointer items-center gap-3 rounded-[14px] border-2 p-3.5 transition-colors ${method === 'wallet' ? 'border-[#C06B3E] bg-[#FFF7ED]' : 'border-[#E2E8F0]'} ${enough ? '' : 'cursor-not-allowed opacity-60'}`}
+                  >
+                    <input type="radio" name="pay-method" className="accent-[#C06B3E]" checked={method === 'wallet'} disabled={!enough} onChange={() => setMethod('wallet')} />
+                    <Wallet size={18} className="text-[#C06B3E]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13.5px] font-bold text-[#08182B]">Wallet balance</p>
+                      <p className="text-[12px] text-[#64748B]">
+                        {walletBalance == null ? 'Loading…' : `${formatINR(walletBalance, { decimals: true })} available`}
+                        {walletBalance != null && !enough && (
+                          <>
+                            {' · '}
+                            <Link to="/freelancer/wallet" className="font-bold text-[#C06B3E] no-underline hover:underline">
+                              Add money
+                            </Link>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                )
+              })()}
+              <label className={`flex cursor-pointer items-center gap-3 rounded-[14px] border-2 p-3.5 transition-colors ${method === 'razorpay' ? 'border-[#C06B3E] bg-[#FFF7ED]' : 'border-[#E2E8F0]'}`}>
+                <input type="radio" name="pay-method" className="accent-[#C06B3E]" checked={method === 'razorpay'} onChange={() => setMethod('razorpay')} />
+                <CreditCard size={18} className="text-[#2563EB]" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold text-[#08182B]">UPI, card or net banking</p>
+                  <p className="text-[12px] text-[#64748B]">Secure checkout by Razorpay</p>
+                </div>
+              </label>
+            </div>
+
+            {method === 'razorpay' && gateway?.provider === 'SIMULATOR' && (
+              <p className="mt-3 rounded-[10px] border border-amber-200 bg-amber-50 p-2.5 text-[12px] font-semibold text-amber-800">
+                Test mode: Razorpay keys are not set on the server yet, so this payment will be simulated after you confirm.
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={buyingId !== null}
+              onClick={() => buy(checkoutPkg)}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[12px] bg-[#C06B3E] py-3 text-[13.5px] font-bold text-white shadow-xs hover:bg-[#A95A30] disabled:opacity-60"
+            >
+              {buyingId !== null && <Loader2 size={15} className="animate-spin" />}
+              {method === 'wallet' ? `Pay ${formatINR(checkoutPkg.priceInInr)} from wallet` : `Pay ${formatINR(checkoutPkg.priceInInr)} with Razorpay`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

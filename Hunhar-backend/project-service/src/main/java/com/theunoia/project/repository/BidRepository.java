@@ -16,4 +16,6 @@ public interface BidRepository extends JpaRepository<Bid, UUID> {
     List<Bid> findByFreelancerIdAndProjectIdIn(UUID freelancerId, java.util.Collection<UUID> projectIds);
     List<Bid> findByFreelancerIdOrderByCreatedAtDesc(UUID freelancerId);
     List<Bid> findByProjectIdOrderByCreatedAtDesc(UUID projectId);
+    List<Bid> findTop20ByProjectIdInOrderByCreatedAtDesc(java.util.Collection<UUID> projectIds);
+    long countByCreatedAtBetween(java.time.Instant from, java.time.Instant to);
 }

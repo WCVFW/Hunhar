@@ -14,13 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class WalletService {
-
-    private static final BigDecimal MIN_PAYOUT = new BigDecimal("100");
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
@@ -28,6 +27,9 @@ public class WalletService {
     private final InvoiceService invoiceService;
     private final EncryptionUtils encryptionUtils;
     private final NotificationPublisher notifications;
+    private final PlatformSettingsService settings;
+    private final com.theunoia.common.internal.InternalClient internalClient;
+    private final BillingEmailNotifier billingEmailNotifier;
 
     @Transactional
     public Wallet getOrCreateWallet(UUID userId) {
@@ -56,6 +58,29 @@ public class WalletService {
                 .status(TransactionStatus.COMPLETED)
                 .gatewayRefId(gatewayRefId)
                 .description("Wallet top-up")
+                .build());
+    }
+
+    /**
+     * Pays for something inside Hunhar (credit packs) from the available balance.
+     * The wallet row is locked, so two quick clicks cannot spend the same money twice.
+     */
+    @Transactional
+    public Transaction debitForPurchase(UUID userId, BigDecimal amount, String description) {
+        getOrCreateWallet(userId);
+        Wallet wallet = walletRepository.findByIdForUpdate(userId).orElseThrow();
+        if (wallet.getAvailableBalance().compareTo(amount) < 0) {
+            throw new BadRequestException("Not enough wallet balance. You have ₹" + wallet.getAvailableBalance().toPlainString()
+                    + " and need ₹" + amount.toPlainString() + ". Add money to your wallet or pay with UPI / card.");
+        }
+        wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(amount));
+        walletRepository.save(wallet);
+        return transactionRepository.save(Transaction.builder()
+                .userId(userId)
+                .amount(amount)
+                .type(TransactionType.CREDIT_PURCHASE)
+                .status(TransactionStatus.COMPLETED)
+                .description(description)
                 .build());
     }
 
@@ -99,8 +124,8 @@ public class WalletService {
         clientWallet.setEscrowBalance(clientWallet.getEscrowBalance().subtract(amount));
         walletRepository.save(clientWallet);
 
-        // Platform commission is 10%
-        BigDecimal commission = amount.multiply(new BigDecimal("0.10"));
+        BigDecimal rate = settings.commissionRate();
+        BigDecimal commission = amount.multiply(rate).setScale(2, java.math.RoundingMode.HALF_UP);
         BigDecimal netToFreelancer = amount.subtract(commission);
 
         getOrCreateWallet(freelancerId);
@@ -122,11 +147,11 @@ public class WalletService {
         transactionRepository.save(Transaction.builder()
                 .userId(freelancerId)
                 .amount(netToFreelancer)
-                .type(TransactionType.ESCROW_RELEASE)
+                .type(TransactionType.MILESTONE_EARNING)
                 .status(TransactionStatus.COMPLETED)
                 .projectId(projectId)
                 .milestoneId(milestoneId)
-                .description("Milestone payment: " + milestoneTitle + " (after 10% platform fee)")
+                .description("Milestone payment: " + milestoneTitle + " (after " + settings.getInt(PlatformSettingsService.COMMISSION_PERCENT) + "% platform fee)")
                 .build());
 
         notifications.notify(freelancerId, "PAYMENT_RECEIVED", "Payment received 💰",
@@ -134,13 +159,26 @@ public class WalletService {
                         + " for \"" + milestoneTitle + "\" was added to your wallet.",
                 "/freelancer/wallet");
 
-        return invoiceService.generateMilestoneInvoice(clientId, freelancerId, projectId, milestoneId, milestoneTitle, amount);
+        Invoice inv = invoiceService.generateMilestoneInvoice(clientId, freelancerId, projectId, milestoneId, milestoneTitle, amount, rate);
+
+        String fee = InvoiceService.rupees(inv.getCommissionAmount()).replace("Rs. ", "₹");
+        billingEmailNotifier.sendInvoice(clientId, inv, "Milestone paid - " + milestoneTitle + " (" + inv.getInvoiceNumber() + ")",
+                "Your payment for the milestone \"" + milestoneTitle + "\" was released from escrow to the freelancer.", amount);
+        billingEmailNotifier.sendInvoice(freelancerId, inv, "Payment received - " + milestoneTitle + " (" + inv.getInvoiceNumber() + ")",
+                "You were paid for the milestone \"" + milestoneTitle + "\". After the platform fee of " + fee
+                        + ", the money is in your Hunhar wallet.", netToFreelancer);
+
+        return inv;
     }
 
     @Transactional
     public PayoutRequest requestPayout(UUID freelancerId, BigDecimal amount, String method, String accountDetails) {
-        if (amount == null || amount.compareTo(MIN_PAYOUT) < 0) {
-            throw new BadRequestException("Minimum withdrawal amount is ₹100");
+        int minPayout = settings.getInt(PlatformSettingsService.MIN_PAYOUT);
+        if (amount == null || amount.compareTo(BigDecimal.valueOf(minPayout)) < 0) {
+            throw new BadRequestException("Minimum withdrawal amount is ₹" + minPayout);
+        }
+        if (settings.getBoolean(PlatformSettingsService.KYC_REQUIRED_FOR_PAYOUT) && !isKycVerified(freelancerId)) {
+            throw new BadRequestException("Please complete KYC verification (Settings → Security) before withdrawing.");
         }
         if (!"UPI".equals(method) && !"BANK_TRANSFER".equals(method)) {
             throw new BadRequestException("Payout method must be UPI or BANK_TRANSFER");
@@ -203,6 +241,40 @@ public class WalletService {
                 approve ? "₹" + req.getAmount().toPlainString() + " was sent to your account."
                         : "Your withdrawal of ₹" + req.getAmount().toPlainString() + " was refunded to your wallet. " + notes,
                 "/freelancer/wallet");
+    }
+
+    /** Returns held escrow to the client's available balance (e.g. when a project is cancelled). */
+    @Transactional
+    public void refundEscrow(UUID clientId, BigDecimal amount, UUID projectId, UUID milestoneId, String reason) {
+        getOrCreateWallet(clientId);
+        Wallet wallet = walletRepository.findByIdForUpdate(clientId).orElseThrow();
+        BigDecimal refund = amount.min(wallet.getEscrowBalance());
+        if (refund.signum() <= 0) return;
+        wallet.setEscrowBalance(wallet.getEscrowBalance().subtract(refund));
+        wallet.setAvailableBalance(wallet.getAvailableBalance().add(refund));
+        walletRepository.save(wallet);
+        transactionRepository.save(Transaction.builder()
+                .userId(clientId)
+                .amount(refund)
+                .type(TransactionType.REFUND)
+                .status(TransactionStatus.COMPLETED)
+                .projectId(projectId)
+                .milestoneId(milestoneId)
+                .description("Escrow refunded: " + reason)
+                .build());
+        notifications.notify(clientId, "PAYMENT_RECEIVED", "Escrow refunded",
+                "₹" + refund.toPlainString() + " was returned to your wallet. " + reason, "/client/payments");
+    }
+
+    private boolean isKycVerified(UUID userId) {
+        try {
+            Map<String, Object> res = internalClient.get(internalClient.identity() + "/internal/users/" + userId + "/kyc",
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+            return res != null && "VERIFIED".equals(res.get("kycStatus"));
+        } catch (Exception e) {
+            throw new com.theunoia.common.exception.ApiException("Could not verify your KYC status right now. Please try again.",
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+        }
     }
 
     public List<Transaction> getTransactions(UUID userId) {

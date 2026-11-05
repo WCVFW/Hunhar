@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Upload,
@@ -8,7 +8,17 @@ import {
   Sparkles,
   AlertCircle,
 } from 'lucide-react'
-import { projectsApi } from '../../services/api'
+import { clientApi, filesApi, projectsApi, type Project, type StoredFile } from '../../services/api'
+import { splitList } from '../../services/format'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
+
+const TIMELINE_OPTIONS: { label: string; days: number }[] = [
+  { label: 'Less than 1 week', days: 7 },
+  { label: '1 to 2 weeks', days: 14 },
+  { label: '2 to 4 weeks', days: 28 },
+  { label: '1 to 3 months', days: 60 },
+  { label: '3+ months', days: 90 },
+]
 
 const categories = [
   'Branding',
@@ -30,68 +40,111 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [projectDescription, setProjectDescription] = useState('')
   const [budget, setBudget] = useState('')
   const [timeline, setTimeline] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(['Branding'])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [customDays, setCustomDays] = useState('')
   const [skillsRequired, setSkillsRequired] = useState('')
-  const [attachments, setAttachments] = useState<File[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState<false | 'draft' | 'publish'>(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploaded, setUploaded] = useState<StoredFile[]>([])
+  const [existingAttachments, setExistingAttachments] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [saved, setSaved] = useState<Project | null>(null)
+  const [searchParams] = useSearchParams()
+  const editId = fromRouteId(searchParams.get('edit')) || null
+
+  // Edit mode: load the draft / unbid project
+  useEffect(() => {
+    if (!editId) return
+    projectsApi
+      .getProjectById(editId)
+      .then((p) => {
+        setProjectTitle(p.title)
+        setProjectDescription(p.description)
+        setBudget(String(Math.round(Number(p.budget))))
+        setTimeline(TIMELINE_OPTIONS.find((o) => o.days === p.timelineDays)?.label || '')
+        setCustomDays(TIMELINE_OPTIONS.some((o) => o.days === p.timelineDays) ? '' : String(p.timelineDays))
+        setSelectedCategories(p.category ? [p.category] : [])
+        setSkillsRequired(splitList(p.skills).join(', '))
+        setExistingAttachments(splitList(p.attachmentUrls))
+      })
+      .catch((err) => setErrorMessage(err.message))
+  }, [editId])
 
   const toggleCategory = (cat: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    )
+    // A project has one category; clicking another one switches to it
+    setSelectedCategories((prev) => (prev.includes(cat) ? [] : [cat]))
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setAttachments((prev) => [...prev, ...newFiles])
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    if (uploaded.length + existingAttachments.length + files.length > 10) {
+      setErrorMessage('You can attach up to 10 files.')
+      return
+    }
+    setUploading(true)
+    setErrorMessage(null)
+    try {
+      for (const file of files) {
+        const stored = await filesApi.upload(file)
+        setUploaded((prev) => [...prev, stored])
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
     }
   }
 
   const removeFile = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
+    setUploaded((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const parseTimelineDays = (t: string): number => {
-    if (t.includes('1 week')) return 7
-    if (t.includes('1 to 2')) return 14
-    if (t.includes('2 to 4')) return 28
-    if (t.includes('1 to 3')) return 60
-    if (t.includes('3+')) return 90
-    return 14
+  const timelineDays = (): number | null => {
+    if (customDays.trim()) {
+      const n = Number(customDays)
+      return Number.isInteger(n) && n >= 1 && n <= 365 ? n : null
+    }
+    return TIMELINE_OPTIONS.find((o) => o.label === timeline)?.days ?? null
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const save = async (publish: boolean) => {
     setErrorMessage(null)
-    setIsSubmitting(true)
+    const numericBudget = Number(budget.replace(/[^0-9.]/g, ''))
+    const days = timelineDays()
+    if (projectTitle.trim().length < 5) return setErrorMessage('Title must be at least 5 characters.')
+    if (projectDescription.trim().length < 30) return setErrorMessage('Please describe the project in at least 30 characters.')
+    if (!(numericBudget >= 100)) return setErrorMessage('Budget must be at least ₹100.')
+    if (days === null) return setErrorMessage('Please choose a timeline (or enter 1–365 days).')
+    if (!selectedCategories[0]) return setErrorMessage('Please choose a category.')
 
+    setIsSubmitting(publish ? 'publish' : 'draft')
     try {
-      const numericBudget = parseFloat(budget.replace(/[^0-9.]/g, '')) || 1000
-      const days = parseTimelineDays(timeline)
-      const parsedSkills = skillsRequired
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-
-      await projectsApi.createProject({
-        title: projectTitle,
-        description: projectDescription,
-        category: selectedCategories[0] || 'General',
+      const payload = {
+        title: projectTitle.trim(),
+        description: projectDescription.trim(),
+        category: selectedCategories[0],
         budget: numericBudget,
         timelineDays: days,
-        skills: parsedSkills,
-      })
-
+        skills: skillsRequired.split(',').map((s) => s.trim()).filter(Boolean),
+        attachmentUrls: [...existingAttachments, ...uploaded.map((f) => f.url)],
+        publish,
+      }
+      const project = editId ? await clientApi.updateProject(editId, payload) : await clientApi.createProject(payload)
+      setSaved(project)
       setIsSuccess(true)
     } catch (err: any) {
-      console.error('Failed to create project:', err)
-      setErrorMessage(err.message || 'Failed to publish project to hunhar.in backend. Please ensure you are logged in as a Client.')
+      setErrorMessage(err.message || 'Could not save the project. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    save(true)
   }
 
   return (
@@ -110,10 +163,10 @@ export default function CreateProjectPage(): React.JSX.Element {
       {/* 2. Main Page Header */}
       <div className="mb-8">
         <h1 className="font-manrope text-[24px] sm:text-[28px] font-extrabold text-[#08182B]">
-          Create Project
+          {editId ? 'Edit Project' : 'Create Project'}
         </h1>
         <p className="mt-1 font-manrope text-[14px] text-[#7A7065]">
-          Post a new project and receive proposals from skilled freelancers.
+          {editId ? 'Update your project details. You can edit until freelancers start sending proposals.' : 'Post a new project and receive proposals from skilled freelancers.'}
         </p>
       </div>
 
@@ -125,27 +178,35 @@ export default function CreateProjectPage(): React.JSX.Element {
               <Check size={32} strokeWidth={2.5} />
             </div>
             <h2 className="mt-4 font-manrope text-[22px] font-bold text-[#08182B]">
-              Project Created Successfully!
+              {saved?.status === 'DRAFT' ? 'Draft Saved' : editId ? 'Project Updated' : 'Project Published!'}
             </h2>
             <p className="mt-1.5 max-w-md text-[13.5px] text-[#7A7065]">
-              Your project has been posted. Top freelancers will begin reviewing and submitting proposals shortly.
+              {saved?.status === 'DRAFT'
+                ? 'Your draft is saved. Freelancers will see it once you publish it.'
+                : 'Freelancers can now see your project and send proposals. You will be notified for every proposal.'}
             </p>
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link
-                to="/client/dashboard"
-                className="rounded-[12px] bg-[#C06B3E] px-6 py-2.5 font-manrope text-[13px] font-bold text-white shadow-xs hover:bg-[#A95A30]"
+                to={saved ? `/client/projects/${toRouteId(saved.id)}` : '/client/projects'}
+                className="rounded-[12px] bg-[#C06B3E] px-6 py-2.5 font-manrope text-[13px] font-bold text-white no-underline shadow-xs hover:bg-[#A95A30]"
               >
-                Go to Dashboard
+                View Project
               </Link>
               <button
                 type="button"
                 onClick={() => {
+                  navigate('/client/create-project')
                   setIsSuccess(false)
+                  setSaved(null)
                   setProjectTitle('')
                   setProjectDescription('')
                   setBudget('')
+                  setTimeline('')
+                  setCustomDays('')
+                  setSelectedCategories([])
                   setSkillsRequired('')
-                  setAttachments([])
+                  setUploaded([])
+                  setExistingAttachments([])
                 }}
                 className="rounded-[12px] border border-[#CBD5E1] px-5 py-2.5 font-manrope text-[13px] font-semibold text-[#64748B] hover:bg-[#F8FAFC]"
               >
@@ -202,9 +263,10 @@ export default function CreateProjectPage(): React.JSX.Element {
                 <div className="relative mt-2">
                   <input
                     type="text"
+                    inputMode="numeric"
                     required
                     value={budget}
-                    onChange={(e) => setBudget(e.target.value)}
+                    onChange={(e) => setBudget(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="₹ e.g. 1500"
                     className="h-12 w-full rounded-[12px] border border-[#E2E8F0] bg-white px-4 font-manrope text-[13.5px] text-[#08182B] placeholder-[#94A3B8] outline-none transition-all focus:border-[#C06B3E] focus:ring-2 focus:ring-[#C06B3E]/15"
                   />
@@ -218,8 +280,11 @@ export default function CreateProjectPage(): React.JSX.Element {
                 </label>
                 <div className="relative mt-2">
                   <select
-                    value={timeline}
-                    onChange={(e) => setTimeline(e.target.value)}
+                    value={customDays ? 'custom' : timeline}
+                    onChange={(e) => {
+                      setTimeline(e.target.value === 'custom' ? '' : e.target.value)
+                      setCustomDays(e.target.value === 'custom' ? '30' : '')
+                    }}
                     className="h-12 w-full appearance-none rounded-[12px] border border-[#E2E8F0] bg-white px-4 pr-10 font-manrope text-[13.5px] text-[#08182B] outline-none transition-all focus:border-[#C06B3E] focus:ring-2 focus:ring-[#C06B3E]/15"
                   >
                     <option value="">Select timeline</option>
@@ -228,6 +293,7 @@ export default function CreateProjectPage(): React.JSX.Element {
                     <option value="2 to 4 weeks">2 to 4 weeks</option>
                     <option value="1 to 3 months">1 to 3 months</option>
                     <option value="3+ months">3+ months</option>
+                    <option value="custom">Exact number of days…</option>
                   </select>
                   {/* Chevron down */}
                   <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8]">
@@ -236,13 +302,25 @@ export default function CreateProjectPage(): React.JSX.Element {
                     </svg>
                   </div>
                 </div>
+                {customDays !== '' && (
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={customDays}
+                    onChange={(e) => setCustomDays(e.target.value)}
+                    aria-label="Timeline in days"
+                    placeholder="Days (1-365)"
+                    className="mt-2 h-11 w-full rounded-[12px] border border-[#E2E8F0] bg-white px-4 font-manrope text-[13.5px] text-[#08182B] outline-none focus:border-[#C06B3E]"
+                  />
+                )}
               </div>
             </div>
 
             {/* Field 4: Category Pills */}
             <div>
               <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
-                Category
+                Category <span className="text-[#E11D48]">*</span>
               </label>
               <div className="mt-2.5 flex flex-wrap gap-2.5">
                 {categories.map((cat) => {
@@ -289,6 +367,8 @@ export default function CreateProjectPage(): React.JSX.Element {
                   type="file"
                   multiple
                   onChange={handleFileUpload}
+                  disabled={uploading}
+                  aria-label="Upload attachments"
                   className="absolute inset-0 cursor-pointer opacity-0"
                 />
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#EFE5DB] text-[#C06B3E]">
@@ -298,22 +378,30 @@ export default function CreateProjectPage(): React.JSX.Element {
                   Drop files here or <span className="font-bold text-[#C06B3E] hover:underline">browse</span>
                 </p>
                 <p className="mt-1 font-manrope text-[11.5px] text-[#94A3B8]">
-                  PDF, PNG, JPG, Figma links — up to 20MB
+                  {uploading ? 'Uploading…' : 'PDF, images, docs, design files — up to 20MB each, 10 files'}
                 </p>
               </div>
 
-              {/* Uploaded Files list if any */}
-              {attachments.length > 0 && (
+              {(uploaded.length > 0 || existingAttachments.length > 0) && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {attachments.map((file, idx) => (
+                  {existingAttachments.map((url, idx) => (
+                    <div key={url} className="flex items-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white px-3 py-1.5 text-[12px] text-[#08182B]">
+                      <span className="truncate max-w-[200px]">Attachment {idx + 1}</span>
+                      <button type="button" aria-label="Remove attachment" onClick={() => setExistingAttachments((prev) => prev.filter((u) => u !== url))} className="text-[#94A3B8] hover:text-[#EF4444]">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {uploaded.map((file, idx) => (
                     <div
-                      key={idx}
+                      key={file.id}
                       className="flex items-center gap-2 rounded-[10px] border border-[#E2E8F0] bg-white px-3 py-1.5 text-[12px] text-[#08182B]"
                     >
-                      <span className="truncate max-w-[200px]">{file.name}</span>
+                      <span className="truncate max-w-[200px]">{file.originalName}</span>
                       <button
                         type="button"
                         onClick={() => removeFile(idx)}
+                        aria-label={`Remove ${file.originalName}`}
                         className="text-[#94A3B8] hover:text-[#EF4444]"
                       >
                         <X size={14} />
@@ -328,8 +416,8 @@ export default function CreateProjectPage(): React.JSX.Element {
             <div className="flex flex-col-reverse sm:flex-row items-center gap-3 pt-6 border-t border-[#F5F2ED]">
               {/* Cancel Button */}
               <Link
-                to="/client/dashboard"
-                className="flex h-12 w-full sm:flex-1 items-center justify-center rounded-[12px] border border-[#E2E8F0] bg-white font-manrope text-[14px] font-semibold text-[#08182B] transition-all hover:bg-[#F8FAFC] active:scale-98"
+                to={editId ? `/client/projects/${toRouteId(editId)}` : '/client/dashboard'}
+                className="flex h-12 w-full sm:flex-1 items-center justify-center rounded-[12px] border border-[#E2E8F0] bg-white font-manrope text-[14px] font-semibold text-[#08182B] no-underline transition-all hover:bg-[#F8FAFC] active:scale-98"
               >
                 Cancel
               </Link>
@@ -337,22 +425,20 @@ export default function CreateProjectPage(): React.JSX.Element {
               {/* Save as draft Button */}
               <button
                 type="button"
-                onClick={() => {
-                  alert('Project saved as draft successfully!')
-                  navigate('/client/dashboard')
-                }}
-                className="flex h-12 w-full sm:flex-1 items-center justify-center rounded-[12px] border border-[#08182B] bg-white font-manrope text-[14px] font-semibold text-[#08182B] transition-all hover:bg-[#08182B]/5 active:scale-98"
+                onClick={() => save(false)}
+                disabled={isSubmitting !== false || uploading}
+                className="flex h-12 w-full sm:flex-1 items-center justify-center rounded-[12px] border border-[#08182B] bg-white font-manrope text-[14px] font-semibold text-[#08182B] transition-all hover:bg-[#08182B]/5 active:scale-98 disabled:opacity-60"
               >
-                Save as draft
+                {isSubmitting === 'draft' ? 'Saving…' : 'Save as draft'}
               </button>
 
               {/* Publish Project Button */}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting !== false || uploading}
                 className="flex h-12 w-full sm:flex-1 items-center justify-center rounded-[12px] bg-gradient-to-r from-[#D98F62] to-[#C06B3E] font-manrope text-[14px] font-semibold text-white shadow-[0_4px_14px_-4px_rgba(192,107,62,0.5)] transition-all hover:opacity-95 active:scale-98 disabled:opacity-70"
               >
-                {isSubmitting ? 'Publishing...' : 'Publish Project'}
+                {isSubmitting === 'publish' ? 'Publishing…' : 'Publish Project'}
               </button>
             </div>
           </form>

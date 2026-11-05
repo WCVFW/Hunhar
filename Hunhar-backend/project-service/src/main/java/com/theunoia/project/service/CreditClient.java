@@ -17,19 +17,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CreditClient {
 
-    public static final int CREDITS_PER_BID = 2;
-
     private final InternalClient internalClient;
 
     /**
+     * Deducts the admin-configured "credits per proposal" (billing-service reads the live setting).
      * @return true when the credits were deducted, false when the freelancer does not have enough.
      * @throws ApiException when billing-service cannot be reached (the bid must not go through for free).
      */
     public boolean consumeCreditsForBid(UUID freelancerId, UUID projectId) {
         Map<String, Object> body = Map.of(
                 "freelancerId", freelancerId.toString(),
-                "projectId", projectId.toString(),
-                "creditsToDeduct", CREDITS_PER_BID
+                "projectId", projectId.toString()
         );
         try {
             Map<String, Object> res = internalClient.post(internalClient.billing() + "/internal/credits/consume", body,

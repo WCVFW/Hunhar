@@ -1,0 +1,30 @@
+# One unit per backend service: hunhar@identity-service, hunhar@api-gateway, ...
+# Each service reads /opt/hunhar/.env (Spring's optional:file:.env import, relative to WorkingDirectory)
+# and uses its own default port: gateway 8080, identity 8081, project 8082, billing 8083, engagement 8084.
+[Unit]
+Description=Hunhar %i
+After=network-online.target mysql.service
+Wants=network-online.target
+Requires=mysql.service
+PartOf=hunhar.target
+
+[Service]
+User=hunhar
+Group=hunhar
+WorkingDirectory=/opt/hunhar
+Environment="JAVA_OPTS=-Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Duser.timezone=Asia/Kolkata"
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/hunhar/app/%i.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+# Hardening: the service can only write its uploads folder (and the gateway its key file in /opt/hunhar)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=hunhar.target

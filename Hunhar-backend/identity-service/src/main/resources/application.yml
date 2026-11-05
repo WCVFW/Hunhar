@@ -37,6 +37,17 @@ spring:
           writetimeout: 10000
 
 theunoia:
+  internal:
+    # Shared key for service-to-service /internal/** calls (same value in every service)
+    key: ${INTERNAL_API_KEY:hunhar-internal-dev-key-change-me}
+  google:
+    # OAuth 2.0 Web client id from Google Cloud Console (APIs & Services > Credentials). Empty = Google sign-in disabled.
+    client-id: ${GOOGLE_CLIENT_ID:}
+  admin:
+    # The platform admin account is created on startup from these (set them in Hunhar-backend/.env)
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    name: ${ADMIN_NAME:Hunhar Admin}
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
   mail:
@@ -49,6 +60,16 @@ theunoia:
     max-attempts: 5
     # How long a verified OTP stays valid for completing registration
     verified-window-minutes: 30
+    # Signup must verify the mobile number by SMS (false = mobile is only format-checked)
+    mobile-required: ${MOBILE_OTP_REQUIRED:true}
+    # Max SMS codes per number per day (protects the SMS balance)
+    mobile-daily-limit: ${MOBILE_OTP_DAILY_LIMIT:5}
+  sms:
+    fast2sms:
+      url: ${FAST2SMS_API_URL:https://www.fast2sms.com/dev/bulkV2}
+      api-key: ${FAST2SMS_API_KEY:}
+      # otp = OTP route (needs website verification in Fast2SMS), q = Quick SMS (needs a Rs 100+ recharge once), auto = otp then q
+      route: ${FAST2SMS_ROUTE:auto}
 
 management:
   endpoints:

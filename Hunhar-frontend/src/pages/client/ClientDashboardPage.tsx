@@ -1,118 +1,126 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Calendar as CalendarIcon,
-  Plus,
-  ArrowRight,
-  Clock,
-  Briefcase,
-  TrendingUp,
-} from 'lucide-react'
+import { Calendar as CalendarIcon, Plus, ArrowRight, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import cardDeskMascot from '../../assets/Job_details_image.png'
-import { projectsApi } from '../../services/api'
-
-interface BidItem {
-  id: string
-  title: string
-  budget: string
-  status: 'Under Review' | 'Shortlisted' | 'Awaiting'
-}
-
-const defaultRecentBids: BidItem[] = [
-  {
-    id: '1',
-    title: 'Mobile Banking App',
-    budget: '₹32,000',
-    status: 'Under Review',
-  },
-  {
-    id: '2',
-    title: 'Portfolio Website',
-    budget: '₹6,500',
-    status: 'Shortlisted',
-  },
-  {
-    id: '3',
-    title: 'SaaS Landing Page',
-    budget: '₹11,000',
-    status: 'Awaiting',
-  },
-]
+import { clientApi, projectsApi, tokenStorage, workspaceApi, type Bid, type Project, type Workspace } from '../../services/api'
+import { BID_STATUS_LABEL, BID_STATUS_STYLE, deadlineLabel, formatDate, formatINR, isOverdue } from '../../services/format'
+import { toRouteId } from '../../services/routeIds'
 
 interface DeadlineItem {
   id: string
   title: string
   date: string
   daysLeft: string
+  overdue: boolean
+  link: string
 }
 
-const defaultUpcomingDeadlines: DeadlineItem[] = [
-  {
-    id: '1',
-    title: 'E-Commerce App',
-    date: 'Aug 28',
-    daysLeft: '7d left',
-  },
-  {
-    id: '2',
-    title: 'Dashboard UI',
-    date: 'Sep 5',
-    daysLeft: '15d left',
-  },
-  {
-    id: '3',
-    title: 'Brand Identity',
-    date: 'Sep 12',
-    daysLeft: '22d left',
-  },
-]
+const greeting = () => {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
+const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
 export default function ClientDashboardPage(): React.JSX.Element {
-  const [clientName, setClientName] = useState<string>('Client Partner')
-  const [activeProject, setActiveProject] = useState<any>(null)
-  const [totalProjects, setTotalProjects] = useState<number>(0)
-  const [recentBids, setRecentBids] = useState<BidItem[]>(defaultRecentBids)
-  const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>(defaultUpcomingDeadlines)
+  const [clientName, setClientName] = useState<string>(() => tokenStorage.getUser()?.fullName || '')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [activeProject, setActiveProject] = useState<Project | null>(null)
+  const [ws, setWs] = useState<Workspace | null>(null)
+  const [recentBids, setRecentBids] = useState<Bid[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('hunhar_user')
-      if (stored) {
-        const u = JSON.parse(stored)
-        if (u.fullName || u.companyName) setClientName(u.fullName || u.companyName)
-      }
-    } catch (_) {}
+    clientApi
+      .getProfile()
+      .then((p) => setClientName(p.fullName))
+      .catch(() => {})
 
-    async function loadClientProjects() {
-      try {
-        const list = await projectsApi.getClientProjects()
-        if (Array.isArray(list) && list.length > 0) {
-          setTotalProjects(list.length)
-          setActiveProject(list[0])
+    async function load() {
+      const [list, bids] = await Promise.allSettled([projectsApi.getClientProjects(), clientApi.recentBids()])
+      if (list.status === 'fulfilled') {
+        setProjects(list.value)
+        const featured =
+          list.value.find((p) => p.status === 'ACTIVE') || list.value.find((p) => p.status === 'OPEN') || list.value[0] || null
+        setActiveProject(featured)
+        if (featured && (featured.status === 'ACTIVE' || featured.status === 'COMPLETED')) {
+          workspaceApi.get(featured.id).then(setWs).catch(() => {})
         }
-      } catch (err) {
-        console.warn('Could not fetch client projects from backend:', err)
+      } else {
+        setError(list.reason?.message || 'Could not load your projects')
       }
+      if (bids.status === 'fulfilled') setRecentBids(bids.value)
+      setLoading(false)
     }
-    loadClientProjects()
+    load()
   }, [])
 
-  const todayFormatted = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
+  const todayFormatted = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  // Milestone tracking for the featured project
+  const milestones = ws?.milestones.map((m) => m.milestone) || []
+  const doneCount = milestones.filter((m) => m.status === 'APPROVED' || m.status === 'PAID').length
+  const currentMilestone = milestones.find((m) => m.status !== 'APPROVED' && m.status !== 'PAID')
+  const progress = activeProject?.progressPercentage ?? 0
+  const overdue = activeProject ? isOverdue(activeProject) : false
+  const awaitingReview = milestones.filter((m) => m.status === 'SUBMITTED').length
+
+  // Proposals received per day this week (Mon..Sun)
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
+  const perDay = DAY_LETTERS.map((_, i) => {
+    const from = new Date(weekStart.getTime() + i * 86_400_000)
+    const to = new Date(from.getTime() + 86_400_000)
+    return recentBids.filter((b) => {
+      const t = new Date(b.createdAt).getTime()
+      return t >= from.getTime() && t < to.getTime()
+    }).length
   })
+  const maxPerDay = Math.max(1, ...perDay)
+  const todayIdx = (new Date().getDay() + 6) % 7
+
+  const deadlines: DeadlineItem[] = [
+    ...projects
+      .filter((p) => p.status === 'ACTIVE' && p.deadline)
+      .map((p) => ({
+        id: 'p-' + p.id,
+        title: p.title,
+        date: formatDate(p.deadline!, true),
+        daysLeft: deadlineLabel(p),
+        overdue: isOverdue(p),
+        link: `/client/projects/${toRouteId(p.id)}`,
+        at: new Date(p.deadline!).getTime(),
+      })),
+    ...milestones
+      .filter((m) => m.dueDate && m.status !== 'PAID' && m.status !== 'APPROVED')
+      .map((m) => {
+        const days = Math.ceil((new Date(m.dueDate!).getTime() - Date.now()) / 86_400_000)
+        return {
+          id: 'm-' + m.id,
+          title: `${m.title} (milestone)`,
+          date: formatDate(m.dueDate!, true),
+          daysLeft: days >= 0 ? `${days}d left` : `${-days}d overdue`,
+          overdue: days < 0,
+          link: `/client/projects/${toRouteId(m.projectId)}`,
+          at: new Date(m.dueDate!).getTime(),
+        }
+      }),
+  ]
+    .sort((a, b) => a.at - b.at)
+    .slice(0, 4)
 
   return (
     <div className="w-full font-manrope">
       {/* Outer White Card Container matching Hunhar Design System */}
-      <div className="w-full rounded-[24px] bg-[#FFFFFF] p-6 sm:p-8 lg:p-9 shadow-sm">
+      <div className="w-full rounded-[24px] bg-[#FFFFFF] p-5 sm:p-8 lg:p-9 shadow-sm">
+        {error && <div className="mb-4 rounded-[12px] border border-red-200 bg-red-50 p-3 text-[13px] font-semibold text-red-700">{error}</div>}
         {/* 1. Header Welcome Bar & Create Project CTA */}
         <div className="flex flex-col justify-between gap-4 border-b border-[#F5F2ED] pb-6 sm:flex-row sm:items-center">
           <div>
             <h1 className="font-manrope text-[24px] sm:text-[28px] font-extrabold text-[#C06B3E]">
-              Good afternoon, {clientName}
+              {greeting()}{clientName ? `, ${clientName.split(' ')[0]}` : ''}
             </h1>
             <p className="mt-1 font-manrope text-[13px] text-[#7A7065]">
               Here's what's happening with your projects on hunhar.in today.
@@ -127,7 +135,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
 
             <Link
               to="/client/create-project"
-              className="inline-flex items-center gap-1.5 rounded-[12px] bg-[#C06B3E] px-5 py-2.5 font-manrope text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(192,107,62,0.5)] transition-all hover:bg-[#A95A30] active:scale-98"
+              className="inline-flex items-center gap-1.5 rounded-[12px] bg-[#C06B3E] px-5 py-2.5 font-manrope text-[13px] font-bold text-white no-underline shadow-[0_4px_14px_-4px_rgba(192,107,62,0.5)] transition-all hover:bg-[#A95A30] active:scale-98"
             >
               <Plus size={16} strokeWidth={2.5} />
               <span>Create Project</span>
@@ -145,70 +153,76 @@ export default function ClientDashboardPage(): React.JSX.Element {
                 <h2 className="font-manrope text-[15px] font-bold text-[#08182B]">
                   Project Overview
                 </h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EBF7EE] px-2.5 py-0.5 text-[11px] font-bold text-[#16A34A]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#16A34A]" />
-                  ACTIVE
-                </span>
+                {activeProject && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EBF7EE] px-2.5 py-0.5 text-[11px] font-bold text-[#16A34A]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#16A34A]" />
+                    {activeProject.status === 'ACTIVE' ? 'ACTIVE' : activeProject.status === 'OPEN' ? 'OPEN FOR BIDS' : activeProject.status}
+                  </span>
+                )}
               </div>
 
               {/* Mascot Banner Artwork matching screenshot */}
               <div className="relative mt-4 h-[180px] sm:h-[210px] w-full overflow-hidden rounded-[20px] bg-[#E8DDD0]">
                 <img
                   src={cardDeskMascot}
-                  alt="Brand Identity Project"
+                  alt={activeProject?.title || 'Project'}
                   className="h-full w-full object-cover select-none"
                 />
               </div>
 
               {/* Project Details */}
-              <div className="mt-5">
-                <h3 className="font-manrope text-[18px] font-extrabold text-[#08182B]">
-                  {activeProject ? activeProject.title : 'Brand Identity'}
-                </h3>
-                <p className="mt-0.5 font-manrope text-[13px] text-[#7A7065]">
-                  {activeProject ? `Budget: ₹${(activeProject.budget ?? 0).toLocaleString('en-IN')}` : 'Assigned to Arun Kumar'}
-                </p>
-
-                {/* Deadline & Phase */}
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[13px] font-medium text-[#C06B3E]">
-                    <Clock size={15} />
-                    <span>Timeline</span>
-                  </div>
-                  <span className="font-manrope text-[13px] font-bold text-[#08182B]">
-                    {activeProject ? `${activeProject.timelineDays ?? 14} Days` : 'Aug 28, 2026'}
-                  </span>
+              {loading ? (
+                <p className="mt-5 text-[13px] text-[#8C9BA8]">Loading…</p>
+              ) : !activeProject ? (
+                <div className="mt-5">
+                  <h3 className="font-manrope text-[17px] font-extrabold text-[#08182B]">No projects yet</h3>
+                  <p className="mt-1 text-[13px] text-[#7A7065]">Post your first project to start receiving proposals from freelancers.</p>
                 </div>
+              ) : (
+                <div className="mt-5">
+                  <h3 className="font-manrope text-[18px] font-extrabold text-[#08182B]">{activeProject.title}</h3>
+                  <p className="mt-0.5 font-manrope text-[13px] text-[#7A7065]">
+                    {activeProject.freelancerName
+                      ? `Assigned to ${activeProject.freelancerName}`
+                      : `${activeProject.bidCount} proposal${activeProject.bidCount === 1 ? '' : 's'} · Budget ${formatINR(activeProject.budget)}`}
+                  </p>
 
-                <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[13px] text-[#7A7065]">Current Phase</span>
-                  <span className="rounded-[8px] border border-[#DEBBA5] bg-[#FBF8F4] px-2.5 py-0.5 text-[11.5px] font-bold text-[#C06B3E]">
-                    Design
-                  </span>
-                </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[13px] font-medium text-[#C06B3E]">
+                      <Clock size={15} />
+                      <span>{activeProject.status === 'ACTIVE' ? 'Deadline' : 'Timeline'}</span>
+                    </div>
+                    <span className={`font-manrope text-[13px] font-bold ${overdue ? 'text-[#DC2626]' : 'text-[#08182B]'}`}>
+                      {activeProject.status === 'ACTIVE' ? deadlineLabel(activeProject) : `${activeProject.timelineDays} Days`}
+                    </span>
+                  </div>
 
-                {/* Completion Progress Bar */}
-                <div className="mt-3.5">
-                  <div className="flex items-center justify-between text-[12.5px] font-medium text-[#7A7065]">
-                    <span>Completion</span>
-                    <span className="font-bold text-[#C06B3E]">65%</span>
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <span className="text-[13px] text-[#7A7065]">Current Phase</span>
+                    <span className="max-w-[60%] truncate rounded-[8px] border border-[#DEBBA5] bg-[#FBF8F4] px-2.5 py-0.5 text-[11.5px] font-bold text-[#C06B3E]">
+                      {activeProject.status === 'OPEN' ? 'Reviewing proposals' : currentMilestone?.title || (milestones.length ? 'All milestones done' : 'Plan milestones')}
+                    </span>
                   </div>
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-[#E5E9EE]">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#D98F62] to-[#C06B3E]"
-                      style={{ width: '65%' }}
-                    />
+
+                  <div className="mt-3.5">
+                    <div className="flex items-center justify-between text-[12.5px] font-medium text-[#7A7065]">
+                      <span>Completion</span>
+                      <span className="font-bold text-[#C06B3E]">{progress}%</span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-[#E5E9EE]">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#D98F62] to-[#C06B3E]" style={{ width: `${progress}%` }} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Open Project CTA Button */}
             <Link
-              to="/client/projects"
-              className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-[#C06B3E] font-manrope text-[13.5px] font-bold text-white shadow-xs transition-all hover:bg-[#A95A30] active:scale-98"
+              to={activeProject ? `/client/projects/${toRouteId(activeProject.id)}` : '/client/create-project'}
+              className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-[#C06B3E] font-manrope text-[13.5px] font-bold text-white no-underline shadow-xs transition-all hover:bg-[#A95A30] active:scale-98"
             >
-              <span>Open Project</span>
+              <span>{activeProject ? 'Open Project' : 'Post a Project'}</span>
               <ArrowRight size={15} />
             </Link>
           </div>
@@ -220,90 +234,67 @@ export default function ClientDashboardPage(): React.JSX.Element {
                 Project Tracking
               </h2>
 
-              {/* Box 1: On Track (65%) */}
+              {/* Box 1: status */}
               <div className="mt-4 flex min-h-[76px] items-center justify-between rounded-[18px] border border-[#DEBBA5] bg-[#FAF6F1] px-5 py-4">
                 <div className="flex items-center gap-3.5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[#EFE5DB] text-[#C06B3E]">
-                    <TrendingUp size={18} strokeWidth={2.2} />
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] ${overdue ? 'bg-[#FEE2E2] text-[#DC2626]' : 'bg-[#EFE5DB] text-[#C06B3E]'}`}>
+                    {overdue ? <AlertTriangle size={18} /> : <TrendingUp size={18} strokeWidth={2.2} />}
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-manrope text-[14.5px] font-bold leading-snug text-[#C06B3E]">
-                      On Track
+                    <span className={`font-manrope text-[14.5px] font-bold leading-snug ${overdue ? 'text-[#DC2626]' : 'text-[#C06B3E]'}`}>
+                      {!activeProject || activeProject.status !== 'ACTIVE' ? 'No active work' : overdue ? 'Overdue' : awaitingReview ? 'Needs your review' : 'On Track'}
                     </span>
                     <span className="mt-0.5 font-manrope text-[12px] text-[#7A7065]">
-                      Brand Identity · Phase 2 of 5
+                      {activeProject?.status === 'ACTIVE'
+                        ? `${activeProject.title} · ${milestones.length ? `${doneCount} of ${milestones.length} milestones` : 'no milestones yet'}`
+                        : 'Hire a freelancer to start tracking'}
                     </span>
                   </div>
                 </div>
-                <span className="font-manrope text-[26px] font-extrabold leading-none text-[#C06B3E]">
-                  65%
-                </span>
+                <span className="font-manrope text-[26px] font-extrabold leading-none text-[#C06B3E]">{activeProject?.status === 'ACTIVE' ? `${progress}%` : '—'}</span>
               </div>
 
               {/* Box 2: ACTIVE PHASE */}
               <div className="mt-3.5 flex min-h-[82px] flex-col justify-center rounded-[18px] border border-[#DEBBA5] bg-[#FAF6F1] px-5 py-3.5">
-                <span className="font-manrope text-[10px] font-extrabold tracking-wider text-[#C06B3E] uppercase">
-                  ⚡ ACTIVE PHASE
-                </span>
+                <span className="font-manrope text-[10px] font-extrabold uppercase tracking-wider text-[#C06B3E]">⚡ ACTIVE PHASE</span>
                 <h4 className="mt-1 font-manrope text-[14.5px] font-bold leading-snug text-[#08182B]">
-                  Design — Logo Concepts
+                  {currentMilestone ? currentMilestone.title : activeProject?.status === 'ACTIVE' ? 'Add a milestone to plan the work' : '—'}
                 </h4>
                 <p className="mt-1 font-manrope text-[12px] text-[#7A7065]">
-                  3 of 5 tasks complete · Due Aug 22
+                  {currentMilestone
+                    ? `${formatINR(currentMilestone.amount)} · ${currentMilestone.funded ? 'funded' : 'not funded yet'}${currentMilestone.dueDate ? ` · due ${formatDate(currentMilestone.dueDate)}` : ''}`
+                    : awaitingReview
+                    ? `${awaitingReview} submission(s) waiting for your review`
+                    : ' '}
                 </p>
               </div>
 
               {/* Weekly Tasks Completed Bar Graph matching screenshot */}
               <div className="mt-5">
                 <span className="font-manrope text-[10.5px] font-bold tracking-wider text-[#8C9BA8] uppercase">
-                  TASKS COMPLETED / DAY (THIS WEEK)
+                  PROPOSALS RECEIVED / DAY (THIS WEEK)
                 </span>
 
                 {/* Bar visualization */}
-                <div className="mt-3.5 flex items-end justify-between gap-2 px-1">
-                  {/* Mon */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[30px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">M</span>
-                  </div>
-                  {/* Tue */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[40px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">T</span>
-                  </div>
-                  {/* Wed */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[15px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">W</span>
-                  </div>
-                  {/* Thu */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[55px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">T</span>
-                  </div>
-                  {/* Fri */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[26px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">F</span>
-                  </div>
-                  {/* Sat */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#C5A880] h-[16px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">S</span>
-                  </div>
-                  {/* Sun */}
-                  <div className="flex flex-1 flex-col items-center gap-1.5">
-                    <div className="w-full rounded-[4px] bg-[#CBD5E1] h-[8px]" />
-                    <span className="text-[11px] font-semibold text-[#8C9BA8]">S</span>
-                  </div>
+                <div className="mt-3.5 flex h-[80px] items-end justify-between gap-2 px-1">
+                  {perDay.map((n, i) => (
+                    <div key={i} className="flex flex-1 flex-col items-center gap-1.5" title={`${n} proposal${n === 1 ? '' : 's'}`}>
+                      <span className="text-[10px] font-bold text-[#8C9BA8]">{n || ''}</span>
+                      <div
+                        className={`w-full rounded-[4px] ${i > todayIdx ? 'bg-[#E2E8F0]' : 'bg-[#C5A880]'}`}
+                        style={{ height: `${Math.max(6, (n / maxPerDay) * 52)}px` }}
+                      />
+                      <span className={`text-[11px] font-semibold ${i === todayIdx ? 'text-[#C06B3E]' : 'text-[#8C9BA8]'}`}>{DAY_LETTERS[i]}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* View Full Tracking Dark Button matching screenshot */}
             <Link
-              to="/client/projects"
-              className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-[#0A1629] font-manrope text-[13.5px] font-bold text-white shadow-xs transition-all hover:bg-[#122340] active:scale-98"
+              to={activeProject ? `/client/projects/${toRouteId(activeProject.id)}` : '/client/projects'}
+              className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[12px] bg-[#0A1629] font-manrope text-[13.5px] font-bold text-white no-underline shadow-xs transition-all hover:bg-[#122340] active:scale-98"
             >
               <span>View Full Tracking</span>
               <ArrowRight size={15} />
@@ -322,47 +313,32 @@ export default function ClientDashboardPage(): React.JSX.Element {
                 </span>
                 <Link
                   to="/client/projects"
-                  className="flex items-center gap-1 text-[12px] font-bold text-[#08182B] hover:text-[#C06B3E]"
+                  className="flex items-center gap-1 text-[12px] font-bold text-[#08182B] no-underline hover:text-[#C06B3E]"
                 >
-                  <span>All bids</span>
+                  <span>All projects</span>
                   <ArrowRight size={13} />
                 </Link>
               </div>
 
               {/* List */}
               <div className="mt-4 flex flex-col space-y-3.5">
-                {recentBids.map((bid) => (
-                  <div
+                {recentBids.length === 0 && (
+                  <p className="py-4 text-center text-[12.5px] text-[#8C9BA8]">{loading ? 'Loading…' : 'No proposals yet. They will appear here as freelancers apply.'}</p>
+                )}
+                {recentBids.slice(0, 4).map((bid) => (
+                  <Link
                     key={bid.id}
-                    className="flex items-center justify-between rounded-[14px] border border-[#F0ECE6] bg-[#FFFFFF] p-3.5 transition-all hover:border-[#DEBBA5]"
+                    to={`/client/projects/${toRouteId(bid.projectId)}`}
+                    className="flex items-center justify-between gap-3 rounded-[14px] border border-[#F0ECE6] bg-[#FFFFFF] p-3.5 no-underline transition-all hover:border-[#DEBBA5]"
                   >
-                    <div className="flex flex-col">
-                      <span className="font-manrope text-[13.5px] font-bold text-[#08182B]">
-                        {bid.title}
-                      </span>
-                      <span className="font-manrope text-[12px] font-semibold text-[#7A7065]">
-                        {bid.budget}
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-manrope text-[13.5px] font-bold text-[#08182B]">{bid.freelancerName || 'Freelancer'}</span>
+                      <span className="truncate font-manrope text-[12px] font-semibold text-[#7A7065]">
+                        {formatINR(bid.proposedCost)} · {bid.projectTitle}
                       </span>
                     </div>
-
-                    <div>
-                      {bid.status === 'Under Review' && (
-                        <span className="rounded-full bg-[#FEF5E7] px-2.5 py-0.5 text-[11px] font-bold text-[#D97706]">
-                          Under Review
-                        </span>
-                      )}
-                      {bid.status === 'Shortlisted' && (
-                        <span className="rounded-full bg-[#EEF2FF] px-2.5 py-0.5 text-[11px] font-bold text-[#4F46E5]">
-                          Shortlisted
-                        </span>
-                      )}
-                      {bid.status === 'Awaiting' && (
-                        <span className="rounded-full bg-[#F1F5F9] px-2.5 py-0.5 text-[11px] font-bold text-[#475569]">
-                          Awaiting
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${BID_STATUS_STYLE[bid.status]}`}>{BID_STATUS_LABEL[bid.status]}</span>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -377,7 +353,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
                 </span>
                 <Link
                   to="/client/calendar"
-                  className="flex items-center gap-1 text-[12px] font-bold text-[#08182B] hover:text-[#C06B3E]"
+                  className="flex items-center gap-1 text-[12px] font-bold text-[#08182B] no-underline hover:text-[#C06B3E]"
                 >
                   <span>View all</span>
                   <ArrowRight size={13} />
@@ -386,26 +362,23 @@ export default function ClientDashboardPage(): React.JSX.Element {
 
               {/* List */}
               <div className="mt-4 flex flex-col space-y-3.5">
-                {upcomingDeadlines.map((item) => (
-                  <div
+                {deadlines.length === 0 && (
+                  <p className="py-4 text-center text-[12.5px] text-[#8C9BA8]">{loading ? 'Loading…' : 'No upcoming deadlines.'}</p>
+                )}
+                {deadlines.map((item) => (
+                  <Link
                     key={item.id}
-                    className="flex items-center justify-between rounded-[14px] border border-[#F0ECE6] bg-[#FFFFFF] p-3.5 transition-all hover:border-[#DEBBA5]"
+                    to={item.link}
+                    className="flex items-center justify-between gap-3 rounded-[14px] border border-[#F0ECE6] bg-[#FFFFFF] p-3.5 no-underline transition-all hover:border-[#DEBBA5]"
                   >
-                    <div className="flex flex-col">
-                      <span className="font-manrope text-[13.5px] font-bold text-[#08182B]">
-                        {item.title}
-                      </span>
-                      <span className="font-manrope text-[12px] text-[#8C9BA8]">
-                        {item.date}
-                      </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-manrope text-[13.5px] font-bold text-[#08182B]">{item.title}</span>
+                      <span className="font-manrope text-[12px] text-[#8C9BA8]">{item.date}</span>
                     </div>
-
-                    <div>
-                      <span className="rounded-full bg-[#FEF2F2] px-2.5 py-0.5 text-[11px] font-bold text-[#EF4444]">
-                        {item.daysLeft}
-                      </span>
-                    </div>
-                  </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${item.overdue ? 'bg-[#FEF2F2] text-[#EF4444]' : 'bg-[#FDF3E8] text-[#B4652F]'}`}>
+                      {item.daysLeft}
+                    </span>
+                  </Link>
                 ))}
               </div>
             </div>

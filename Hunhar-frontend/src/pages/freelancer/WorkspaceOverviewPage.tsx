@@ -38,6 +38,8 @@ import {
   isOverdue,
   splitList,
 } from '../../services/format'
+import { toRouteId, fromRouteId } from '../../services/routeIds'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
 
 type TabType = 'overview' | 'files' | 'payments' | 'hustlers'
 
@@ -61,8 +63,10 @@ const inputClass =
   'h-10 w-full rounded-[12px] border border-[#DECFBE] bg-[#FDFBF7] px-3 font-manrope text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20'
 
 export default function WorkspaceOverviewPage(): React.JSX.Element {
-  const { projectId = '' } = useParams<{ projectId: string }>()
+  const { projectId: projectToken = '' } = useParams<{ projectId: string }>()
+  const projectId = fromRouteId(projectToken)
   const navigate = useNavigate()
+  const { commissionPercent } = usePlatformSettings()
   const me = tokenStorage.getUser()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [ws, setWs] = useState<Workspace | null>(null)
@@ -220,7 +224,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
     setOpeningChat(true)
     try {
       const conv = await messagesApi.startConversation(project.clientId, project.id)
-      navigate(`/freelancer/messages?c=${conv.id}`)
+      navigate(`/freelancer/messages?c=${toRouteId(conv.id)}`)
     } catch (err: any) {
       flash('error', err.message)
       setOpeningChat(false)
@@ -670,7 +674,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
             ))
           )}
           <p className="text-[12px] text-[#8E8376]">
-            When the client releases a milestone payment, the amount (minus the 10% platform fee) appears in your{' '}
+            When the client releases a milestone payment, the amount (minus the {commissionPercent}% platform fee) appears in your{' '}
             <Link to="/freelancer/wallet" className="font-bold text-[#C06B3E]">wallet</Link>.
           </p>
         </div>
@@ -684,7 +688,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
               <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">Team Members</h3>
               {isLead && active && (
                 <Link
-                  to={`/freelancer/team?project=${project.id}`}
+                  to={`/freelancer/team?project=${toRouteId(project.id)}`}
                   className="flex items-center gap-2 rounded-[12px] bg-[#0A182B] px-4 py-2 font-manrope text-[13px] font-bold text-white no-underline shadow-sm transition-all hover:bg-[#122844]"
                 >
                   <UserPlus size={15} />
@@ -739,7 +743,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                 <div className="mt-4 flex flex-col items-center justify-center rounded-[18px] border border-dashed border-[#DCD3C7] p-8 text-center">
                   <p className="font-manrope text-[13px] text-[#8E8376]">No pending invitations.</p>
                   {active && (
-                    <Link to={`/freelancer/team?project=${project.id}`} className="mt-2.5 font-manrope text-[13px] font-bold text-[#5249DE] no-underline hover:underline">
+                    <Link to={`/freelancer/team?project=${toRouteId(project.id)}`} className="mt-2.5 font-manrope text-[13px] font-bold text-[#5249DE] no-underline hover:underline">
                       Search for freelancers &rarr;
                     </Link>
                   )}

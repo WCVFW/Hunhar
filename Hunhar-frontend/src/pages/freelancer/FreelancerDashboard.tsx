@@ -20,6 +20,7 @@ import {
   type BidStatus,
   type CalendarTask,
 } from '../../services/api'
+import { CardSkeleton } from '../../components/common/Loader'
 import {
   BID_STATUS_LABEL,
   BID_STATUS_STYLE,
@@ -30,6 +31,7 @@ import {
   splitList,
   timeAgo,
 } from '../../services/format'
+import { toRouteId } from '../../services/routeIds'
 
 interface StatCardProps {
   label: string
@@ -160,7 +162,7 @@ export default function FreelancerDashboard(): React.JSX.Element {
               subtitle: `${p.category} · ${p.clientName || 'Client'}`,
               date: deadlineLabel(p),
               overdue: isOverdue(p),
-              link: `/freelancer/projects/${p.id}`,
+              link: `/freelancer/projects/${toRouteId(p.id)}`,
               at: new Date(p.deadline!).getTime(),
             })
           )
@@ -460,9 +462,7 @@ export default function FreelancerDashboard(): React.JSX.Element {
         {/* 4. RECOMMENDED / LIVE PROJECTS (Horizontal 3 Columns) */}
         <section className="mt-2">
           {projectsLoading ? (
-            <div className="flex min-h-[180px] w-full items-center justify-center rounded-[20px] border border-[#E7DCCE] bg-[#FBF8F3] p-8 text-center">
-              <span className="font-manrope text-[14px] font-semibold text-[#8E8376]">Loading latest projects…</span>
-            </div>
+            <CardSkeleton count={3} />
           ) : projectsError ? (
             <div className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[20px] border border-red-200 bg-red-50 p-8 text-center">
               <p className="font-manrope text-[14px] font-semibold text-red-700">{projectsError}</p>
@@ -574,7 +574,7 @@ export default function FreelancerDashboard(): React.JSX.Element {
                     </span>
 
                     <Link
-                      to={`/freelancer/browse/${project.id}`}
+                      to={`/freelancer/browse/${toRouteId(project.id)}`}
                       className="flex items-center gap-1 font-manrope text-[12px] font-extrabold text-[#08182B] no-underline transition-colors hover:text-[#C06B3E]"
                     >
                       {project.alreadyBid ? 'View' : 'View & Bid'}

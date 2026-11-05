@@ -32,6 +32,8 @@ public class WorkspaceService {
     private final ProjectAccessService access;
     private final ProjectViewEnricher enricher;
     private final NotificationPublisher notifications;
+    private final com.theunoia.common.internal.InternalClient internalClient;
+    private final com.theunoia.common.internal.PlatformSettingsClient settings;
 
     @Transactional(readOnly = true)
     public WorkspaceViewDto getWorkspace(UUID projectId, AuthUser user) {
@@ -76,6 +78,9 @@ public class WorkspaceService {
         if (project.getStatus() != ProjectStatus.ACTIVE) {
             throw new BadRequestException("Milestones can only be added to active projects");
         }
+        if (dto.getDueDate() != null && dto.getDueDate().isBefore(java.time.Instant.now().minusSeconds(86400))) {
+            throw new BadRequestException("Due date cannot be in the past");
+        }
 
         Milestone milestone = milestoneRepository.save(Milestone.builder()
                 .projectId(projectId)
@@ -87,7 +92,7 @@ public class WorkspaceService {
                 .build());
 
         UUID other = access.isClient(project, user.id()) ? project.getAwardedFreelancerId() : project.getClientId();
-        String link = other != null && other.equals(project.getClientId()) ? "/client/projects" : "/freelancer/projects/" + projectId;
+        String link = other != null && other.equals(project.getClientId()) ? "/client/projects/" + projectId : "/freelancer/projects/" + projectId;
         notifications.notify(other, "MILESTONE_ADDED", "New milestone added",
                 "\"" + milestone.getTitle() + "\" was added to \"" + project.getTitle() + "\".", link);
         return milestone;
@@ -116,11 +121,12 @@ public class WorkspaceService {
                 .build());
 
         milestone.setStatus(MilestoneStatus.SUBMITTED);
+        milestone.setSubmittedAt(java.time.Instant.now());
         milestoneRepository.save(milestone);
 
         notifications.notify(project.getClientId(), "DELIVERABLE_SUBMITTED", "Work submitted for review",
                 "New work was submitted for \"" + milestone.getTitle() + "\" on \"" + project.getTitle() + "\".",
-                "/client/projects");
+                "/client/projects/" + project.getId());
         return deliverable;
     }
 
@@ -166,6 +172,83 @@ public class WorkspaceService {
                 (approve ? "The client approved your submission" : "The client asked for changes on your submission")
                         + (milestone != null ? " for \"" + milestone.getTitle() + "\"." : "."),
                 "/freelancer/projects/" + project.getId());
+    }
+
+    /** Client moves the milestone amount from their wallet into escrow, so the freelancer knows the money is there. */
+    @Transactional
+    public Milestone fundMilestone(UUID milestoneId, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        Project project = access.requireClient(m.getProjectId(), user);
+        if (project.getStatus() != ProjectStatus.ACTIVE) throw new BadRequestException("Only milestones of active projects can be funded");
+        if (m.isFunded()) throw new BadRequestException("This milestone is already funded");
+        if (m.getStatus() == MilestoneStatus.PAID) throw new BadRequestException("This milestone is already paid");
+
+        internalClient.postChecked(internalClient.billing() + "/internal/escrow/lock",
+                Map.of("clientId", project.getClientId().toString(), "amount", m.getAmount(),
+                        "projectId", project.getId().toString(), "milestoneId", m.getId().toString()),
+                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+
+        m.setFunded(true);
+        m.setFundedAt(java.time.Instant.now());
+        if (m.getStatus() == MilestoneStatus.PENDING) m.setStatus(MilestoneStatus.IN_PROGRESS);
+        milestoneRepository.save(m);
+        notifications.notify(project.getAwardedFreelancerId(), "MILESTONE_FUNDED", "Milestone funded 💰",
+                "The client put ₹" + m.getAmount().toPlainString() + " in escrow for \"" + m.getTitle() + "\". You can start working.",
+                "/freelancer/projects/" + project.getId());
+        return m;
+    }
+
+    /** Client pays an approved, funded milestone: escrow -> freelancer wallet (minus platform fee) + invoice. */
+    @Transactional
+    public Milestone releaseMilestone(UUID milestoneId, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        Project project = access.requireClient(m.getProjectId(), user);
+        if (!m.isFunded()) throw new BadRequestException("Fund this milestone before releasing payment");
+        if (m.getStatus() == MilestoneStatus.PAID) throw new BadRequestException("This milestone is already paid");
+        if (m.getStatus() != MilestoneStatus.APPROVED) throw new BadRequestException("Approve the submitted work before releasing payment");
+
+        Map<String, Object> res = internalClient.postChecked(internalClient.billing() + "/internal/escrow/release",
+                Map.of("clientId", project.getClientId().toString(), "freelancerId", project.getAwardedFreelancerId().toString(),
+                        "amount", m.getAmount(), "projectId", project.getId().toString(), "milestoneId", m.getId().toString(),
+                        "title", m.getTitle()),
+                new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+
+        m.setStatus(MilestoneStatus.PAID);
+        m.setPaidAt(java.time.Instant.now());
+        if (res != null && res.get("invoiceNumber") != null) m.setInvoiceNumber(String.valueOf(res.get("invoiceNumber")));
+        return milestoneRepository.save(m);
+    }
+
+    /**
+     * If the client does not review submitted work within the admin-set number of days,
+     * it is approved automatically (0 disables this). Runs hourly.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3_600_000, initialDelay = 120_000)
+    @Transactional
+    public void autoApproveStaleSubmissions() {
+        int days = settings.getInt("autoApproveDays", 7);
+        if (days <= 0) return;
+        java.time.Instant cutoff = java.time.Instant.now().minus(java.time.Duration.ofDays(days));
+        for (Milestone m : milestoneRepository.findByStatusAndSubmittedAtBefore(MilestoneStatus.SUBMITTED, cutoff)) {
+            m.setStatus(MilestoneStatus.APPROVED);
+            milestoneRepository.save(m);
+            deliverableRepository.findByMilestoneId(m.getId()).stream()
+                    .filter(d -> !d.isApproved())
+                    .forEach(d -> {
+                        d.setApproved(true);
+                        deliverableRepository.save(d);
+                    });
+            projectRepository.findById(m.getProjectId()).ifPresent(p -> {
+                notifications.notify(p.getAwardedFreelancerId(), "DELIVERABLE_APPROVED", "Work auto-approved",
+                        "\"" + m.getTitle() + "\" was approved automatically after " + days + " days without client review.",
+                        "/freelancer/projects/" + p.getId());
+                notifications.notify(p.getClientId(), "DELIVERABLE_APPROVED", "Work auto-approved",
+                        "\"" + m.getTitle() + "\" on \"" + p.getTitle() + "\" was approved automatically. Release the payment when ready.",
+                        "/client/projects/" + p.getId());
+            });
+        }
     }
 
     /** The lead freelancer reports progress (0-99). Completion is done by the client. */

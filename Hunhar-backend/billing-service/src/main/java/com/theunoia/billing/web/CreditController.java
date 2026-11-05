@@ -26,6 +26,7 @@ import java.util.UUID;
 public class CreditController {
 
     private final CreditService creditService;
+    private final com.theunoia.billing.service.PaymentService paymentService;
 
     @GetMapping("/my-credits")
     public ResponseEntity<ApiResponse<CreditWallet>> getMyCredits(@CurrentUser AuthUser currentUser) {
@@ -35,6 +36,20 @@ public class CreditController {
     @GetMapping("/packages")
     public ResponseEntity<ApiResponse<List<CreditPackage>>> getAvailablePackages() {
         return ResponseEntity.ok(ApiResponse.ok(creditService.getAvailablePackages()));
+    }
+
+    /** Buy a credit pack using the wallet balance instead of UPI / card. */
+    @PostMapping("/buy-with-wallet")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> buyWithWallet(
+            @CurrentUser AuthUser currentUser, @RequestBody java.util.Map<String, String> body) {
+        UUID userId = requireUser(currentUser).id();
+        UUID packageId;
+        try {
+            packageId = UUID.fromString(String.valueOf(body.get("packageId")));
+        } catch (IllegalArgumentException e) {
+            throw new com.theunoia.common.exception.BadRequestException("Choose a credit package");
+        }
+        return ResponseEntity.ok(ApiResponse.ok("Credits added", paymentService.buyCreditsWithWallet(userId, packageId)));
     }
 
     @GetMapping("/history")

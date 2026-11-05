@@ -8,9 +8,13 @@ node_modules/
 .env
 .env.*
 !.env.example
+# Gateway payload-encryption private key (generated on first start)
+.api-enc-key
 **/.env
 **/.env.*
 !**/.env.example
+# Frontend build settings hold only public URLs (no secrets); Vercel/EC2 builds need them
+!Hunhar-frontend/.env.production
 
 # Build outputs
 dist/
@@ -55,3 +59,6 @@ temp/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Built deploy files (deploy/ec2/build-release.sh)
+release/

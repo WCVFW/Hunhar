@@ -23,6 +23,18 @@ public class Invoice extends BaseEntity {
     @Column(nullable = false, unique = true, length = 50)
     private String invoiceNumber;
 
+    /** MILESTONE, CREDIT_PURCHASE or WALLET_TOPUP (null = MILESTONE, for invoices created before types existed). */
+    @Column(length = 20)
+    private String type;
+
+    /** Gateway payment id or internal reference, shown on the PDF. */
+    @Column(length = 100)
+    private String paymentRef;
+
+    /** RAZORPAY, WALLET, ESCROW or SIMULATED. */
+    @Column(length = 20)
+    private String paymentMethod;
+
     @Column(nullable = false)
     private UUID clientId;
 
@@ -50,5 +62,6 @@ public class Invoice extends BaseEntity {
 
     @Lob
     @Column(columnDefinition = "LONGBLOB")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private byte[] pdfContent;
 }

@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface PayoutRequestRepository extends JpaRepository<PayoutRequest, UUID> {
     List<PayoutRequest> findByFreelancerIdOrderByCreatedAtDesc(UUID freelancerId);
     List<PayoutRequest> findByStatus(PayoutStatus status);
+    List<PayoutRequest> findByStatusOrderByCreatedAtAsc(PayoutStatus status);
+    List<PayoutRequest> findTop500ByOrderByCreatedAtDesc();
 }

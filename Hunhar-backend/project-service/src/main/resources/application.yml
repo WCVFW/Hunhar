@@ -2,6 +2,9 @@ server:
   port: ${PORT:8082}
 
 spring:
+  config:
+    # Secrets and settings come from Hunhar-backend/.env (see .env.example). Real environment variables override it.
+    import: "optional:file:.env[.properties],optional:file:../.env[.properties]"
   application:
     name: project-service
   servlet:
@@ -23,11 +26,23 @@ spring:
     show-sql: false
 
 theunoia:
+  internal:
+    # Shared key for service-to-service /internal/** calls (same value in every service)
+    key: ${INTERNAL_API_KEY:hunhar-internal-dev-key-change-me}
   billing-service:
     url: ${BILLING_SERVICE_URL:http://localhost:8083}
   uploads:
     # Where uploaded project files are stored. Use a persistent volume in production.
     dir: ${UPLOADS_DIR:./uploads}
+  storage:
+    # local = files on this server's disk (UPLOADS_DIR); s3 = Amazon S3 (recommended in production)
+    type: ${STORAGE_TYPE:local}
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:ap-south-1}
+      # Leave empty on AWS servers with an IAM role; otherwise an IAM user key with List/Get/Put/DeleteObject
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
 
 management:
   endpoints:

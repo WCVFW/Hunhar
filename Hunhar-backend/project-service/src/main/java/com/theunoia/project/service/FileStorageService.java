@@ -1,5 +1,23 @@
 package com.theunoia.project.service;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import org.springframework.core.io.InputStreamResource;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 import com.theunoia.common.exception.BadRequestException;
 import com.theunoia.common.exception.ResourceNotFoundException;
 import com.theunoia.project.domain.StoredFile;
@@ -43,6 +61,49 @@ public class FileStorageService {
     @Value("${theunoia.uploads.dir:./uploads}")
     private String uploadsDir;
 
+    @Value("${theunoia.storage.type:local}")
+    private String storageType;
+
+    @Value("${theunoia.storage.s3.bucket:}")
+    private String bucket;
+
+    @Value("${theunoia.storage.s3.region:ap-south-1}")
+    private String region;
+
+    @Value("${theunoia.storage.s3.access-key:}")
+    private String accessKey;
+
+    @Value("${theunoia.storage.s3.secret-key:}")
+    private String secretKey;
+
+    private S3Client s3;
+
+    @PostConstruct
+    void init() {
+        if (!"s3".equalsIgnoreCase(storageType)) {
+            log.info("File storage: local disk ({})", root());
+            return;
+        }
+        if (bucket.isBlank()) {
+            throw new IllegalStateException("STORAGE_TYPE=s3 needs S3_BUCKET");
+        }
+        // Explicit keys from .env, otherwise the default chain (env vars, ~/.aws, EC2/ECS IAM role)
+        AwsCredentialsProvider credentials = accessKey.isBlank()
+                ? DefaultCredentialsProvider.create()
+                : StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey));
+        s3 = S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentials)
+                .httpClientBuilder(ApacheHttpClient.builder())
+                .build();
+        log.info("File storage: Amazon S3 bucket {} ({})", bucket, region);
+    }
+
+    @PreDestroy
+    void close() {
+        if (s3 != null) s3.close();
+    }
+
     public StoredFile store(MultipartFile file, UUID ownerId, UUID projectId) {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Please choose a file to upload");
@@ -58,25 +119,45 @@ public class FileStorageService {
 
         UUID storageId = UUID.randomUUID();
         String relative = LocalDate.now() + "/" + storageId + "." + ext;
-        Path target = root().resolve(relative).normalize();
-        if (!target.startsWith(root())) {
-            throw new BadRequestException("Invalid file path");
-        }
-        try (InputStream in = file.getInputStream()) {
-            Files.createDirectories(target.getParent());
-            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            log.error("Failed to store upload {}: {}", originalName, e.getMessage());
-            throw new BadRequestException("Could not save the file. Please try again.");
+        String contentType = contentTypeFor(ext, file.getContentType());
+        String storage;
+        if (s3 != null) {
+            try (InputStream in = file.getInputStream()) {
+                s3.putObject(PutObjectRequest.builder()
+                                .bucket(bucket)
+                                .key(s3Key(relative))
+                                .contentType(contentType)
+                                .serverSideEncryption(ServerSideEncryption.AES256)
+                                .build(),
+                        RequestBody.fromInputStream(in, file.getSize()));
+            } catch (IOException | SdkException e) {
+                log.error("Failed to upload {} to S3: {}", originalName, e.getMessage());
+                throw new BadRequestException("Could not save the file. Please try again.");
+            }
+            storage = "S3";
+        } else {
+            Path target = root().resolve(relative).normalize();
+            if (!target.startsWith(root())) {
+                throw new BadRequestException("Invalid file path");
+            }
+            try (InputStream in = file.getInputStream()) {
+                Files.createDirectories(target.getParent());
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                log.error("Failed to store upload {}: {}", originalName, e.getMessage());
+                throw new BadRequestException("Could not save the file. Please try again.");
+            }
+            storage = "LOCAL";
         }
 
         return storedFileRepository.save(StoredFile.builder()
                 .ownerId(ownerId)
                 .projectId(projectId)
                 .originalName(originalName)
-                .contentType(contentTypeFor(ext, file.getContentType()))
+                .contentType(contentType)
                 .sizeBytes(file.getSize())
                 .storagePath(relative)
+                .storage(storage)
                 .build());
     }
 
@@ -86,11 +167,31 @@ public class FileStorageService {
     }
 
     public Resource load(StoredFile file) {
+        if ("S3".equals(file.getStorage())) {
+            if (s3 == null) {
+                log.error("File {} is in S3 but STORAGE_TYPE is not s3", file.getId());
+                throw new ResourceNotFoundException("File not found");
+            }
+            try {
+                ResponseInputStream<GetObjectResponse> in = s3.getObject(GetObjectRequest.builder()
+                        .bucket(bucket).key(s3Key(file.getStoragePath())).build());
+                return new InputStreamResource(in);
+            } catch (NoSuchKeyException e) {
+                throw new ResourceNotFoundException("File not found");
+            } catch (SdkException e) {
+                log.error("Failed to read {} from S3: {}", file.getId(), e.getMessage());
+                throw new ResourceNotFoundException("File is temporarily unavailable");
+            }
+        }
         Path path = root().resolve(file.getStoragePath()).normalize();
         if (!path.startsWith(root()) || !Files.exists(path)) {
             throw new ResourceNotFoundException("File not found");
         }
         return new FileSystemResource(path);
+    }
+
+    private static String s3Key(String relative) {
+        return "uploads/" + relative;
     }
 
     private Path root() {

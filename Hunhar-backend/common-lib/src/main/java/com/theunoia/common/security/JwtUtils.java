@@ -3,6 +3,7 @@ package com.theunoia.common.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -16,20 +17,13 @@ import java.util.UUID;
 @Component
 public class JwtUtils {
 
-    // Default 256-bit dev secret, override via environment variable JWT_SECRET in production
+    // Default 256-bit dev secret; set JWT_SECRET in Hunhar-backend/.env or the environment in production
     private static final String DEFAULT_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
     private final SecretKey key;
     private final long expirationMinutes = 1440; // 24 hours
 
-    public JwtUtils() {
-        String secret = System.getenv("JWT_SECRET");
-        if (secret == null || secret.length() < 32) {
-            secret = DEFAULT_SECRET;
-        }
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-    }
-
-    public JwtUtils(String secret) {
+    /** Reads JWT_SECRET from Spring's environment (OS env vars and the imported .env), like the gateway does. */
+    public JwtUtils(@Value("${JWT_SECRET:${theunoia.jwt.secret:" + DEFAULT_SECRET + "}}") String secret) {
         if (secret == null || secret.length() < 32) {
             secret = DEFAULT_SECRET;
         }

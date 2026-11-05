@@ -1,9 +1,7 @@
 package com.theunoia.billing.web;
 
-import com.theunoia.billing.domain.Invoice;
 import com.theunoia.billing.domain.PaymentOrder;
 import com.theunoia.billing.service.PaymentService;
-import com.theunoia.billing.service.WalletService;
 import com.theunoia.common.dto.ApiResponse;
 import com.theunoia.common.exception.UnauthorizedException;
 import com.theunoia.common.security.AuthUser;
@@ -26,7 +24,16 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService paymentService;
-    private final WalletService walletService;
+    private final com.theunoia.billing.gateway.PaymentGateway paymentGateway;
+
+    /** Which checkout the web app will get: real Razorpay (TEST or LIVE keys) or the local simulator. */
+    @GetMapping("/gateway")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> gatewayInfo(@CurrentUser AuthUser currentUser) {
+        requireUser(currentUser);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "provider", paymentGateway.isMock() ? "SIMULATOR" : "RAZORPAY",
+                "live", paymentGateway.isLive())));
+    }
 
     /** Step 1: create a gateway order for a credit package or a wallet top-up. */
     @PostMapping("/orders")
@@ -49,31 +56,6 @@ public class PaymentController {
                 paymentService.verifyAndFulfill(requireUser(currentUser).id(), orderId, req.getPaymentId(), req.getSignature())));
     }
 
-    @PostMapping("/escrow/lock")
-    public ResponseEntity<ApiResponse<Void>> lockEscrow(
-            @CurrentUser AuthUser currentUser,
-            @RequestBody LockEscrowRequest req
-    ) {
-        walletService.lockEscrow(requireUser(currentUser).id(), req.getAmount(), req.getProjectId(), req.getMilestoneId());
-        return ResponseEntity.ok(ApiResponse.ok("Funds held in escrow for milestone", null));
-    }
-
-    @PostMapping("/escrow/release")
-    public ResponseEntity<ApiResponse<Invoice>> releaseEscrow(
-            @CurrentUser AuthUser currentUser,
-            @RequestBody ReleaseEscrowRequest req
-    ) {
-        Invoice invoice = walletService.releaseEscrowToFreelancer(
-                requireUser(currentUser).id(),
-                req.getFreelancerId(),
-                req.getAmount(),
-                req.getProjectId(),
-                req.getMilestoneId(),
-                req.getMilestoneTitle() != null ? req.getMilestoneTitle() : "Project Milestone"
-        );
-        return ResponseEntity.ok(ApiResponse.ok("Escrow released and invoice generated", invoice));
-    }
-
     private static AuthUser requireUser(AuthUser user) {
         if (user == null) throw new UnauthorizedException("Authentication required");
         return user;
@@ -93,21 +75,5 @@ public class PaymentController {
         private String paymentId;
         @NotBlank(message = "Payment signature is required")
         private String signature;
-    }
-
-    @Data
-    public static class LockEscrowRequest {
-        private UUID projectId;
-        private UUID milestoneId;
-        private BigDecimal amount;
-    }
-
-    @Data
-    public static class ReleaseEscrowRequest {
-        private UUID freelancerId;
-        private UUID projectId;
-        private UUID milestoneId;
-        private String milestoneTitle;
-        private BigDecimal amount;
     }
 }

@@ -7,5 +7,7 @@ public enum TransactionType {
     COMMISSION_DEDUCTION,
     WITHDRAWAL,
     CREDIT_PURCHASE,
-    REFUND
+    REFUND,
+    /** Freelancer's net share of a released milestone payment */
+    MILESTONE_EARNING
 }

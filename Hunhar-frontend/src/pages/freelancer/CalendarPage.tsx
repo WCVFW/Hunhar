@@ -19,6 +19,8 @@ import {
   type CalendarTaskInput,
   type Project,
 } from '../../services/api'
+import { useRoleBase } from '../../services/useRoleBase'
+import { toRouteId } from '../../services/routeIds'
 
 // ---------------------------------------------------------------- helpers
 
@@ -105,6 +107,7 @@ const inputClass =
 // ---------------------------------------------------------------- page
 
 export default function CalendarPage(): React.JSX.Element {
+  const base = useRoleBase()
   const today = startOfDay(new Date())
   const [currentDate, setCurrentDate] = useState<Date>(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState<Date>(today)
@@ -151,11 +154,10 @@ export default function CalendarPage(): React.JSX.Element {
   }, [loadTasks])
 
   useEffect(() => {
-    projectsApi
-      .getFreelancerProjects()
+    ;(base === '/client' ? projectsApi.getClientProjects() : projectsApi.getFreelancerProjects())
       .then(setProjects)
       .catch(() => setProjects([]))
-  }, [])
+  }, [base])
 
   const activeProjects = projects.filter((p) => p.status === 'ACTIVE')
 
@@ -182,7 +184,7 @@ export default function CalendarPage(): React.JSX.Element {
         at: new Date(p.deadline),
         allDay: true,
         done: false,
-        projectTitle: p.clientName || p.category,
+        projectTitle: base === '/client' ? p.freelancerName || p.category : p.clientName || p.category,
         projectId: p.id,
       })
     })
@@ -387,7 +389,7 @@ export default function CalendarPage(): React.JSX.Element {
           </div>
         )}
         {!compact && item.projectId && (
-          <Link to={`/freelancer/projects/${item.projectId}`} className="shrink-0 rounded p-1 text-[#8E8376] hover:text-[#C06B3E]" aria-label="Open project">
+          <Link to={`${base}/projects/${toRouteId(item.projectId)}`} className="shrink-0 rounded p-1 text-[#8E8376] hover:text-[#C06B3E]" aria-label="Open project">
             <Briefcase size={13} />
           </Link>
         )}

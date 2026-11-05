@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react'
-import { walletApi, paymentsApi, profileApi } from '../../services/api'
+import { ArrowDownLeft, ArrowUpRight, Download, Loader2 } from 'lucide-react'
+import { walletApi, paymentsApi, profileApi, invoicesApi, type Invoice } from '../../services/api'
 import { payForOrder, PaymentCancelledError } from '../../services/checkout'
-import { PLATFORM_FEE_RATE, formatDate, formatINR } from '../../services/format'
+import { formatDate, formatINR } from '../../services/format'
+import { usePlatformSettings } from '../../services/usePlatformSettings'
 
-const INCOMING = new Set(['DEPOSIT', 'ESCROW_RELEASE', 'REFUND'])
+const INCOMING = new Set(['DEPOSIT', 'MILESTONE_EARNING', 'REFUND'])
 
 const TX_TITLE: Record<string, string> = {
   DEPOSIT: 'Wallet top-up',
   ESCROW_HOLD: 'Held in escrow',
-  ESCROW_RELEASE: 'Milestone payment',
+  ESCROW_RELEASE: 'Milestone payment released',
+  MILESTONE_EARNING: 'Milestone payment',
   COMMISSION_DEDUCTION: 'Platform fee',
   WITHDRAWAL: 'Withdrawal',
   CREDIT_PURCHASE: 'Credits purchase',
@@ -26,10 +28,12 @@ const PAYOUT_STYLE: Record<string, string> = {
 }
 
 export default function WalletPage(): React.JSX.Element {
+  const { commissionRate: PLATFORM_FEE_RATE, minPayout } = usePlatformSettings()
   const [loading, setLoading] = useState(true)
   const [wallet, setWallet] = useState({ availableBalance: 0, escrowBalance: 0, totalEarned: 0, totalWithdrawn: 0 })
   const [transactions, setTransactions] = useState<any[]>([])
   const [payouts, setPayouts] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [savedPayout, setSavedPayout] = useState<{ method: 'UPI' | 'BANK_TRANSFER'; details: string } | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -53,6 +57,7 @@ export default function WalletPage(): React.JSX.Element {
     else setNotice({ type: 'error', text: w.reason?.message || 'Could not load your wallet' })
     if (t.status === 'fulfilled') setTransactions(t.value)
     if (p.status === 'fulfilled') setPayouts(p.value)
+    invoicesApi.freelancerInvoices().then(setInvoices).catch(() => {})
     if (prof.status === 'fulfilled' && prof.value.payout?.method) {
       const po = prof.value.payout
       setSavedPayout(
@@ -70,7 +75,7 @@ export default function WalletPage(): React.JSX.Element {
 
   const openWithdraw = () => {
     setModalError('')
-    setWithdrawAmount(wallet.availableBalance >= 100 ? String(Math.floor(wallet.availableBalance)) : '')
+    setWithdrawAmount(wallet.availableBalance >= minPayout ? String(Math.floor(wallet.availableBalance)) : '')
     if (savedPayout) {
       setPayoutMethod(savedPayout.method)
       setAccountDetails(savedPayout.details)
@@ -80,7 +85,7 @@ export default function WalletPage(): React.JSX.Element {
 
   const handleWithdraw = async () => {
     const amt = Number(withdrawAmount)
-    if (!(amt >= 100)) return setModalError('Minimum withdrawal is ₹100.')
+    if (!(amt >= minPayout)) return setModalError(`Minimum withdrawal is ₹${minPayout}.`)
     if (amt > wallet.availableBalance) return setModalError('Amount is more than your available balance.')
     if (!accountDetails.trim()) return setModalError(payoutMethod === 'UPI' ? 'Enter your UPI ID.' : 'Enter your bank account details.')
     setBusy(true)
@@ -106,6 +111,7 @@ export default function WalletPage(): React.JSX.Element {
       const order = await paymentsApi.createOrder({ purpose: 'WALLET_TOPUP', amount: amt })
       await payForOrder(order)
       setShowAddFunds(false)
+      window.dispatchEvent(new Event('hunhar:balances-changed'))
       setNotice({ type: 'success', text: `${formatINR(amt)} added to your wallet.${order.mock ? ' (Test mode: no real money was charged.)' : ''}` })
       await load()
     } catch (err: any) {
@@ -154,8 +160,8 @@ export default function WalletPage(): React.JSX.Element {
             <button
               type="button"
               onClick={openWithdraw}
-              disabled={wallet.availableBalance < 100}
-              title={wallet.availableBalance < 100 ? 'Minimum withdrawal is ₹100' : undefined}
+              disabled={wallet.availableBalance < minPayout}
+              title={wallet.availableBalance < minPayout ? `Minimum withdrawal is ₹${minPayout}` : undefined}
               className="flex h-11 w-full items-center justify-center rounded-[12px] bg-[#C06B3E] font-manrope text-[14px] font-bold text-white shadow-xs transition-all hover:bg-[#A95A30] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Withdraw Funds
@@ -213,6 +219,35 @@ export default function WalletPage(): React.JSX.Element {
           </div>
         )}
 
+        <div className="mt-8 rounded-[20px] border border-[#F0ECE6] p-5 sm:p-7">
+          <h2 className="text-[15px] font-bold text-[#111827]">Invoices</h2>
+          <p className="mt-0.5 text-[12px] text-[#A0AEC0]">A PDF invoice is created and emailed to you for every payment.</p>
+          <div className="mt-4 flex flex-col">
+            {invoices.length === 0 ? (
+              <div className="py-6 text-center text-[13px] text-[#A0AEC0]">{loading ? 'Loading…' : 'No invoices yet.'}</div>
+            ) : (
+              invoices.map((inv, i) => (
+                <div key={inv.id} className={`flex items-center justify-between gap-3 py-3 ${i ? 'border-t border-[#F3EFE9]' : ''}`}>
+                  <div className="min-w-0">
+                    <span className="block truncate text-[14px] font-bold text-[#111827]">{inv.description}</span>
+                    <span className="block text-[12px] text-[#A0AEC0]">
+                      {inv.invoiceNumber} · {formatDate(inv.createdAt, true)} · {formatINR(inv.grossAmount, { decimals: true })}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => invoicesApi.download(inv.invoiceNumber).catch((e) => setNotice({ type: 'error', text: e.message }))}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] border border-[#E5DACD] px-3 py-1.5 text-[12px] font-bold text-[#C06B3E] hover:bg-[#FAF3EB]"
+                    aria-label={`Download invoice ${inv.invoiceNumber}`}
+                  >
+                    <Download size={14} /> PDF
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         <div className="mt-8 rounded-[20px] border border-[#F0ECE6] bg-[#FFFFFF] p-5 sm:p-7">
           <h2 className="font-manrope text-[15px] font-bold text-[#111827]">Transaction History</h2>
           <div className="mt-4 flex flex-col">
@@ -263,7 +298,7 @@ export default function WalletPage(): React.JSX.Element {
             <div className="mt-4 space-y-3">
               <label className="block text-[12px] font-bold text-[#8C9BA8] uppercase">
                 Amount (₹)
-                <input type="number" min={100} max={wallet.availableBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} className={input} />
+                <input type="number" min={minPayout} max={wallet.availableBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} className={input} />
               </label>
               <label className="block text-[12px] font-bold text-[#8C9BA8] uppercase">
                 Payout Method

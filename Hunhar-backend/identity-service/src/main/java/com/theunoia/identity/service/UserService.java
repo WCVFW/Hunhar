@@ -25,6 +25,7 @@ public class UserService {
     private final FreelancerProfileRepository freelancerProfileRepository;
     private final ClientProfileRepository clientProfileRepository;
     private final FreelancerProfileService freelancerProfileService;
+    private final com.theunoia.common.internal.NotificationPublisher notifications;
 
     /**
      * @param includePrivate true when the viewer is the user themself or an admin:
@@ -55,14 +56,54 @@ public class UserService {
                 .emailVerified(user.isEmailVerified())
                 .avatarUrl(user.getAvatarUrl())
                 .profile(profile)
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 
+    /** Admin list: lightweight rows (no profile), filtered and newest first. */
     @Transactional(readOnly = true)
-    public List<UserSummaryDto> getAllUsers() {
-        return userRepository.findAll().stream()
-                .map(u -> getUserSummary(u.getId(), true))
+    public List<UserSummaryDto> searchUsers(UserRole role, UserStatus status, String search, int limit) {
+        String q = search == null || search.isBlank() ? null : search.trim().toLowerCase();
+        return userRepository.adminSearch(role, status, q, org.springframework.data.domain.PageRequest.of(0, Math.min(Math.max(limit, 1), 500)))
+                .stream()
+                .map(u -> UserSummaryDto.builder()
+                        .id(u.getId())
+                        .email(u.getEmail())
+                        .fullName(u.getFullName())
+                        .mobile(u.getMobile())
+                        .role(u.getRole())
+                        .status(u.getStatus())
+                        .kycStatus(u.getKycStatus())
+                        .emailVerified(u.isEmailVerified())
+                        .avatarUrl(u.getAvatarUrl())
+                        .createdAt(u.getCreatedAt())
+                        .build())
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> stats() {
+        java.time.ZoneId ist = java.time.ZoneId.of("Asia/Kolkata");
+        Map<String, Object> s = new LinkedHashMap<>();
+        s.put("totalUsers", userRepository.count());
+        s.put("freelancers", userRepository.countByRole(UserRole.FREELANCER));
+        s.put("clients", userRepository.countByRole(UserRole.CLIENT));
+        s.put("activeUsers", userRepository.countByStatus(UserStatus.ACTIVE));
+        s.put("suspendedUsers", userRepository.countByStatus(UserStatus.SUSPENDED));
+        s.put("pendingKyc", userRepository.countByKycStatus(com.theunoia.identity.domain.KycStatus.PENDING_REVIEW));
+        s.put("verifiedKyc", userRepository.countByKycStatus(com.theunoia.identity.domain.KycStatus.VERIFIED));
+        java.time.YearMonth now = java.time.YearMonth.now(ist);
+        s.put("newThisMonth", userRepository.countByCreatedAtBetween(now.atDay(1).atStartOfDay(ist).toInstant(), java.time.Instant.now().plusSeconds(60)));
+        List<Map<String, Object>> monthly = new java.util.ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            java.time.YearMonth ym = now.minusMonths(i);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("month", ym.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + ym.getYear());
+            m.put("signups", userRepository.countByCreatedAtBetween(ym.atDay(1).atStartOfDay(ist).toInstant(), ym.plusMonths(1).atDay(1).atStartOfDay(ist).toInstant()));
+            monthly.add(m);
+        }
+        s.put("monthly", monthly);
+        return s;
     }
 
     @Transactional(readOnly = true)
@@ -80,16 +121,26 @@ public class UserService {
                         u.getFullName(),
                         u.getAvatarUrl(),
                         u.getRole().name(),
-                        titles.getOrDefault(u.getId(), companies.get(u.getId()))))
+                        titles.getOrDefault(u.getId(), companies.get(u.getId())),
+                        u.getEmail()))
                 .collect(Collectors.toList());
     }
 
     @Transactional
-    public void updateUserStatus(UUID userId, UserStatus status) {
+    public void updateUserStatus(UUID adminId, UUID userId, UserStatus status, String reason) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getId().equals(adminId)) throw new com.theunoia.common.exception.BadRequestException("You cannot change your own account status");
+        if (user.getRole() == UserRole.ADMIN) throw new com.theunoia.common.exception.BadRequestException("Admin accounts cannot be suspended here");
         user.setStatus(status);
         userRepository.save(user);
+        String why = reason == null || reason.isBlank() ? "." : ": " + reason.trim();
+        notifications.notify(userId, "ACCOUNT_" + status.name(),
+                status == UserStatus.SUSPENDED ? "Account suspended" : "Account status updated",
+                status == UserStatus.SUSPENDED
+                        ? "Your account was suspended" + why + " Contact support if you think this is a mistake."
+                        : "Your account is now " + status.name().toLowerCase().replace('_', ' ') + ".",
+                null);
     }
 
     private Map<String, Object> clientProfileView(ClientProfile c) {

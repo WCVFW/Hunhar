@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -39,6 +41,8 @@ public class ProjectService {
     private final ProjectViewEnricher enricher;
     private final NotificationPublisher notifications;
     private final InternalClient internalClient;
+    private final com.theunoia.project.repository.MilestoneRepository milestoneRepository;
+    private final com.theunoia.project.repository.DisputeRepository disputeRepository;
 
     public record SearchFilters(
             List<String> categories,
@@ -64,12 +68,122 @@ public class ProjectService {
                 .timelineDays(dto.getTimelineDays())
                 .skills(skillsStr)
                 .attachmentUrls(attachmentsStr)
-                .status(ProjectStatus.OPEN)
+                .status(Boolean.FALSE.equals(dto.getPublish()) ? ProjectStatus.DRAFT : ProjectStatus.OPEN)
                 .progressPercentage(0)
                 .bidCount(0)
                 .build();
 
         return projectRepository.save(project);
+    }
+
+    /** Client edits a draft, or an open project that has not received proposals yet. */
+    @Transactional
+    public Project updateProject(UUID projectId, AuthUser user, CreateProjectDto dto) {
+        Project p = access.requireClient(projectId, user);
+        boolean editable = p.getStatus() == ProjectStatus.DRAFT || (p.getStatus() == ProjectStatus.OPEN && p.getBidCount() == 0);
+        if (!editable) throw new BadRequestException("Projects can only be edited before freelancers start sending proposals");
+        p.setTitle(dto.getTitle().trim());
+        p.setDescription(dto.getDescription().trim());
+        p.setCategory(dto.getCategory());
+        p.setBudget(dto.getBudget());
+        p.setTimelineDays(dto.getTimelineDays());
+        p.setSkills(dto.getSkills() != null ? String.join(",", dto.getSkills()) : "");
+        if (dto.getAttachmentUrls() != null) p.setAttachmentUrls(String.join(",", dto.getAttachmentUrls()));
+        if (Boolean.TRUE.equals(dto.getPublish()) && p.getStatus() == ProjectStatus.DRAFT) p.setStatus(ProjectStatus.OPEN);
+        return enricher.project(projectRepository.save(p), user.id());
+    }
+
+    @Transactional
+    public Project publish(UUID projectId, AuthUser user) {
+        Project p = access.requireClient(projectId, user);
+        if (p.getStatus() != ProjectStatus.DRAFT) throw new BadRequestException("Only drafts can be published");
+        p.setStatus(ProjectStatus.OPEN);
+        return enricher.project(projectRepository.save(p), user.id());
+    }
+
+    /** Client cancels before hiring. Pending proposals are closed and freelancers notified. */
+    @Transactional
+    public Project cancelByClient(UUID projectId, AuthUser user) {
+        Project p = access.requireClient(projectId, user);
+        if (p.getStatus() != ProjectStatus.DRAFT && p.getStatus() != ProjectStatus.OPEN) {
+            throw new BadRequestException("A project that is in progress cannot be cancelled here. Raise a dispute if something went wrong.");
+        }
+        closeProject(p, "The client cancelled \"" + p.getTitle() + "\".");
+        return enricher.project(p, user.id());
+    }
+
+    /** Admin cancels any project that is not finished; funded but unpaid milestones are refunded to the client. */
+    @Transactional
+    public Project cancelByAdmin(UUID projectId, String reason) {
+        Project p = access.load(projectId);
+        if (p.getStatus() == ProjectStatus.COMPLETED || p.getStatus() == ProjectStatus.CANCELLED) {
+            throw new BadRequestException("This project is already " + p.getStatus().name().toLowerCase());
+        }
+        String why = reason == null || reason.isBlank() ? "Cancelled by Hunhar support" : reason.trim();
+        for (Milestone m : milestoneRepository.findByProjectId(projectId)) {
+            if (m.isFunded() && m.getStatus() != MilestoneStatus.PAID) {
+                internalClient.postChecked(internalClient.billing() + "/internal/escrow/refund",
+                        Map.of("clientId", p.getClientId().toString(), "amount", m.getAmount(),
+                                "projectId", projectId.toString(), "milestoneId", m.getId().toString(),
+                                "title", "\"" + p.getTitle() + "\" was cancelled"),
+                        new ParameterizedTypeReference<Map<String, Object>>() {});
+                m.setFunded(false);
+                milestoneRepository.save(m);
+            }
+        }
+        closeProject(p, "\"" + p.getTitle() + "\" was cancelled: " + why);
+        notifications.notify(p.getClientId(), "PROJECT_CANCELLED", "Project cancelled", "\"" + p.getTitle() + "\" was cancelled: " + why, "/client/projects");
+        if (p.getAwardedFreelancerId() != null) {
+            notifications.notify(p.getAwardedFreelancerId(), "PROJECT_CANCELLED", "Project cancelled", "\"" + p.getTitle() + "\" was cancelled: " + why, "/freelancer/projects");
+        }
+        return enricher.project(p, null);
+    }
+
+    private void closeProject(Project p, String message) {
+        p.setStatus(ProjectStatus.CANCELLED);
+        p.setEndDate(Instant.now());
+        projectRepository.save(p);
+        for (Bid b : bidRepository.findByProjectId(p.getId())) {
+            if (b.getStatus() == BidStatus.SUBMITTED || b.getStatus() == BidStatus.SHORTLISTED) {
+                b.setStatus(BidStatus.REJECTED);
+                bidRepository.save(b);
+                notifications.notify(b.getFreelancerId(), "BID_REJECTED", "Project closed", message, "/freelancer/bids");
+            }
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Project> adminList(ProjectStatus status, String search) {
+        String q = search == null || search.isBlank() ? null : search.trim().toLowerCase();
+        List<Project> all = new ArrayList<>(projectRepository.findAll(Sort.by("createdAt").descending()));
+        all.removeIf(p -> (status != null && p.getStatus() != status)
+                || (q != null && !p.getTitle().toLowerCase().contains(q) && !p.getCategory().toLowerCase().contains(q)));
+        return enricher.projects(all.size() > 500 ? new ArrayList<>(all.subList(0, 500)) : all, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> stats() {
+        ZoneId ist = ZoneId.of("Asia/Kolkata");
+        Map<String, Object> s = new LinkedHashMap<>();
+        s.put("totalProjects", projectRepository.count());
+        for (ProjectStatus st : ProjectStatus.values()) {
+            s.put(st.name().toLowerCase() + "Projects", projectRepository.countByStatus(st));
+        }
+        s.put("openDisputes", disputeRepository.countByStatus("OPEN"));
+        YearMonth now = YearMonth.now(ist);
+        List<Map<String, Object>> monthly = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            YearMonth ym = now.minusMonths(i);
+            Instant from = ym.atDay(1).atStartOfDay(ist).toInstant();
+            Instant to = ym.plusMonths(1).atDay(1).atStartOfDay(ist).toInstant();
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("month", ym.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + ym.getYear());
+            m.put("projects", projectRepository.countByCreatedAtBetween(from, to));
+            m.put("proposals", bidRepository.countByCreatedAtBetween(from, to));
+            monthly.add(m);
+        }
+        s.put("monthly", monthly);
+        return s;
     }
 
     /**
@@ -145,7 +259,7 @@ public class ProjectService {
 
     @Transactional(readOnly = true)
     public List<Project> getClientProjects(UUID clientId) {
-        return enricher.projects(projectRepository.findByClientId(clientId), clientId);
+        return enricher.projects(projectRepository.findByClientIdOrderByCreatedAtDesc(clientId), clientId);
     }
 
     /** Projects the freelancer is delivering: awarded to them, or joined as an accepted team member. */

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Search,
   Bell,
@@ -10,11 +10,52 @@ import {
   LogOut,
   User,
 } from 'lucide-react'
-import { logout } from '../../services/api'
+import { clientApi, fileUrl, logout, notificationsApi, tokenStorage } from '../../services/api'
+
+const POLL_MS = 60_000
 
 export default function ClientTopNavbar(): React.JSX.Element {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const [name, setName] = useState<string>(() => tokenStorage.getUser()?.fullName || '')
+  const [avatarUrl, setAvatarUrl] = useState<string>(() => tokenStorage.getUser()?.avatarUrl || '')
+  const [company, setCompany] = useState('')
+  const [unread, setUnread] = useState(0)
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    const loadProfile = () =>
+      clientApi
+        .getProfile()
+        .then((p) => {
+          setName(p.fullName)
+          setAvatarUrl(p.avatarUrl || '')
+          setCompany(p.companyName || '')
+        })
+        .catch(() => {})
+    const loadUnread = () =>
+      notificationsApi
+        .getNotifications(20)
+        .then((list) => setUnread(list.filter((n) => !n.read).length))
+        .catch(() => {})
+    loadProfile()
+    loadUnread()
+    const t = window.setInterval(loadUnread, POLL_MS)
+    window.addEventListener('hunhar:profile-updated', loadProfile)
+    window.addEventListener('hunhar:notifications-changed', loadUnread)
+    return () => {
+      window.clearInterval(t)
+      window.removeEventListener('hunhar:profile-updated', loadProfile)
+      window.removeEventListener('hunhar:notifications-changed', loadUnread)
+    }
+  }, [])
+
+  const initial = (name || 'C').trim().charAt(0).toUpperCase()
+  const avatar = (size: string) =>
+    avatarUrl ? (
+      <img src={fileUrl(avatarUrl)} alt={name} className={`${size} rounded-full object-cover ring-2 ring-[#E5DACD]`} />
+    ) : null
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -34,29 +75,39 @@ export default function ClientTopNavbar(): React.JSX.Element {
   return (
     <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8 font-manrope">
       {/* Search Input Box */}
-      <div className="relative min-w-0 flex-1 max-w-[420px]">
+      <form
+        role="search"
+        className="relative min-w-0 flex-1 max-w-[420px]"
+        onSubmit={(e) => {
+          e.preventDefault()
+          navigate(`/client/projects${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''}`)
+        }}
+      >
         <Search
           size={16}
           className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E8376]"
         />
         <input
           type="text"
-          placeholder="Search projects, clients, bids..."
+          placeholder="Search your projects..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search your projects"
           className="h-9 sm:h-11 w-full rounded-full border border-[#E5DACD] bg-white pl-9 sm:pl-11 pr-3 sm:pr-4 font-manrope text-[12.5px] sm:text-[14px] text-[#08182B] placeholder-[#9D9183] shadow-xs transition-all focus:border-[#C06B3E] focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20"
         />
-      </div>
+      </form>
 
       {/* Top Badges & Client Profile */}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {/* Notification Bell */}
-        <button
-          type="button"
+        <Link
+          to="/client/notifications"
           className="relative flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full border border-[#E5DACD] bg-white text-[#524B42] shadow-xs transition-colors hover:bg-[#F8F4EE]"
-          aria-label="Notifications"
+          aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         >
           <Bell size={16} />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E04F36] ring-2 ring-white" />
-        </button>
+          {unread > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E04F36] ring-2 ring-white" />}
+        </Link>
 
         {/* Client Profile Avatar & Dropdown */}
         <div className="relative shrink-0" ref={dropdownRef}>
@@ -67,9 +118,11 @@ export default function ClientTopNavbar(): React.JSX.Element {
             aria-expanded={isDropdownOpen}
             aria-label="Client Profile Menu"
           >
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-[#08182B] font-manrope text-[13px] sm:text-[14px] font-bold text-white shadow-xs ring-2 ring-[#E5DACD]">
-              A
-            </div>
+            {avatar('h-9 w-9 sm:h-10 sm:w-10') || (
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-[#08182B] font-manrope text-[13px] sm:text-[14px] font-bold text-white shadow-xs ring-2 ring-[#E5DACD]">
+                {initial}
+              </div>
+            )}
             <svg
               className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#8E8376] transition-transform duration-200 ${
                 isDropdownOpen ? 'rotate-180 text-[#C06B3E]' : ''
@@ -91,20 +144,22 @@ export default function ClientTopNavbar(): React.JSX.Element {
               {/* Client Profile Summary */}
               <div className="flex flex-col">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#08182B] text-[16px] font-bold text-white ring-2 ring-[#F0ECE6]">
-                    A
-                  </div>
+                  {avatar('h-12 w-12 shrink-0') || (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#08182B] text-[16px] font-bold text-white ring-2 ring-[#F0ECE6]">
+                      {initial}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <h4 className="truncate font-manrope text-[15px] font-bold text-[#08182B]">
-                        Alex Rivers
+                        {name || 'Client'}
                       </h4>
                       <span className="rounded-full bg-[#F0FDF4] px-1.5 py-0.2 text-[10px] font-bold text-[#16A34A] border border-[#86EFAC]">
                         Client
                       </span>
                     </div>
                     <p className="mt-0.5 line-clamp-1 font-manrope text-[11.5px] text-[#7A7065]">
-                      Founder @ NovaTech Inc.
+                      {company || tokenStorage.getUser()?.email || ''}
                     </p>
                   </div>
                 </div>
@@ -114,7 +169,7 @@ export default function ClientTopNavbar(): React.JSX.Element {
                   onClick={() => setIsDropdownOpen(false)}
                   className="mt-3 flex h-8 w-full items-center justify-center rounded-full border border-[#C06B3E] font-manrope text-[12px] font-bold text-[#C06B3E] transition-all hover:bg-[#C06B3E] hover:text-white active:scale-98"
                 >
-                  View Profile
+                  Company Settings
                 </Link>
               </div>
 

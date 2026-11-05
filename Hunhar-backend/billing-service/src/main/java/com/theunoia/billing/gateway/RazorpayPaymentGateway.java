@@ -62,6 +62,11 @@ public class RazorpayPaymentGateway implements PaymentGateway {
     }
 
     @Override
+    public boolean isLive() {
+        return keyId.startsWith("rzp_live_");
+    }
+
+    @Override
     public boolean isMock() {
         return false;
     }

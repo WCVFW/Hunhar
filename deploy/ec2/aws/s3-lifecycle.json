@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-hunhar-db-backups",
+      "Filter": { "Prefix": "mysql-backups/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 8 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}

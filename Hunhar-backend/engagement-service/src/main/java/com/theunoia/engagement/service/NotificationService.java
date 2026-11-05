@@ -36,10 +36,9 @@ public class NotificationService {
         return notificationRepository.save(notification);
     }
 
-    public void triggerWhatsAppAlert(String mobileNumber, String templateName, Map<String, String> params) {
-        if (mobileNumber != null && !mobileNumber.isBlank()) {
-            whatsAppSender.sendTemplateNotification(mobileNumber, templateName, params);
-        }
+    public boolean triggerWhatsAppAlert(String mobileNumber, String templateName, Map<String, String> params) {
+        if (mobileNumber == null || mobileNumber.isBlank() || templateName == null || templateName.isBlank()) return false;
+        return whatsAppSender.sendTemplateNotification(mobileNumber, templateName, params);
     }
 
     public List<Notification> getUserNotifications(UUID userId, int limit) {

@@ -2,6 +2,9 @@ server:
   port: ${PORT:8083}
 
 spring:
+  config:
+    # Secrets and settings come from Hunhar-backend/.env (see .env.example). Real environment variables override it.
+    import: "optional:file:.env[.properties],optional:file:../.env[.properties]"
   application:
     name: billing-service
   datasource:
@@ -19,6 +22,9 @@ spring:
     show-sql: false
 
 theunoia:
+  internal:
+    # Shared key for service-to-service /internal/** calls (same value in every service)
+    key: ${INTERNAL_API_KEY:hunhar-internal-dev-key-change-me}
   payments:
     # Simulated payments when no Razorpay keys are set. Set PAYMENTS_ALLOW_MOCK=false in production.
     allow-mock: ${PAYMENTS_ALLOW_MOCK:true}

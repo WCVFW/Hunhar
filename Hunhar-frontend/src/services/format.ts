@@ -126,8 +126,3 @@ export const CATEGORY_GROUPS: Record<string, string[]> = {
   video: ['Motion Design'],
 }
 
-/** Credits a proposal costs (keep in sync with CreditClient.CREDITS_PER_BID). */
-export const CREDITS_PER_BID = 2
-
-/** Platform fee taken from freelancer earnings (keep in sync with WalletService). */
-export const PLATFORM_FEE_RATE = 0.1

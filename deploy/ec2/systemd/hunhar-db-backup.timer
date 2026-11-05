@@ -1,0 +1,11 @@
+# Every night at 02:00 India time. Change the time here, then: sudo systemctl daemon-reload
+[Unit]
+Description=Nightly Hunhar MySQL backup (02:00 IST)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Kolkata
+# If the server was off at 02:00, run as soon as it is back
+Persistent=true
+
+[Install]
+WantedBy=timers.target

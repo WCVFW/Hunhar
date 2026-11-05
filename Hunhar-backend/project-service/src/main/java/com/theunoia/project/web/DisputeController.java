@@ -1,12 +1,14 @@
 package com.theunoia.project.web;
 
 import com.theunoia.common.dto.ApiResponse;
+import com.theunoia.common.exception.ForbiddenException;
 import com.theunoia.common.security.AuthUser;
 import com.theunoia.common.security.CurrentUser;
 import com.theunoia.project.domain.Dispute;
 import com.theunoia.project.dto.CreateDisputeDto;
 import com.theunoia.project.service.DisputeService;
 import jakarta.validation.Valid;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,19 +16,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+import static com.theunoia.project.service.ProjectAccessService.requireUser;
+
 @RestController
 @RequestMapping("/api/v1/disputes")
 @RequiredArgsConstructor
 public class DisputeController {
 
     private final DisputeService disputeService;
-    private final com.theunoia.project.service.ProjectAccessService access;
-
-    private static void requireAdmin(AuthUser user) {
-        if (user == null || !user.hasRole("ADMIN")) {
-            throw new com.theunoia.common.exception.ForbiddenException("Admin access required");
-        }
-    }
 
     @PostMapping("/project/{projectId}")
     public ResponseEntity<ApiResponse<Dispute>> raiseDispute(
@@ -34,31 +31,41 @@ public class DisputeController {
             @PathVariable UUID projectId,
             @Valid @RequestBody CreateDisputeDto dto
     ) {
-        access.requireParticipant(projectId, currentUser);
-        Dispute dispute = disputeService.raiseDispute(projectId, currentUser.id(), dto);
-        return ResponseEntity.ok(ApiResponse.ok("Dispute submitted to administration", dispute));
+        return ResponseEntity.ok(ApiResponse.ok("Dispute submitted. Hunhar support will review it.",
+                disputeService.raiseDispute(projectId, requireUser(currentUser), dto)));
     }
 
     @GetMapping("/project/{projectId}")
     public ResponseEntity<ApiResponse<List<Dispute>>> getProjectDisputes(@CurrentUser AuthUser currentUser, @PathVariable UUID projectId) {
-        access.requireParticipant(projectId, currentUser);
-        return ResponseEntity.ok(ApiResponse.ok(disputeService.getProjectDisputes(projectId)));
+        return ResponseEntity.ok(ApiResponse.ok(disputeService.getProjectDisputes(projectId, requireUser(currentUser))));
     }
 
+    /** Admin: all disputes, optional ?status=OPEN|RESOLVED|DISMISSED */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Dispute>>> getAllDisputes(@CurrentUser AuthUser currentUser) {
+    public ResponseEntity<ApiResponse<List<Dispute>>> getAllDisputes(@CurrentUser AuthUser currentUser,
+                                                                     @RequestParam(required = false) String status) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(ApiResponse.ok(disputeService.getAllDisputes()));
+        return ResponseEntity.ok(ApiResponse.ok(disputeService.getAllDisputes(status)));
     }
 
     @PostMapping("/{disputeId}/resolve")
     public ResponseEntity<ApiResponse<Dispute>> resolveDispute(
             @CurrentUser AuthUser currentUser,
             @PathVariable UUID disputeId,
-            @RequestParam String resolutionNotes,
-            @RequestParam String status
+            @RequestBody ResolveRequest req
     ) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(ApiResponse.ok(disputeService.resolveDispute(disputeId, resolutionNotes, status)));
+        return ResponseEntity.ok(ApiResponse.ok("Dispute closed",
+                disputeService.resolveDispute(disputeId, req.getResolutionNotes(), req.getStatus())));
+    }
+
+    private static void requireAdmin(AuthUser user) {
+        if (!requireUser(user).hasRole("ADMIN")) throw new ForbiddenException("Admin access required");
+    }
+
+    @Data
+    public static class ResolveRequest {
+        private String resolutionNotes;
+        private String status;
     }
 }

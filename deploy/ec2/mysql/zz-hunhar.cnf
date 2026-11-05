@@ -1,0 +1,19 @@
+# Hunhar: MySQL 8 on the same EC2 instance as the backend.
+# Installed to /etc/mysql/mysql.conf.d/zz-hunhar.cnf by setup-server.sh
+[mysqld]
+# Never reachable from the internet; only the local services connect
+bind-address            = 127.0.0.1
+mysqlx-bind-address     = 127.0.0.1
+
+character-set-server    = utf8mb4
+collation-server        = utf8mb4_0900_ai_ci
+
+# Sized for a 4 GB instance that also runs 5 JVMs (t3.medium). Raise on a bigger instance.
+innodb_buffer_pool_size = 384M
+innodb_log_buffer_size  = 16M
+max_connections         = 150
+# Saves ~200 MB RAM
+performance_schema      = OFF
+
+# Binary logs are not needed for a single server; daily dumps go to S3
+skip-log-bin

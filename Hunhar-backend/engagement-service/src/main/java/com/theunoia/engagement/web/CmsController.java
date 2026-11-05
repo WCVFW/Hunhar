@@ -1,6 +1,10 @@
 package com.theunoia.engagement.web;
 
 import com.theunoia.common.dto.ApiResponse;
+import com.theunoia.common.exception.ForbiddenException;
+import com.theunoia.common.exception.UnauthorizedException;
+import com.theunoia.common.security.AuthUser;
+import com.theunoia.common.security.CurrentUser;
 import com.theunoia.engagement.domain.ContactInquiry;
 import com.theunoia.engagement.domain.LandingPageContent;
 import com.theunoia.engagement.service.CmsService;
@@ -24,11 +28,14 @@ public class CmsController {
         return ResponseEntity.ok(ApiResponse.ok(cmsService.getLandingPage(slug)));
     }
 
+    /** Admin: create or replace a CMS page. */
     @PostMapping("/pages/{slug}")
     public ResponseEntity<ApiResponse<LandingPageContent>> savePage(
+            @CurrentUser AuthUser user,
             @PathVariable String slug,
             @RequestBody SavePageRequest req
     ) {
+        requireAdmin(user);
         LandingPageContent page = cmsService.saveLandingPage(slug, req.getTitle(), req.getContentJson(), req.getMetaDescription(), req.getMetaKeywords());
         return ResponseEntity.ok(ApiResponse.ok("Page updated", page));
     }
@@ -39,8 +46,10 @@ public class CmsController {
         return ResponseEntity.ok(ApiResponse.ok("Thank you for your inquiry. Our team will contact you shortly.", inquiry));
     }
 
+    /** Admin: contact-form submissions (contain personal data). */
     @GetMapping("/inquiries")
-    public ResponseEntity<ApiResponse<List<ContactInquiry>>> getInquiries() {
+    public ResponseEntity<ApiResponse<List<ContactInquiry>>> getInquiries(@CurrentUser AuthUser user) {
+        requireAdmin(user);
         return ResponseEntity.ok(ApiResponse.ok(cmsService.getAllInquiries()));
     }
 
@@ -80,5 +89,10 @@ public class CmsController {
         private String phone;
         private String subject;
         private String message;
+    }
+
+    private static void requireAdmin(AuthUser user) {
+        if (user == null) throw new UnauthorizedException("Authentication required");
+        if (!user.hasRole("ADMIN")) throw new ForbiddenException("Admin access required");
     }
 }

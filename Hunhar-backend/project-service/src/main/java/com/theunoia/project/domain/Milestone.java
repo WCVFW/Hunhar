@@ -39,4 +39,17 @@ public class Milestone extends BaseEntity {
     @Column(nullable = false, length = 30)
     @Builder.Default
     private MilestoneStatus status = MilestoneStatus.PENDING;
+
+    /** True once the client has moved the milestone amount into escrow. */
+    private boolean funded;
+
+    private Instant fundedAt;
+
+    private Instant paidAt;
+
+    /** When work was last submitted; used for auto-approval if the client does not respond. */
+    private Instant submittedAt;
+
+    @Column(length = 40)
+    private String invoiceNumber;
 }

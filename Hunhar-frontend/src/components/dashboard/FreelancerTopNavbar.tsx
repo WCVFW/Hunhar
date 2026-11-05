@@ -28,6 +28,7 @@ import {
   type AppNotification,
 } from '../../services/api'
 import { formatINR, initials, timeAgo } from '../../services/format'
+import { hideIdsInPath } from '../../services/routeIds'
 
 const POLL_MS = 60_000
 
@@ -86,7 +87,9 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
     window.addEventListener('hunhar:profile-updated', onProfile)
     window.addEventListener('hunhar:notifications-changed', onNotifications)
     window.addEventListener('focus', loadBalances)
+    window.addEventListener('hunhar:balances-changed', loadBalances)
     return () => {
+      window.removeEventListener('hunhar:balances-changed', loadBalances)
       window.clearInterval(t)
       window.removeEventListener('hunhar:profile-updated', onProfile)
       window.removeEventListener('hunhar:notifications-changed', onNotifications)
@@ -239,7 +242,7 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
                   notifications.slice(0, 5).map((item) => (
                     <Link
                       key={item.id}
-                      to={item.link && item.link.startsWith('/freelancer/') ? item.link : '/freelancer/notifications'}
+                      to={item.link && item.link.startsWith('/freelancer/') ? hideIdsInPath(item.link) : '/freelancer/notifications'}
                       onClick={() => openNotification(item)}
                       className={`flex items-start gap-3 p-2.5 rounded-[14px] transition-colors ${
                         item.read ? 'hover:bg-[#FAF8F5]' : 'bg-[#FFFBF7] hover:bg-[#FFF7ED]'

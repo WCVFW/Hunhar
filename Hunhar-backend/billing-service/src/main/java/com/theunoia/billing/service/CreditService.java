@@ -19,30 +19,32 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CreditService {
 
-    public static final int STARTER_CREDITS = 10;
-
     private final CreditWalletRepository creditWalletRepository;
     private final CreditLedgerRepository creditLedgerRepository;
     private final CreditPackageRepository creditPackageRepository;
+    private final PlatformSettingsService settings;
 
     @Transactional
     public CreditWallet getOrCreateWallet(UUID userId) {
         return creditWalletRepository.findById(userId)
                 .orElseGet(() -> {
+                    int starter = settings.getInt(PlatformSettingsService.STARTER_CREDITS);
                     CreditWallet wallet = creditWalletRepository.save(CreditWallet.builder()
                             .userId(userId)
-                            .balance(STARTER_CREDITS)
+                            .balance(starter)
                             .totalPurchased(0)
                             .totalConsumed(0)
                             .build());
-                    record(userId, STARTER_CREDITS, "Welcome bonus — starter credits", null, wallet.getBalance());
+                    if (starter > 0) record(userId, starter, "Welcome bonus — starter credits", null, wallet.getBalance());
                     return wallet;
                 });
     }
 
     /** Row-locked so two simultaneous bids cannot spend the same credits. */
     @Transactional
-    public boolean consumeCredits(UUID userId, UUID projectId, int creditsToDeduct) {
+    public boolean consumeCredits(UUID userId, UUID projectId) {
+        int creditsToDeduct = settings.getInt(PlatformSettingsService.CREDITS_PER_BID);
+        if (creditsToDeduct == 0) return true;
         getOrCreateWallet(userId);
         CreditWallet wallet = creditWalletRepository.findByIdForUpdate(userId).orElseThrow();
         if (wallet.getBalance() < creditsToDeduct) {
@@ -81,6 +83,28 @@ public class CreditService {
 
     public List<CreditLedger> getHistory(UUID userId) {
         return creditLedgerRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CreditPackage> getAllPackages() {
+        getAvailablePackages();
+        List<CreditPackage> all = creditPackageRepository.findAll();
+        all.sort((a, b) -> a.getPriceInInr().compareTo(b.getPriceInInr()));
+        return all;
+    }
+
+    @Transactional
+    public CreditPackage savePackage(UUID id, String name, int credits, BigDecimal price, boolean active) {
+        if (name == null || name.isBlank() || name.length() > 60) throw new com.theunoia.common.exception.BadRequestException("Package name is required (max 60 characters)");
+        if (credits < 1 || credits > 10000) throw new com.theunoia.common.exception.BadRequestException("Credits must be between 1 and 10,000");
+        if (price == null || price.compareTo(BigDecimal.ONE) < 0) throw new com.theunoia.common.exception.BadRequestException("Price must be at least ₹1");
+        CreditPackage pkg = id == null ? new CreditPackage()
+                : creditPackageRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Credit package not found"));
+        pkg.setName(name.trim());
+        pkg.setCredits(credits);
+        pkg.setPriceInInr(price);
+        pkg.setActive(active);
+        return creditPackageRepository.save(pkg);
     }
 
     @Transactional

@@ -18,6 +18,7 @@ import {
   isOverdue,
   splitList,
 } from '../../services/format'
+import { toRouteId } from '../../services/routeIds'
 
 interface ActiveProjectCard {
   id: string
@@ -283,7 +284,7 @@ export default function ActiveProjectsPage(): React.JSX.Element {
                   </span>
 
                   <Link
-                    to={`/freelancer/projects/${project.id}`}
+                    to={`/freelancer/projects/${toRouteId(project.id)}`}
                     className="flex items-center gap-1 font-manrope text-[12px] font-extrabold text-[#08182B] no-underline transition-colors hover:text-[#C06B3E]"
                   >
                     Open workspace
@@ -319,7 +320,7 @@ export default function ActiveProjectsPage(): React.JSX.Element {
                   deadlines.map((item) => (
                     <Link
                       key={item.id}
-                      to={`/freelancer/projects/${item.id}`}
+                      to={`/freelancer/projects/${toRouteId(item.id)}`}
                       className="flex items-center justify-between gap-3 rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-3 no-underline transition-colors hover:bg-white"
                     >
                       <div className="flex items-center gap-3">

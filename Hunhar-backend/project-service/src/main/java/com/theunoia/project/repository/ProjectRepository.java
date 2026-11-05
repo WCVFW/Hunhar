@@ -16,6 +16,9 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, org.spr
     List<Project> findByClientId(UUID clientId);
     List<Project> findByAwardedFreelancerId(UUID freelancerId);
     List<Project> findByStatus(ProjectStatus status);
+    long countByStatus(ProjectStatus status);
+    long countByCreatedAtBetween(java.time.Instant from, java.time.Instant to);
+    List<Project> findByClientIdOrderByCreatedAtDesc(UUID clientId);
 
     @Query("SELECT p FROM Project p WHERE p.status = 'OPEN' AND " +
             "(:category IS NULL OR p.category = :category) AND " +
