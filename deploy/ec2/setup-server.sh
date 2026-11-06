@@ -176,7 +176,13 @@ chmod 600 "$ETC/backup.env"
 systemctl enable --now hunhar-db-backup.timer
 
 echo "==> nginx"
-install -m 644 "$HERE/nginx/hunhar.conf" /etc/nginx/sites-available/hunhar.conf
+install -m 644 "$HERE/nginx/hunhar-site.conf" /etc/nginx/snippets/hunhar-site.conf
+# After certbot has added HTTPS to hunhar.conf, never overwrite it (that would drop the certificates)
+if grep -q "managed by Certbot" /etc/nginx/sites-available/hunhar.conf 2>/dev/null; then
+  echo "   hunhar.conf has HTTPS from certbot — kept as it is"
+else
+  install -m 644 "$HERE/nginx/hunhar.conf" /etc/nginx/sites-available/hunhar.conf
+fi
 ln -sf /etc/nginx/sites-available/hunhar.conf /etc/nginx/sites-enabled/hunhar.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t

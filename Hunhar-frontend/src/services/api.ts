@@ -5,8 +5,9 @@
 
 import { secureFetch } from './secureTransport'
 
-// Production builds talk to the EC2 backend at api.hunhar.in unless VITE_API_BASE_URL says otherwise
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://api.hunhar.in' : 'http://localhost:8080')
+// Empty (production, .env.production) = the website's own address: nginx passes /api/* to the gateway, so the
+// site works on https://www.hunhar.in and on the server's IP alike. A full URL calls another host instead.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8080')).replace(/\/$/, '')
 
 export interface ApiResponse<T> {
   success: boolean

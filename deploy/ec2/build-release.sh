@@ -2,7 +2,7 @@
 # =============================================================================
 # Builds ONE file to deploy:  release/hunhar-release-<date>-<time>.tar.gz
 #   app/<service>.jar   5 backend services (built with Maven)
-#   web/                the website (Vite production build -> calls https://api.hunhar.in)
+#   web/                the website (Vite production build -> calls /api/ on its own address)
 #   deploy/ec2/         server scripts and configs
 #   install.sh          run this on the server
 #
@@ -30,7 +30,8 @@ done
 echo "==> Building website (Vite, production)"
 ( cd "$ROOT/Hunhar-frontend" && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build )
 cp -r "$ROOT/Hunhar-frontend/dist" "$STAGE/web"
-grep -q 'api.hunhar.in' "$STAGE"/web/assets/*.js || { echo "Website build does not point at https://api.hunhar.in"; exit 1; }
+# Production calls the API on its own address (/api/...); a dev URL must never ship
+! grep -q 'localhost:8080' "$STAGE"/web/assets/*.js || { echo "Website build still calls http://localhost:8080"; exit 1; }
 
 echo "==> Adding server scripts"
 cp -r "$ROOT/deploy/ec2" "$STAGE/deploy/ec2"
