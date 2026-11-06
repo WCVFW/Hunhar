@@ -67,11 +67,12 @@ if ! command -v aws >/dev/null 2>&1; then
 fi
 
 echo "==> Service user and folders"
-id -u hunhar >/dev/null 2>&1 || useradd --system --home-dir "$APP" --shell /usr/sbin/nologin hunhar
+# Services run as hunhar-app: no login, no sudo. (The admin login user "hunhar" is separate.)
+id -u hunhar-app >/dev/null 2>&1 || useradd --system --home-dir "$APP" --shell /usr/sbin/nologin hunhar-app
 mkdir -p "$APP/app" "$APP/uploads" "$APP/backups" "$ETC" /var/www/hunhar
 # The gateway creates its encryption key file (.api-enc-key) in /opt/hunhar, so the service user owns it
-chown hunhar:hunhar "$APP"
-chown -R hunhar:hunhar "$APP/app" "$APP/uploads"
+chown hunhar-app:hunhar-app "$APP"
+chown -R hunhar-app:hunhar-app "$APP/app" "$APP/uploads"
 chown root:root "$APP/backups"
 chmod 700 "$APP/backups" "$ETC"
 
@@ -138,7 +139,7 @@ else
   sed -i -E "s|^DB_USER=.*|DB_USER=hunhar|; s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASS}|; s|^DB_HOST=.*|DB_HOST=127.0.0.1|" "$APP/.env"
   NEW_ENV=0
 fi
-chown hunhar:hunhar "$APP/.env"
+chown hunhar-app:hunhar-app "$APP/.env"
 chmod 600 "$APP/.env"
 
 echo "==> systemd services"

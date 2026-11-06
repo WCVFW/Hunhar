@@ -53,7 +53,7 @@ must allow your home IP.
 
 | ID (type exactly) | Kind | Value |
 |---|---|---|
-| `hunhar-ec2-ssh` | SSH Username with private key | Username `ubuntu`; Private Key → Enter directly → the whole `hunhar.pem` |
+| `hunhar-ec2-ssh` | SSH Username with private key | Username `hunhar`; Private Key → Enter directly → the whole `hunhar.pem` |
 | `hunhar-ec2-host` | Secret text | The **live** server's Elastic IP |
 | `github-hunhar` | Username with password | GitHub username + a fine-grained token (repo `WCVFW/Hunhar`, *Contents: Read*, *Webhooks: Read*) |
 
@@ -92,7 +92,7 @@ git push origin main          # Jenkins builds, deploys and checks — watch it 
 ## 6. Rollback
 
 ```bash
-ssh -i hunhar.pem ubuntu@<live-ip>
+ssh -i hunhar.pem hunhar@<live-ip>
 ls -1dt ~/releases/hunhar-release-*/            # newest first
 sudo bash ~/releases/<previous-release>/install.sh
 ```
@@ -109,7 +109,7 @@ Then `git revert` the bad commit and push, so the next automatic deploy does not
 | Build release | `mvn` / `npm` not found | Re-run `setup-jenkins-server.sh`; restart Jenkins |
 | Build release | `No such DSL method 'githubPush'` | Install the **GitHub** plugin (Manage Jenkins → Plugins) |
 | Deploy | `Connection timed out` | Live server's port 22 does not allow the Jenkins server (step 1.3) |
-| Deploy | `Permission denied (publickey)` | `hunhar-ec2-ssh` must be user `ubuntu` + the live instance's `.pem` |
+| Deploy | `Permission denied (publickey)` | `hunhar-ec2-ssh` must be user `hunhar` + the live instance's `.pem` |
 | Deploy | `This server was never set up` | Step 0 |
 | Deploy | `<service> NOT UP` + doctor output | Read the FAIL lines; on the server `journalctl -u hunhar@<service> -n 100 --no-pager` |
 | Check | `FAILED https://www.hunhar.in` | DNS/HTTPS for the live site not ready — untick `CHECK_PUBLIC_URLS` until then |

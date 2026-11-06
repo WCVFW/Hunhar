@@ -9,8 +9,8 @@ Requires=mysql.service
 PartOf=hunhar.target
 
 [Service]
-User=hunhar
-Group=hunhar
+User=hunhar-app
+Group=hunhar-app
 WorkingDirectory=/opt/hunhar
 Environment="JAVA_OPTS=-Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -Duser.timezone=Asia/Kolkata"
 ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/hunhar/app/%i.jar

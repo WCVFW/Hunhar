@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 # =============================================================================
-# One-time setup of a SEPARATE small Ubuntu 24.04 EC2 instance as the Hunhar Jenkins server,
+# One-time setup of Jenkins for Hunhar on Ubuntu 24.04/26.04 — its own small EC2, or the live server (--port 8090),
 # reachable at https://jenkins.hunhar.in so GitHub can call its webhook on every push to main.
 #
-#   sudo bash setup-jenkins-server.sh --email you@example.com
+#   sudo bash setup-jenkins-server.sh --email you@example.com                 # its own server
+#   sudo bash setup-jenkins-server.sh --email you@example.com --port 8090     # on the live server (8080 = API gateway)
 #
 # Installs: Java 21 (Jenkins needs 21+, it also builds the Java 17 backend), Maven, Node.js 22, Git,
-# Jenkins LTS (listening on 127.0.0.1:8080 only), nginx in front with HTTPS (certbot), 4 GB swap.
+# Jenkins LTS (listening on 127.0.0.1 only, port 8080 or --port), nginx in front with HTTPS (certbot), 4 GB swap.
 # Before running: DNS A record  jenkins.hunhar.in -> this instance's Elastic IP.
 # =============================================================================
 set -euo pipefail
 
 DOMAIN="jenkins.hunhar.in"
 EMAIL=""
+PORT=8080
 while [ $# -gt 0 ]; do
   case "$1" in
     --email) EMAIL="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
+    --port) PORT="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -41,6 +44,18 @@ if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.spli
   DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 fi
 
+# Port + localhost-only BEFORE the package is installed: its first start must not grab 8080
+# (taken by the Hunhar API gateway when Jenkins shares the live server). nginx is the public door.
+if [ "$PORT" = 8080 ] && ss -ltn 2>/dev/null | grep -q '127.0.0.1:8080\|\*:8080\|0.0.0.0:8080\|:::8080'; then
+  echo "Port 8080 is taken (the Hunhar API gateway?) — re-run with --port 8090"; exit 1
+fi
+mkdir -p /etc/systemd/system/jenkins.service.d
+cat > /etc/systemd/system/jenkins.service.d/override.conf <<EOF
+[Service]
+Environment="JENKINS_LISTEN_ADDRESS=127.0.0.1"
+Environment="JENKINS_PORT=${PORT}"
+Environment="JAVA_OPTS=-Djava.awt.headless=true -Xmx1g -Duser.timezone=Asia/Kolkata"
+EOF
 echo "==> Jenkins LTS (official repository, 2026 signing key)"
 mkdir -p /etc/apt/keyrings
 wget -qO /etc/apt/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
@@ -49,20 +64,12 @@ echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y jenkins
 
-# Jenkins only on localhost; nginx is the public door (HTTPS)
-mkdir -p /etc/systemd/system/jenkins.service.d
-cat > /etc/systemd/system/jenkins.service.d/override.conf <<'EOF'
-[Service]
-Environment="JENKINS_LISTEN_ADDRESS=127.0.0.1"
-Environment="JENKINS_PORT=8080"
-Environment="JAVA_OPTS=-Djava.awt.headless=true -Xmx1g -Duser.timezone=Asia/Kolkata"
-EOF
 systemctl daemon-reload
 systemctl enable jenkins
 systemctl restart jenkins
 
 echo "==> nginx for $DOMAIN"
-sed "s/jenkins.hunhar.in/$DOMAIN/g" "$HERE/nginx-jenkins.conf" > /etc/nginx/sites-available/jenkins.conf
+sed -e "s/jenkins.hunhar.in/$DOMAIN/g" -e "s/127.0.0.1:8080/127.0.0.1:$PORT/" "$HERE/nginx-jenkins.conf" > /etc/nginx/sites-available/jenkins.conf
 ln -sf /etc/nginx/sites-available/jenkins.conf /etc/nginx/sites-enabled/jenkins.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t

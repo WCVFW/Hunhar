@@ -58,7 +58,7 @@ if [ "$BACKEND" = 1 ]; then
   for item in "${SERVICES[@]}"; do
     name="${item%%:*}"
     if [ -n "$RELEASE" ]; then jar="$RELEASE/app/$name.jar"; else jar="$SRC/Hunhar-backend/$name/target/$name-1.0.0.jar"; fi
-    install -o hunhar -g hunhar -m 644 "$jar" "$APP/app/$name.jar"
+    install -o hunhar-app -g hunhar-app -m 644 "$jar" "$APP/app/$name.jar"
   done
 
   echo "==> Restarting services"

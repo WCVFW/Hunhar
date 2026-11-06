@@ -5,7 +5,7 @@
 # Environment (set by Jenkins):
 #   EC2_HOST       Elastic IP or host name of the server
 #   SSH_KEY        path to the private key (Jenkins "SSH Username with private key" credential)
-#   SSH_USER       login user (ubuntu)
+#   SSH_USER       login user (hunhar, a sudo user on the server)
 #   RELEASE_FILE   release/hunhar-release-....tar.gz built by build-release.sh
 #   CHECK_PUBLIC   1 = afterwards check https://www.hunhar.in and https://api.hunhar.in
 #   KEEP_RELEASES  how many old releases to keep on the server for rollback (default 3)
@@ -15,7 +15,7 @@ set -euo pipefail
 : "${EC2_HOST:?EC2_HOST is not set}"
 : "${SSH_KEY:?SSH_KEY is not set}"
 : "${RELEASE_FILE:?RELEASE_FILE is not set}"
-SSH_USER="${SSH_USER:-ubuntu}"
+SSH_USER="${SSH_USER:-hunhar}"
 KEEP="${KEEP_RELEASES:-3}"
 CHECK_PUBLIC="${CHECK_PUBLIC:-1}"
 

@@ -55,7 +55,7 @@ echo "==> 3/5 Turning S3 on in $ENV_FILE"
 env_set STORAGE_TYPE s3
 env_set S3_BUCKET "$BUCKET"
 env_set S3_REGION "$REGION"
-chown hunhar:hunhar "$ENV_FILE"; chmod 600 "$ENV_FILE"
+chown hunhar-app:hunhar-app "$ENV_FILE"; chmod 600 "$ENV_FILE"
 
 echo "==> 4/5 Restarting project-service (records still marked LOCAL keep loading from disk)"
 systemctl restart hunhar@project-service

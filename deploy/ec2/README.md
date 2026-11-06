@@ -19,8 +19,8 @@ bash deploy/ec2/build-release.sh        # -> release/hunhar-release-<date>-<time
 ```
 Copy it to the server and run the installer (after steps 1–3 below):
 ```bash
-scp -i hunhar.pem release/hunhar-release-*.tar.gz ubuntu@<elastic-ip>:~
-ssh -i hunhar.pem ubuntu@<elastic-ip>
+scp -i hunhar.pem release/hunhar-release-*.tar.gz hunhar@<elastic-ip>:~
+ssh -i hunhar.pem hunhar@<elastic-ip>
 tar -xzf hunhar-release-*.tar.gz && cd hunhar-release-*/
 sudo bash install.sh --bucket hunhar-db-backups   # first time: sets up the server, then asks you to fill /opt/hunhar/.env
 sudo nano /opt/hunhar/.env
@@ -104,7 +104,7 @@ After the switch works, remove the domain from the Vercel project (Settings → 
 ## 5. Put the code on the server
 
 ```bash
-ssh -i hunhar.pem ubuntu@<elastic-ip>
+ssh -i hunhar.pem hunhar@<elastic-ip>
 sudo mkdir -p /opt/hunhar && sudo chown ubuntu /opt/hunhar
 git clone https://github.com/WCVFW/Hunhar.git /opt/hunhar/src
 ```
