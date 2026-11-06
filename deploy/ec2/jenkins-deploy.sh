@@ -73,8 +73,12 @@ if [ "$CHECK_PUBLIC" = 1 ]; then
     echo "   FAILED  $1"
     return 1
   }
-  check https://api.hunhar.in/actuator/health '"UP"'
-  check https://www.hunhar.in/ '<div id="root">'
+  # A warning, not a failure: the server's own health checks above already passed. These only fail
+  # while DNS/HTTPS for hunhar.in are not set up yet, or are broken.
+  ok=1
+  check https://api.hunhar.in/actuator/health '"UP"' || ok=0
+  check https://www.hunhar.in/ '<div id="root">' || ok=0
+  [ "$ok" = 1 ] || echo "   WARN: the live URLs did not answer — check DNS and HTTPS (sudo hunhar-doctor)"
 fi
 
 echo "==> Live deploy finished: $NAME"
