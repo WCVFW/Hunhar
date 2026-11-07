@@ -50,10 +50,21 @@ if [ ! -f /opt/hunhar/.env ]; then
 fi
 rm -rf "$NAME"
 tar -xzf "$NAME.tar.gz"
-if ! sudo bash "$NAME/install.sh"; then
-  echo; echo "================ hunhar-doctor (what is wrong) ================"
+rollback() {
+  echo; echo "================ $1 — rolling back to the previous version ================"
+  sudo hunhar-deploy --rollback || true
+  echo; echo "================ hunhar-doctor ================"
   sudo hunhar-doctor || true
   exit 1
+}
+sudo bash "$NAME/install.sh" || rollback "INSTALL FAILED"
+
+# Production smoke test on the server itself: the real encrypted flow, like a browser
+echo; echo "================ smoke test ================"
+if command -v node >/dev/null 2>&1; then
+  node /usr/local/lib/hunhar-smoke-test.mjs http://127.0.0.1 || rollback "SMOKE TEST FAILED"
+else
+  echo "WARN: Node.js is not installed on the server — smoke test skipped"
 fi
 echo; echo "================ hunhar-doctor ================"
 sudo hunhar-doctor || true
@@ -64,21 +75,11 @@ echo "Releases kept on the server:"; ls -1dt hunhar-release-*/
 REMOTE
 
 if [ "$CHECK_PUBLIC" = 1 ]; then
-  echo "==> Checking the live site"
-  check() { # check URL TEXT
-    for _ in $(seq 1 12); do
-      if curl -fsS -m 15 "$1" 2>/dev/null | grep -q "$2"; then echo "   OK  $1"; return 0; fi
-      sleep 5
-    done
-    echo "   FAILED  $1"
-    return 1
-  }
-  # A warning, not a failure: the server's own health checks above already passed. These only fail
-  # while DNS/HTTPS for hunhar.in are not set up yet, or are broken.
-  ok=1
-  check https://api.hunhar.in/actuator/health '"UP"' || ok=0
-  check https://www.hunhar.in/ '<div id="root">' || ok=0
-  [ "$ok" = 1 ] || echo "   WARN: the live URLs did not answer — check DNS and HTTPS (sudo hunhar-doctor)"
+  # Same smoke test through the real domain + HTTPS (DNS, certificate, nginx). A warning only: the
+  # server-side smoke test above already proved the release works.
+  echo "==> Checking the live site https://www.hunhar.in"
+  HERE="$(cd "$(dirname "$0")" && pwd)"
+  node "$HERE/smoke-test.mjs" https://www.hunhar.in || echo "   WARN: https://www.hunhar.in did not pass — check DNS / HTTPS (sudo hunhar-doctor)"
 fi
 
 echo "==> Live deploy finished: $NAME"

@@ -4,16 +4,43 @@ Pipeline: [`deploy/ec2/Jenkinsfile`](Jenkinsfile).
 
 ```
 git push origin main
-  └─► GitHub webhook ─► https://jenkins.hunhar.in/github-webhook/   (fallback: Jenkins checks GitHub every 2 min)
-        └─► Checkout ─► Build release (5 JARs + website, one .tar.gz, ~5 min)
-              └─► [ "Deploy to live?" only if REQUIRE_APPROVAL is ticked ]
-                    └─► SSH to the live EC2 ─► sudo bash install.sh ─► hunhar-doctor ─► check https://www.hunhar.in
+  └─► Jenkins (GitHub webhook, or its 2-minute check)
+        1. Detect changes since the last successful deploy          (deploy/ec2/detect-changes.sh)
+        2. Test   backend: mvn verify on the changed services   website: tsc type-check + oxlint
+        3. Build  only the changed parts into one release file
+        4. [ "Deploy to live?" only if REQUIRE_APPROVAL is ticked ]
+        5. Deploy on the server                                       (deploy/ec2/deploy.sh)
+             database dump first (MySQL keeps running) -> services replaced ONE AT A TIME -> website swapped in one step
+        6. Smoke test on the server: the real encrypted API flow     (deploy/ec2/smoke-test.mjs)
+             fails -> automatic rollback to the previous version, build turns red
+        7. hunhar-doctor report + the same smoke test through https://www.hunhar.in
 ```
 
-- Only the **`main`** branch deploys. A failed build or failed test never reaches the live site.
-- If the install fails, the build turns red and the console prints `hunhar-doctor` so you see what broke.
-  The last 3 releases stay on the server, so going back is one command (section 6).
-- Secrets stay in `/opt/hunhar/.env` on the live server. Jenkins only holds the SSH key and the IP.
+**What a push deploys**
+
+| You changed | Jenkins deploys | Visitors notice |
+|---|---|---|
+| `Hunhar-frontend/…` | the website only (~12 MB release) | nothing — swapped in one step, no service restarts |
+| `Hunhar-backend/<service>/…` | only that service | only that service's features pause ~45 s while it restarts |
+| `Hunhar-backend/common-lib/…` or `Hunhar-backend/pom.xml` | all 5 services, one at a time | each part pauses in turn; the site never goes down all at once |
+| `deploy/ec2/…` | the server scripts (nothing restarted) | nothing |
+| docs, README, other files | nothing (build is green, "nothing to deploy") | nothing |
+
+Force a scope: **Build with Parameters → DEPLOY_SCOPE** = `website` / `backend` / `everything`.
+
+**Safety net**
+- Tests or the build fail → nothing reaches the server.
+- A replaced service does not report UP within 3 minutes → its previous version is put back at once and the deploy stops.
+- The smoke test fails after the deploy → `sudo hunhar-deploy --rollback` runs automatically (services + website).
+- Before every backend deploy the databases are dumped to `/opt/hunhar/backups/pre-deploy-*.sql.gz` (last 5 kept).
+  Restore one: `gunzip -c /opt/hunhar/backups/pre-deploy-<time>.sql.gz | sudo mysql`
+- Undo the last deploy by hand: `sudo hunhar-deploy --rollback`
+- Only the **`main`** branch deploys. Secrets stay in `/opt/hunhar/.env` on the server.
+
+> There are no unit tests in the project yet, so "Test backend" proves the code compiles and packages;
+> add tests under `Hunhar-backend/<service>/src/test/java` and they run (and can fail the deploy) automatically.
+
+> The root `Jenkinsfile` is a different, older job: it builds and runs everything on the Jenkins machine (testing only).
 
 > The root `Jenkinsfile` is a different, older job: it builds and runs everything on the Jenkins machine (testing only).
 

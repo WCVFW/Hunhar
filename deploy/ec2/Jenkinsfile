@@ -1,10 +1,18 @@
 // =============================================================================
-// Hunhar LIVE deploy: every push to GitHub main -> build -> deploy to the EC2 server -> check the live site
+// Hunhar LIVE deploy: every push to GitHub main -> test -> deploy ONLY what changed -> smoke test -> live
 //
 //   GitHub push (webhook, or the 2-minute poll as fallback)
-//     -> Checkout -> Build release (5 JARs + website, one .tar.gz)
+//     -> Checkout
+//     -> Detect changes since the last successful deploy (deploy/ec2/detect-changes.sh):
+//          website change  -> website only (no backend restart, no downtime)
+//          service change  -> only that service (common-lib / parent pom -> all 5)
+//          docs only       -> nothing
+//     -> Test: backend compile + unit tests (mvn verify) / website type-check + lint — a failure stops here
+//     -> Build release with only those parts
 //     -> [Approve "Deploy to live?" only when REQUIRE_APPROVAL is ticked]
-//     -> Upload over SSH + install.sh on the server -> hunhar-doctor -> Check https://www.hunhar.in
+//     -> Deploy on the server: DB backup, services replaced one at a time, website swapped in one step
+//     -> Smoke test on the server (encrypted API flow like a browser) — a failure ROLLS BACK automatically
+//     -> hunhar-doctor + the same smoke test through https://www.hunhar.in
 //
 // Jenkins job: Pipeline script from SCM, Script Path = deploy/ec2/Jenkinsfile
 // Credentials: hunhar-ec2-ssh (SSH Username with private key), hunhar-ec2-host (Secret text: Elastic IP)
@@ -30,8 +38,9 @@ pipeline {
     }
 
     parameters {
+        choice(name: 'DEPLOY_SCOPE', choices: ['auto', 'website', 'backend', 'everything'], description: 'auto = only what changed since the last successful deploy; or force website / all backend services / everything')
         booleanParam(name: 'REQUIRE_APPROVAL', defaultValue: false, description: 'Pause and ask "Deploy to live?" before deploying (off = every push to main goes live automatically)')
-        booleanParam(name: 'CHECK_PUBLIC_URLS', defaultValue: true, description: 'After deploying, check https://www.hunhar.in and https://api.hunhar.in (untick until DNS and HTTPS are set up)')
+        booleanParam(name: 'CHECK_PUBLIC_URLS', defaultValue: true, description: 'After deploying, also run the smoke test through https://www.hunhar.in (a warning only)')
         string(name: 'GIT_BASH', defaultValue: 'C:\\Program Files\\Git\\bin\\bash.exe', description: 'Windows Jenkins only: Git Bash used to run the build and deploy scripts')
     }
 
@@ -42,8 +51,9 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
                 script {
+                    def scmVars = checkout scm
+                    env.LAST_DEPLOYED = scmVars.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
                     def commit = env.GIT_COMMIT ? env.GIT_COMMIT.substring(0, 7) : 'local'
                     env.RELEASE_NAME = "hunhar-release-b${env.BUILD_NUMBER}-${commit}"
                     currentBuild.description = "${env.RELEASE_NAME}"
@@ -52,16 +62,54 @@ pipeline {
             }
         }
 
-        stage('Build release') {
+        stage('Detect changes') {
             steps {
-                // Backend (Maven) + website (Vite, calls https://api.hunhar.in) + server scripts -> one file
-                bashRun('bash deploy/ec2/build-release.sh')
+                script {
+                    def out = bashOut("bash deploy/ec2/detect-changes.sh '${env.LAST_DEPLOYED}' '${env.GIT_COMMIT ?: 'HEAD'}' '${params.DEPLOY_SCOPE ?: 'auto'}'")
+                    def kv = [:]
+                    out.split('\n').each { line -> def i = line.indexOf('='); if (i > 0) kv[line.substring(0, i).trim()] = line.substring(i + 1).trim() }
+                    env.DEPLOY_SERVICES = kv.SERVICES ?: ''
+                    env.DEPLOY_WEBSITE = kv.WEBSITE ?: '0'
+                    env.DEPLOY_SCRIPTS = kv.SCRIPTS ?: '0'
+                    env.DEPLOY_SOMETHING = (env.DEPLOY_SERVICES || env.DEPLOY_WEBSITE == '1' || env.DEPLOY_SCRIPTS == '1') ? '1' : '0'
+                    currentBuild.description = "${env.RELEASE_NAME}: ${kv.SUMMARY ?: ''}"
+                    echo "Deploy plan: ${kv.SUMMARY}"
+                }
+            }
+        }
+
+        stage('Test backend') {
+            when { expression { env.DEPLOY_SERVICES } }
+            steps {
+                // Compiles the changed services (and common-lib) and runs their unit tests; any failure stops the deploy
+                bashRun("cd Hunhar-backend && mvn -B -q verify -pl ${env.DEPLOY_SERVICES.trim().replace(' ', ',')} -am")
+            }
+            post {
+                always { junit allowEmptyResults: true, testResults: 'Hunhar-backend/**/target/surefire-reports/*.xml' }
+            }
+        }
+
+        stage('Test website') {
+            when { expression { env.DEPLOY_WEBSITE == '1' } }
+            steps {
+                // TypeScript type-check + lint errors (warnings are reported, not fatal)
+                bashRun('cd Hunhar-frontend && npm ci --no-audit --no-fund --loglevel=error && npx tsc -b && npx oxlint')
+            }
+        }
+
+        stage('Build release') {
+            when { expression { env.DEPLOY_SOMETHING == '1' } }
+            steps {
+                // Only the changed services and/or the website + server scripts -> one file
+                withEnv(["SERVICES=${env.DEPLOY_SERVICES}", "WEBSITE=${env.DEPLOY_WEBSITE}"]) {
+                    bashRun('bash deploy/ec2/build-release.sh')
+                }
                 archiveArtifacts artifacts: "release/${env.RELEASE_NAME}.tar.gz*", fingerprint: true
             }
         }
 
         stage('Approve') {
-            when { expression { params.REQUIRE_APPROVAL } }
+            when { expression { params.REQUIRE_APPROVAL && env.DEPLOY_SOMETHING == '1' } }
             steps {
                 timeout(time: 2, unit: 'HOURS') {
                     input message: "Deploy ${env.RELEASE_NAME} to LIVE (www.hunhar.in)?", ok: 'Deploy to live'
@@ -71,7 +119,7 @@ pipeline {
 
         stage('Deploy to EC2') {
             // Only main goes live; any other branch is built and archived but never deployed
-            when { expression { def b = env.GIT_BRANCH ?: 'main'; b == 'main' || b.endsWith('/main') } }
+            when { expression { def b = env.GIT_BRANCH ?: 'main'; (b == 'main' || b.endsWith('/main')) && env.DEPLOY_SOMETHING == '1' } }
             steps {
                 withCredentials([
                     sshUserPrivateKey(credentialsId: 'hunhar-ec2-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER'),
@@ -92,18 +140,16 @@ pipeline {
         success {
             echo """
 ==========================================================
- LIVE: ${env.RELEASE_NAME}
+ ${currentBuild.description}
    Website : https://www.hunhar.in
-   API     : https://api.hunhar.in
- Rollback: ssh to the server and run
-   ls -1dt ~/releases/hunhar-release-*/
-   sudo bash ~/releases/<previous-release>/install.sh
+ Undo this deploy (on the server):  sudo hunhar-deploy --rollback
 =========================================================="""
         }
         failure {
             echo '''
-Live deploy FAILED. The previous version keeps running unless "Installing on the server" had started.
-On the server:  systemctl status 'hunhar@*'   and   journalctl -u hunhar@<service> -n 100 --no-pager'''
+Live deploy FAILED. Tests or the build failed (nothing changed on the server), or the deploy / smoke test
+failed and was rolled back automatically. On the server: sudo hunhar-doctor
+and journalctl -u hunhar@<service> -n 100 --no-pager'''
         }
         always {
             // Release files are archived in Jenkins; no need to keep them in the workspace
@@ -116,6 +162,14 @@ On the server:  systemctl status 'hunhar@*'   and   journalctl -u hunhar@<servic
             }
         }
     }
+}
+
+/** Runs a bash command and returns its output. */
+def bashOut(String cmd) {
+    if (isUnix()) {
+        return sh(returnStdout: true, script: cmd).trim()
+    }
+    return bat(returnStdout: true, script: "@\"${params.GIT_BASH}\" -c \"${cmd}\"").trim()
 }
 
 /** Runs a bash command on Linux agents, or through Git Bash on Windows agents. */
