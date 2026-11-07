@@ -6,3 +6,5 @@ deploy/**       text eol=lf
 *.target        text eol=lf
 *.png           binary
 *.jpg           binary
+*.docx          binary
+*.pdf           binary
