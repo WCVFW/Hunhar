@@ -19,8 +19,10 @@ OUT="$ROOT/release"
 STAMP="$(date +%Y%m%d-%H%M)"
 NAME="${RELEASE_NAME:-hunhar-release-$STAMP}"   # Jenkins passes its own name (build number + commit)
 STAGE="$OUT/$NAME"
-# SERVICES unset = all 5; set (even empty) = only those. WEBSITE=0 leaves the website out.
+# SERVICES unset = all 5; "none" (or empty) = no services; otherwise only those. WEBSITE=0 leaves the website out.
+# (Jenkins drops an empty environment variable, so it passes "none".)
 if [ -z "${SERVICES+x}" ]; then SERVICES="identity-service project-service billing-service engagement-service api-gateway"; fi
+[ "$SERVICES" = "none" ] && SERVICES=""
 read -r -a SERVICE_LIST <<< "$SERVICES"
 WEBSITE="${WEBSITE:-1}"
 

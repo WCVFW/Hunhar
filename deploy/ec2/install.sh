@@ -46,6 +46,7 @@ install -m 755 "$HERE/deploy/ec2/backup/hunhar-db-backup.sh" /usr/local/bin/hunh
 install -m 755 "$HERE/deploy/ec2/backup/hunhar-db-restore.sh" /usr/local/bin/hunhar-db-restore
 install -m 755 "$HERE/deploy/ec2/uploads-to-s3.sh" /usr/local/bin/hunhar-uploads-to-s3
 install -m 755 "$HERE/deploy/ec2/doctor.sh" /usr/local/bin/hunhar-doctor
+install -m 755 "$HERE/deploy/ec2/set-keys.sh" /usr/local/bin/hunhar-set-keys
 install -m 644 "$HERE/deploy/ec2/smoke-test.mjs" /usr/local/lib/hunhar-smoke-test.mjs
 # Website/API routing snippet (certbot never edits it, so it is always safe to refresh)
 install -m 644 "$HERE/deploy/ec2/nginx/hunhar-site.conf" /etc/nginx/snippets/hunhar-site.conf

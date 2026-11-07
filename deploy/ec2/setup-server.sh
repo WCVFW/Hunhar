@@ -151,6 +151,7 @@ install -m 755 "$HERE/backup/hunhar-db-backup.sh" /usr/local/bin/hunhar-db-backu
 install -m 755 "$HERE/backup/hunhar-db-restore.sh" /usr/local/bin/hunhar-db-restore
 install -m 755 "$HERE/uploads-to-s3.sh" /usr/local/bin/hunhar-uploads-to-s3
 install -m 755 "$HERE/doctor.sh" /usr/local/bin/hunhar-doctor
+install -m 755 "$HERE/set-keys.sh" /usr/local/bin/hunhar-set-keys
 install -m 755 "$HERE/deploy.sh" /usr/local/bin/hunhar-deploy
 systemctl daemon-reload
 systemctl enable hunhar.target

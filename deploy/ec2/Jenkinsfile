@@ -101,7 +101,7 @@ pipeline {
             when { expression { env.DEPLOY_SOMETHING == '1' } }
             steps {
                 // Only the changed services and/or the website + server scripts -> one file
-                withEnv(["SERVICES=${env.DEPLOY_SERVICES}", "WEBSITE=${env.DEPLOY_WEBSITE}"]) {
+                withEnv(["SERVICES=${env.DEPLOY_SERVICES ?: 'none'}", "WEBSITE=${env.DEPLOY_WEBSITE}"]) {
                     bashRun('bash deploy/ec2/build-release.sh')
                 }
                 archiveArtifacts artifacts: "release/${env.RELEASE_NAME}.tar.gz*", fingerprint: true
