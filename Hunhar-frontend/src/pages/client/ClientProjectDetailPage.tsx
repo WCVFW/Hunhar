@@ -242,9 +242,23 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
 
   return (
     <div className="flex w-full flex-col gap-5 pb-14 font-manrope">
-      <Link to="/client/projects" className="inline-flex items-center gap-2 self-start text-[14px] font-semibold text-[#64748B] no-underline hover:text-[#08182B]">
-        <ArrowLeft size={16} /> Back to Projects
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to="/client/projects" className="inline-flex items-center gap-2 text-[14px] font-semibold text-[#64748B] no-underline hover:text-[#08182B]">
+          <ArrowLeft size={16} /> Back to Projects
+        </Link>
+        <div className="flex items-center gap-4">
+          {project.status === 'OPEN' && activeBids.length > 0 && (
+            <Link to={`/client/projects/${toRouteId(project.id)}/bids`} className="text-[12.5px] font-bold text-[#C06B3E] no-underline hover:underline">
+              Proposals board →
+            </Link>
+          )}
+          {(project.status === 'ACTIVE' || project.status === 'COMPLETED') && (
+            <Link to={`/client/projects/${toRouteId(project.id)}/tracking`} className="text-[12.5px] font-bold text-[#C06B3E] no-underline hover:underline">
+              Tracking view →
+            </Link>
+          )}
+        </div>
+      </div>
 
       {notice && (
         <div role="status" className={`rounded-[12px] border p-3 text-[13px] font-semibold ${notice.type === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>

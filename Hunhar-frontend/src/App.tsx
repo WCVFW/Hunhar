@@ -1,6 +1,8 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import LandingPage from './pages/LandingPage'
+import AboutPage from './pages/AboutPage'
+import FeaturesPage from './pages/FeaturesPage'
 import SignUpPage from './pages/SignUpPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -35,6 +37,9 @@ import ClientDashboardPage from './pages/client/ClientDashboardPage'
 import CreateProjectPage from './pages/client/CreateProjectPage'
 import ClientProjectsPage from './pages/client/ClientProjectsPage'
 import ClientProjectDetailPage from './pages/client/ClientProjectDetailPage'
+import ClientProjectBidsPage from './pages/client/ClientProjectBidsPage'
+import ClientProjectTrackingPage from './pages/client/ClientProjectTrackingPage'
+import FreelancerProjectTrackingPage from './pages/freelancer/FreelancerProjectTrackingPage'
 import ClientPaymentsPage from './pages/client/ClientPaymentsPage'
 import ClientSettingsPage from './pages/client/ClientSettingsPage'
 
@@ -57,6 +62,8 @@ export default function App(): React.JSX.Element {
           <Routes>
             {/* Public Landing & Auth Routes */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/features" element={<FeaturesPage />} />
             <Route path="/signup" element={<GuestRoute><SignUpPage /></GuestRoute>} />
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
 
@@ -75,6 +82,8 @@ export default function App(): React.JSX.Element {
                 <Route path="profile" element={<FreelancerProfilePage />} />
                 <Route path="projects" element={<ActiveProjectsPage />} />
                 <Route path="projects/:projectId" element={<WorkspaceOverviewPage />} />
+                <Route path="projects/:projectId/tracking" element={<FreelancerProjectTrackingPage />} />
+                <Route path="tracking" element={<FreelancerProjectTrackingPage />} />
                 <Route path="projects/:projectId/submit" element={<WorkspaceRedirect />} />
                 <Route path="projects/:projectId/chat" element={<WorkspaceRedirect />} />
                 <Route path="projects/:projectId/milestones" element={<WorkspaceRedirect />} />
@@ -95,6 +104,9 @@ export default function App(): React.JSX.Element {
                 <Route path="create-project" element={<CreateProjectPage />} />
                 <Route path="projects" element={<ClientProjectsPage />} />
                 <Route path="projects/:projectId" element={<ClientProjectDetailPage />} />
+                <Route path="projects/:projectId/bids" element={<ClientProjectBidsPage />} />
+                <Route path="projects/:projectId/tracking" element={<ClientProjectTrackingPage />} />
+                <Route path="tracking" element={<ClientProjectTrackingPage />} />
                 <Route path="messages" element={<MessagesPage />} />
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="notifications" element={<FreelancerNotificationsPage />} />

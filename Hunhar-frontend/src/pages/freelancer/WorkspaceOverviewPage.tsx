@@ -265,6 +265,9 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
         <h1 className="font-manrope text-[18px] sm:text-[20px] font-bold text-[#08182B]">
           <Link to="/freelancer/projects" className="text-[#8E8376] no-underline hover:text-[#C06B3E]">Projects</Link> / Workspace
         </h1>
+        <Link to={`/freelancer/projects/${toRouteId(projectId)}/tracking`} className="ml-auto text-[12.5px] font-bold text-[#C06B3E] no-underline hover:underline">
+          Tracking view →
+        </Link>
       </div>
 
       {notice && (

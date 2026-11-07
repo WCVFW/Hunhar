@@ -18,8 +18,8 @@ const columns: FooterColumn[] = [
     links: [
       { label: 'How to hire', href: '#how-to-hire' },
       { label: 'Post a Task', href: '/signup?role=client' },
-      { label: 'Browse Categories', href: '#categories' },
-      { label: 'Pricing', href: '#pricing' },
+      // { label: 'Browse Categories', href: '#categories' },
+      // { label: 'Pricing', href: '#pricing' },
     ],
   },
   {
@@ -27,8 +27,8 @@ const columns: FooterColumn[] = [
     links: [
       { label: 'How to find work', href: '#how-it-works' },
       { label: 'Create Profile', href: '/signup?role=freelancer' },
-      { label: 'How Payments Work', href: '#payments' },
-      { label: 'Student Resources', href: '#resources' },
+      // { label: 'How Payments Work', href: '#payments' },
+      // { label: 'Student Resources', href: '#resources' },
     ],
   },
   {
@@ -44,7 +44,7 @@ const columns: FooterColumn[] = [
     links: [
       { label: 'Terms of Service', href: '/terms' },
       { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Trust & Safety', href: '/trust' },
+      // { label: 'Trust & Safety', href: '/trust' },
     ],
   },
 ]
@@ -56,7 +56,7 @@ interface FooterProps {
 export default function Footer({ onOpenSignup }: FooterProps): React.JSX.Element {
   return (
     <footer
-      className="relative w-full bg-[#07152B] text-white overflow-hidden pt-20 pb-0 select-none"
+      className="relative w-full bg-[#07152B] text-white overflow-hidden pt-20 pb-0 select-text"
       style={{
         backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.08) 1.1px, transparent 1.1px)',
         backgroundSize: '28px 28px',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import logo from '../../assets/hunhar-Black.svg'
 
@@ -11,17 +12,23 @@ interface NavbarProps {
   onOpenSignup?: () => void
 }
 
+// Pages are router links; "/#..." are sections of the home page (plain links so the browser scrolls to them)
 const navLinks: NavLink[] = [
-  { name: 'Home', href: '#' },
-  { name: 'About', href: '#about' },
-  { name: 'How It Works', href: '#how-it-works' },
-  { name: 'Guides', href: '#start-smarter' },
-  // { name: 'FAQ', href: '#faq' },
+  { name: 'Home', href: '/' },
+  { name: 'About', href: '/about' },
+  { name: 'Features', href: '/features' },
+  { name: 'How It Works', href: '/#how-it-works' },
+  { name: 'Guides', href: '/#start-smarter' },
 ]
+
+const isSection = (href: string) => href.includes('#')
 
 export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [isScrolled, setIsScrolled] = useState<boolean>(false)
+  const { pathname } = useLocation()
+  const isActive = (href: string) =>
+    !isSection(href) && (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`))
 
   useEffect(() => {
     const handleScroll = () => {
@@ -64,15 +71,21 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
 
         {/* Desktop Nav links */}
         <nav className="hidden md:flex items-center gap-7 lg:gap-9">
-          {navLinks.map((link) => (
-            <a
-              key={link.name}
-              href={link.href}
-              className="font-manrope text-[15px] font-semibold text-navy hover:text-terracotta transition-colors duration-150 no-underline"
-            >
-              {link.name}
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const className = `relative font-manrope text-[15px] font-semibold transition-colors duration-150 no-underline py-1 ${
+              isActive(link.href) ? 'text-terracotta font-bold' : 'text-navy hover:text-terracotta'
+            }`
+            return isSection(link.href) ? (
+              <a key={link.name} href={link.href} className={className}>
+                {link.name}
+              </a>
+            ) : (
+              <Link key={link.name} to={link.href} className={className}>
+                {link.name}
+                {isActive(link.href) && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-terracotta rounded-full" />}
+              </Link>
+            )
+          })}
         </nav>
 
         {/* Login link + Sign Up button */}
@@ -122,16 +135,21 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
       {mobileMenuOpen && (
         <div className="md:hidden bg-ivory/95 backdrop-blur-md border-b border-beige/30 p-6 shadow-lg flex flex-col gap-4">
           <div className="flex flex-col gap-3">
-            {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className="font-manrope text-base font-semibold text-navy py-1.5 no-underline transition-colors duration-150 hover:text-terracotta"
-              >
-                {link.name}
-              </a>
-            ))}
+            {navLinks.map((link) => {
+              const className = `font-manrope text-base font-semibold py-1.5 no-underline transition-colors duration-150 flex items-center justify-between ${
+                isActive(link.href) ? 'text-terracotta font-bold' : 'text-navy hover:text-terracotta'
+              }`
+              return isSection(link.href) ? (
+                <a key={link.name} href={link.href} onClick={() => setMobileMenuOpen(false)} className={className}>
+                  {link.name}
+                </a>
+              ) : (
+                <Link key={link.name} to={link.href} onClick={() => setMobileMenuOpen(false)} className={className}>
+                  <span>{link.name}</span>
+                  {isActive(link.href) && <span className="w-1.5 h-1.5 rounded-full bg-terracotta" />}
+                </Link>
+              )
+            })}
           </div>
           <div className="pt-4 border-t border-beige/30 flex flex-col gap-3">
             <a

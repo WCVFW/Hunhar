@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Clock, ChevronRight, Search } from 'lucide-react'
 import { projectsApi, type Project, type ProjectStatus } from '../../services/api'
 import { deadlineLabel, formatDate, formatINR } from '../../services/format'
@@ -24,6 +24,7 @@ const STATUS_BADGE: Record<ProjectStatus, { label: string; cls: string; dot: str
 }
 
 export default function ClientProjectsPage(): React.JSX.Element {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<ProjectTab>('All')
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,6 +145,20 @@ export default function ClientProjectsPage(): React.JSX.Element {
                         {project.category} · {project.bidCount ? `${project.bidCount} proposal${project.bidCount === 1 ? '' : 's'}` : 'No proposals yet'}
                         {project.freelancerName ? ` · Hired: ${project.freelancerName}` : ''}
                       </p>
+                      {/* Buttons, not links: the whole card is already a link */}
+                      {((project.status === 'OPEN' && project.bidCount > 0) || project.status === 'ACTIVE' || project.status === 'COMPLETED') && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            navigate(`/client/projects/${toRouteId(project.id)}/${project.status === 'OPEN' ? 'bids' : 'tracking'}`)
+                          }}
+                          className="mt-2 self-start rounded-full border border-[#FED7AA] bg-[#FFF7ED] px-3 py-1 font-manrope text-[11.5px] font-bold text-[#C06B3E] hover:bg-[#FFEDD5]"
+                        >
+                          {project.status === 'OPEN' ? `Review ${project.bidCount} proposal${project.bidCount === 1 ? '' : 's'} →` : 'Track progress →'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-4 self-start sm:gap-6 sm:self-center">
