@@ -84,7 +84,8 @@ async function open(key: CryptoKey, payload: string, aad: string): Promise<Uint8
 export async function secureFetch(baseUrl: string, url: string, init: RequestInit = {}, retried = false): Promise<Response> {
   const session = await getSession(baseUrl, retried)
   const method = (init.method || 'GET').toUpperCase()
-  const target = new URL(url)
+  // url may be relative (/api/...) when the site calls the API on its own address
+  const target = new URL(url, window.location.href)
   const path = target.pathname
   const ts = String(Date.now())
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(18)))
