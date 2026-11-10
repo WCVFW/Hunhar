@@ -18,7 +18,7 @@ import bridgeIcon from '../../assets/bridge-icon.svg'
 import handLeftImg from '../../assets/Left.png'
 import handRightImg from '../../assets/right.png'
 import mascotBusinessImg from '../../assets/mascot_business.png'
-import mascotStudentImg from '../../assets/mascot_student.png'
+import mascotTalentImg from '../../assets/image copy.png'
 
 interface StepItem {
   label: string
@@ -301,11 +301,11 @@ export default function HowItWorks(): React.JSX.Element {
               initial="hidden"
               animate={isInView ? 'visible' : 'hidden'}
             >
-              <div className="w-[56px] h-[56px] rounded-[8px] overflow-hidden bg-[#F1F5F9] shrink-0">
+              <div className="w-[56px] h-[56px] rounded-[8px] overflow-hidden bg-[#F1F5F9] shrink-0 p-0.5 flex items-center justify-center">
                 <img
                   src={mascotBusinessImg}
                   alt="Business avatar"
-                  className="w-full h-full object-cover block"
+                  className="w-full h-full object-contain block"
                 />
               </div>
               <span className="font-makira font-bold text-[22px] lg:text-[26px] text-[#0A1B37] tracking-[-0.01em] whitespace-nowrap">
@@ -358,11 +358,11 @@ export default function HowItWorks(): React.JSX.Element {
               initial="hidden"
               animate={isInView ? 'visible' : 'hidden'}
             >
-              <div className="w-[56px] h-[56px] rounded-[8px] overflow-hidden bg-[#F1F5F9] shrink-0">
+              <div className="w-[56px] h-[56px] rounded-[8px] overflow-hidden bg-[#F1F5F9] shrink-0 p-0.5 flex items-center justify-center">
                 <img
-                  src={mascotStudentImg}
+                  src={mascotTalentImg}
                   alt="Student avatar"
-                  className="w-full h-full object-cover block"
+                  className="w-full h-full object-contain block"
                 />
               </div>
               <span className="font-makira font-bold text-[22px] lg:text-[26px] text-[#0A1B37] tracking-[-0.01em] whitespace-nowrap uppercase">

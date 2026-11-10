@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import hunharLogo from '../../assets/hunhar-Black.svg'
+import footerGiantWordmark from '../../assets/image copy 4.png'
 
 interface FooterLink {
   label: string
@@ -168,9 +169,9 @@ export default function Footer({ onOpenSignup }: FooterProps): React.JSX.Element
           transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
         >
           <img
-            src={hunharLogo}
+            src={footerGiantWordmark}
             alt="Hunhar Giant Watermark"
-            className="w-full h-auto block object-contain [filter:invert(1)_hue-rotate(180deg)_brightness(0.88)_opacity(0.48)_drop-shadow(0_6px_20px_rgba(0,0,0,0.4))]"
+            className="w-full h-auto block object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
           />
         </motion.div>
       </div>

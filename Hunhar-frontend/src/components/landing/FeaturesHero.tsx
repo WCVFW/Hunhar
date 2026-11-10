@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   GraduationCap,
 } from 'lucide-react'
+import InteractiveDotGrid from './InteractiveDotGrid'
 
 interface FeaturesHeroProps {
   onOpenSignup?: () => void
@@ -24,12 +25,16 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
   }
 
   return (
-    <section
-      id="features"
-      className="relative w-full overflow-hidden bg-white bg-[image:radial-gradient(#E8DFC9_1.1px,transparent_1.1px)] bg-[length:32px_32px] pt-28 sm:pt-32 lg:pt-36 pb-16 sm:pb-20 lg:pb-24"
-      aria-label="Features Section"
-    >
-      <div className="relative max-w-7xl mx-auto px-6 sm:px-8">
+    <div className="p-2 sm:p-4 lg:p-5 bg-[#0A1B37]">
+      <section
+        id="features"
+        className="relative w-full overflow-hidden rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white pt-24 sm:pt-28 lg:pt-32 pb-16 sm:pb-20 lg:pb-24"
+        aria-label="Features Section"
+      >
+        {/* Interactive Dot Mesh Grid with Mouse Repulsion & Ripple Effect */}
+        <InteractiveDotGrid />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           {/* =========================================================
               LEFT COLUMN: Header, Description, CTAs, Stats
@@ -260,6 +265,7 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
         </div>
       </div>
     </section>
+  </div>
   )
 }
 

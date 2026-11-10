@@ -2,19 +2,19 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
-// Import the 12 complete full-illustration cards
-import card1 from '../../assets/cta_cards/card_1.png'
-import card2 from '../../assets/cta_cards/card_2.png'
-import card3 from '../../assets/cta_cards/card_3.png'
-import card4 from '../../assets/cta_cards/card_4.png'
-import card5 from '../../assets/cta_cards/card_5.png'
-import card6 from '../../assets/cta_cards/card_6.png'
-import card7 from '../../assets/cta_cards/card_7.png'
-import card8 from '../../assets/cta_cards/card_8.png'
-import card9 from '../../assets/cta_cards/card_9.png'
-import card10 from '../../assets/cta_cards/card_10.png'
-import card11 from '../../assets/cta_cards/card_11.png'
-import card12 from '../../assets/cta_cards/card_12.png'
+// Import the 12 complete full-illustration cards from FEATURE SECTION CTA
+import certifiateImg from '../../assets/FEATURE SECTION CTA/CERTIFIATE.png'
+import clientImg from '../../assets/FEATURE SECTION CTA/CLIENT.png'
+import dataImg from '../../assets/FEATURE SECTION CTA/DATA.png'
+import friendsImg from '../../assets/FEATURE SECTION CTA/FRIENDS.png'
+import jobsImg from '../../assets/FEATURE SECTION CTA/JOBS.png'
+import modeImg from '../../assets/FEATURE SECTION CTA/MODE.png'
+import msgImg from '../../assets/FEATURE SECTION CTA/MSG.png'
+import oneImg from '../../assets/FEATURE SECTION CTA/ONE.png'
+import paymentImg from '../../assets/FEATURE SECTION CTA/PAYMENT.png'
+import typeImg from '../../assets/FEATURE SECTION CTA/TYPE.png'
+import verifyImg from '../../assets/FEATURE SECTION CTA/VERIFY.png'
+import workImg from '../../assets/FEATURE SECTION CTA/WORK.png'
 
 interface FeaturesCTASectionProps {
   onOpenSignup?: () => void
@@ -32,32 +32,32 @@ interface CardItem {
 // 8 Columns spread edge-to-edge across the full page (width 11.2% each)
 const cards: CardItem[] = [
   // Col 1 (Far Left)
-  { id: 1, img: card1, alt: 'Student on floor', left: '0.5%', top: '10%', width: '11.2%' },
-  { id: 2, img: card2, alt: 'Code on laptop', left: '0.5%', top: '44%', width: '11.2%' },
+  { id: 1, img: modeImg, alt: 'Student on floor', left: '0.5%', top: '10%', width: '11.2%' },
+  { id: 2, img: typeImg, alt: 'Code on laptop', left: '0.5%', top: '44%', width: '11.2%' },
 
   // Col 2
-  { id: 3, img: card3, alt: 'Phone with checkmark', left: '13%', top: '2%', width: '11.2%' },
-  { id: 4, img: card4, alt: 'Handshake deal confirmed', left: '13%', top: '36%', width: '11.2%' },
+  { id: 3, img: paymentImg, alt: 'Phone with checkmark', left: '13%', top: '2%', width: '11.2%' },
+  { id: 4, img: clientImg, alt: 'Handshake deal confirmed', left: '13%', top: '36%', width: '11.2%' },
 
   // Col 3
-  { id: 5, img: card5, alt: 'Chat bubbles collaboration', left: '25.5%', top: '10%', width: '11.2%' },
+  { id: 5, img: msgImg, alt: 'Chat bubbles collaboration', left: '25.5%', top: '10%', width: '11.2%' },
 
   // Col 4
-  { id: 6, img: card6, alt: 'Video editing on laptop', left: '38%', top: '10%', width: '11.2%' },
+  { id: 6, img: workImg, alt: 'Video editing on laptop', left: '38%', top: '10%', width: '11.2%' },
 
   // Col 5
-  { id: 7, img: card7, alt: 'Analytics dashboard graph', left: '50.5%', top: '10%', width: '11.2%' },
+  { id: 7, img: dataImg, alt: 'Analytics dashboard graph', left: '50.5%', top: '10%', width: '11.2%' },
 
   // Col 6
-  { id: 8, img: card8, alt: 'Student with certificate', left: '63%', top: '10%', width: '11.2%' },
+  { id: 8, img: certifiateImg, alt: 'Student with certificate', left: '63%', top: '10%', width: '11.2%' },
 
   // Col 7
-  { id: 9, img: card9, alt: 'Desk with coffee', left: '75.5%', top: '2%', width: '11.2%' },
-  { id: 10, img: card10, alt: '5-star customer review', left: '75.5%', top: '36%', width: '11.2%' },
+  { id: 9, img: oneImg, alt: 'Desk with coffee', left: '75.5%', top: '2%', width: '11.2%' },
+  { id: 10, img: verifyImg, alt: '5-star customer review', left: '75.5%', top: '36%', width: '11.2%' },
 
   // Col 8 (Far Right)
-  { id: 11, img: card11, alt: 'Pointing up surrounded by icons', left: '88%', top: '10%', width: '11.2%' },
-  { id: 12, img: card12, alt: 'Three students team', left: '88%', top: '44%', width: '11.2%' },
+  { id: 11, img: jobsImg, alt: 'Pointing up surrounded by icons', left: '88%', top: '10%', width: '11.2%' },
+  { id: 12, img: friendsImg, alt: 'Three students team', left: '88%', top: '44%', width: '11.2%' },
 ]
 
 export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionProps): React.JSX.Element {
@@ -120,7 +120,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
               <button
                 type="button"
                 onClick={handleSignup}
-                className="relative z-30 group bg-[#EA580C] hover:bg-[#C2410C] active:scale-95 text-white font-manrope font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 sm:px-8 py-3.5 rounded-xl shadow-[0_6px_20px_rgba(234,88,12,0.32)] transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
+                className="relative z-30 group bg-terracotta hover:bg-[#AA572D] active:scale-95 text-white font-manrope font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 sm:px-8 py-3.5 rounded-xl shadow-[0_8px_24px_rgba(192,107,62,0.35)] hover:shadow-[0_10px_28px_rgba(192,107,62,0.45)] transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
               >
                 <span>GET STARTED FREE</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -128,7 +128,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
             ) : (
               <a
                 href="/signup"
-                className="relative z-30 group bg-[#c06b3e] hover:bg-[#C2410C] active:scale-95 text-white font-manrope font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 sm:px-8 py-3.5 rounded-xl shadow-[0_6px_20px_rgba(234,88,12,0.32)] transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 cursor-pointer"
+                className="relative z-30 group bg-terracotta hover:bg-[#AA572D] active:scale-95 text-white font-manrope font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 sm:px-8 py-3.5 rounded-xl shadow-[0_8px_24px_rgba(192,107,62,0.35)] hover:shadow-[0_10px_28px_rgba(192,107,62,0.45)] transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span>GET STARTED FREE</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -165,7 +165,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
 
           {/* Subtitle */}
           <p className="font-manrope text-xs sm:text-sm text-[#555E6D] text-center mt-2.5 mb-6 max-w-xs leading-relaxed select-text cursor-text">
-            Join thousands of students and clients building amazing things on THEUNOIA.
+            Join thousands of students and clients building amazing things on Hunhar.
           </p>
 
           {/* CTA Button */}
@@ -173,7 +173,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
             <button
               type="button"
               onClick={handleSignup}
-              className="relative z-30 group bg-[#EA580C] hover:bg-[#C2410C] active:scale-95 text-white font-manrope font-semibold text-xs tracking-wider uppercase px-8 py-3.5 rounded-xl shadow-md transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
+              className="relative z-30 group bg-terracotta hover:bg-[#AA572D] active:scale-95 text-white font-manrope font-semibold text-xs tracking-wider uppercase px-8 py-3.5 rounded-xl shadow-[0_8px_24px_rgba(192,107,62,0.35)] hover:shadow-[0_10px_28px_rgba(192,107,62,0.45)] transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
             >
               <span>GET STARTED FREE</span>
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -181,7 +181,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
           ) : (
             <a
               href="/signup"
-              className="relative z-30 group bg-[#EA580C] hover:bg-[#C2410C] active:scale-95 text-white font-manrope font-semibold text-xs tracking-wider uppercase px-8 py-3.5 rounded-xl shadow-md transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 cursor-pointer"
+              className="relative z-30 group bg-terracotta hover:bg-[#AA572D] active:scale-95 text-white font-manrope font-semibold text-xs tracking-wider uppercase px-8 py-3.5 rounded-xl shadow-[0_8px_24px_rgba(192,107,62,0.35)] hover:shadow-[0_10px_28px_rgba(192,107,62,0.45)] transition-all duration-200 no-underline inline-flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>GET STARTED FREE</span>
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />

@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Award, TrendingUp, Users, Sparkles } from 'lucide-react'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
+import SkillsMarquee from '../components/landing/SkillsMarquee'
 
 import meeraImg from '../assets/about/meera_arch.jpg'
 import vikashImg from '../assets/about/vikash_arch.jpg'
 import rihanaImg from '../assets/about/rihana_arch.jpg'
-import wolfRoundImg from '../assets/about/wolf_round.webp'
 import wolfJarImg from '../assets/about/wolf_jar.webp'
 import wolfTalentImg from '../assets/about/wolf_talent.webp'
 import wolfBusinessImg from '../assets/about/wolf_business.webp'
-import visionStudioImg from '../assets/about/vision_studio.jpg'
 import wolfClosingImg from '../assets/about/wolf_closing.webp'
+import visionStudioImg from '../assets/image copy 5.png'
+import talentMascotImg from '../assets/image copy 2.png'
+import opportunityMascotImg from '../assets/image copy 3.png'
 
 interface SkillChip {
   name: string
@@ -23,13 +26,33 @@ interface SkillChip {
 }
 
 const skillChips: SkillChip[] = [
-  { name: 'Design', color: 'bg-navy text-[#F3EFE6]', left: '6%', bottom: '26px', rotate: -4, delay: 0 },
-  { name: 'Writing', color: 'bg-gold text-navy', left: '10%', bottom: '100px', rotate: 4, delay: 150 },
-  { name: 'Marketing', color: 'bg-navy text-[#F3EFE6]', left: '26%', bottom: '175px', rotate: -3, delay: 300 },
-  { name: 'Code', color: 'bg-[#FFF8EF] text-terracotta', left: '38%', bottom: '26px', rotate: 3, delay: 450 },
-  { name: 'Music', color: 'bg-navy text-[#F3EFE6]', left: '46%', bottom: '100px', rotate: -5, delay: 600 },
-  { name: 'Photography', color: 'bg-[#FFF8EF] text-terracotta', left: '66%', bottom: '100px', rotate: 3, delay: 750 },
-  { name: 'Video', color: 'bg-gold text-navy', left: '64%', bottom: '26px', rotate: -2, delay: 900 },
+  // Bottom tier
+  { name: 'Design', color: 'bg-navy text-[#F3EFE6]', left: '4%', bottom: '22px', rotate: -3, delay: 50 },
+  { name: 'Code', color: 'bg-[#FFF8EF] text-terracotta', left: '25%', bottom: '18px', rotate: 2, delay: 180 },
+  { name: 'Video', color: 'bg-gold text-navy', left: '45%', bottom: '24px', rotate: -4, delay: 320 },
+  { name: 'Translation', color: 'bg-navy text-[#F3EFE6]', left: '64%', bottom: '20px', rotate: 3, delay: 460 },
+  { name: 'SEO', color: 'bg-[#FFF8EF] text-terracotta', left: '83%', bottom: '24px', rotate: -2, delay: 600 },
+
+  // Lower-mid tier
+  { name: 'Writing', color: 'bg-gold text-navy', left: '7%', bottom: '80px', rotate: 4, delay: 120 },
+  { name: 'UI / UX', color: 'bg-navy text-[#F3EFE6]', left: '29%', bottom: '84px', rotate: -3, delay: 260 },
+  { name: 'Music', color: 'bg-navy text-[#F3EFE6]', left: '49%', bottom: '78px', rotate: -5, delay: 400 },
+  { name: 'Photography', color: 'bg-[#FFF8EF] text-terracotta', left: '69%', bottom: '82px', rotate: 3, delay: 540 },
+
+  // Mid tier
+  { name: 'Marketing', color: 'bg-navy text-[#F3EFE6]', left: '5%', bottom: '142px', rotate: -4, delay: 160 },
+  { name: 'Animation', color: 'bg-gold text-navy', left: '27%', bottom: '146px', rotate: 3, delay: 300 },
+  { name: 'Branding', color: 'bg-[#FFF8EF] text-terracotta', left: '48%', bottom: '140px', rotate: -2, delay: 440 },
+  { name: 'App Dev', color: 'bg-gold text-navy', left: '68%', bottom: '144px', rotate: 4, delay: 580 },
+
+  // Upper-mid tier
+  { name: '3D Art', color: 'bg-[#FFF8EF] text-terracotta', left: '9%', bottom: '204px', rotate: 4, delay: 220 },
+  { name: 'Voiceover', color: 'bg-navy text-[#F3EFE6]', left: '31%', bottom: '206px', rotate: -3, delay: 380 },
+  { name: 'Content', color: 'bg-gold text-navy', left: '50%', bottom: '202px', rotate: 3, delay: 520 },
+
+  // Top tier
+  { name: 'AI Prompts', color: 'bg-gold text-navy', left: '6%', bottom: '268px', rotate: -5, delay: 280 },
+  { name: 'Web Dev', color: 'bg-[#FFF8EF] text-terracotta', left: '28%', bottom: '272px', rotate: 2, delay: 440 },
 ]
 
 interface BeliefCard {
@@ -37,7 +60,9 @@ interface BeliefCard {
   number: string
   title: string
   description: string
+  icon: React.ElementType
   iconBg: string
+  iconColor: string
   backBg: string
 }
 
@@ -47,7 +72,9 @@ const beliefs: BeliefCard[] = [
     number: '01',
     title: 'Skills Over Labels',
     description: 'Your abilities matter more than where you started.',
-    iconBg: 'bg-terracotta',
+    icon: Award,
+    iconBg: 'bg-terracotta shadow-terracotta/25',
+    iconColor: 'text-[#FFF8EF]',
     backBg: 'bg-terracotta text-[#FFF8EF]',
   },
   {
@@ -55,7 +82,9 @@ const beliefs: BeliefCard[] = [
     number: '02',
     title: 'Growth Through Opportunity',
     description: 'Every project is a chance to learn and improve.',
-    iconBg: 'bg-[#0A1B37] border border-white/15',
+    icon: TrendingUp,
+    iconBg: 'bg-[#142646] border border-white/20 shadow-blue-950/40',
+    iconColor: 'text-gold',
     backBg: 'bg-[#0E1E38] border border-white/10 text-[#F3EFE6]',
   },
   {
@@ -63,7 +92,9 @@ const beliefs: BeliefCard[] = [
     number: '03',
     title: 'Better Together',
     description: 'Great things happen when the right people connect.',
-    iconBg: 'bg-gold',
+    icon: Users,
+    iconBg: 'bg-gold shadow-gold/25',
+    iconColor: 'text-navy',
     backBg: 'bg-terracotta text-[#FFF8EF]',
   },
   {
@@ -71,8 +102,10 @@ const beliefs: BeliefCard[] = [
     number: '04',
     title: 'Everyone Deserves a Start',
     description: 'Every talent deserves a chance to shine.',
-    iconBg: 'bg-terracotta',
-    backBg: 'bg-[#0E1E38] border border-white/10 text-[#F3EFE6]',
+    icon: Sparkles,
+    iconBg: 'bg-terracotta shadow-terracotta/25',
+    iconColor: 'text-[#FFF8EF]',
+    backBg: 'bg-gold text-navy',
   },
 ]
 
@@ -197,10 +230,9 @@ export default function AboutPage(): React.JSX.Element {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            if (entry.target === jarRef.current) {
-              setIsJarVisible(true)
-            }
+          if (entry.target === jarRef.current) {
+            setIsJarVisible(entry.isIntersecting)
+          } else if (entry.isIntersecting) {
             if (entry.target === visionHeadingRef.current) {
               setIsVisionHeadingInView(true)
             }
@@ -240,7 +272,7 @@ export default function AboutPage(): React.JSX.Element {
       <main className="flex-1 w-full select-text">
         {/* HERO SECTION C */}
         <div className="p-3 sm:p-4 lg:p-5 bg-[#0A1B37]">
-          <section className="relative rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-[#F3EFE6] text-navy overflow-hidden pt-24 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-20 px-6 sm:px-10 lg:px-14 bg-[radial-gradient(rgba(10,27,55,0.12)_1.1px,transparent_1.2px)] [background-size:40px_40px] select-text">
+          <section className="relative rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-[#ffffff] text-navy overflow-hidden pt-24 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-20 px-6 sm:px-10 lg:px-14 bg-[radial-gradient(rgba(10,27,55,0.12)_1.1px,transparent_1.2px)] [background-size:40px_40px] select-text">
             <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Left Column: Heading, Subhead, CTA */}
               <div className="flex flex-col items-start lg:col-span-6 z-10 select-text">
@@ -314,55 +346,13 @@ export default function AboutPage(): React.JSX.Element {
                     </figcaption>
                   </figure>
                 </div>
-
-                {/* Circular Mascot Pinned Badge */}
-                <img
-                  src={wolfRoundImg}
-                  alt="Hunhar wolf mascot"
-                  className="absolute -bottom-4 -right-2 sm:-right-4 w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover object-top bg-navy border-4 border-[#F3EFE6] shadow-2xl z-30 pointer-events-none"
-                />
-              </div>
-            </div>
-
-            {/* Marquee Ticker */}
-            <div className="overflow-hidden bg-navy text-[#F3EFE6] py-3.5 -mx-6 sm:-mx-10 lg:-mx-14 -mb-12 sm:-mb-16 lg:-mb-20 mt-12 flex items-center border-t border-navy/20 select-text" aria-hidden="true">
-              <div className="flex shrink-0 gap-8 animate-marquee whitespace-nowrap text-sm sm:text-base font-bold font-display tracking-wide uppercase select-text">
-                <span>Design</span>
-                <span className="text-terracotta">●</span>
-                <span>Development</span>
-                <span className="text-gold">■</span>
-                <span>Video</span>
-                <span className="text-terracotta">▲</span>
-                <span>Writing</span>
-                <span className="text-gold">●</span>
-                <span>Marketing</span>
-                <span className="text-terracotta">■</span>
-                <span>Photography</span>
-                <span className="text-gold">▲</span>
-                <span>Music</span>
-                <span className="text-terracotta">●</span>
-                <span>Translation</span>
-                <span className="text-gold">■</span>
-                <span>Design</span>
-                <span className="text-terracotta">●</span>
-                <span>Development</span>
-                <span className="text-gold">■</span>
-                <span>Video</span>
-                <span className="text-terracotta">▲</span>
-                <span>Writing</span>
-                <span className="text-gold">●</span>
-                <span>Marketing</span>
-                <span className="text-terracotta">■</span>
-                <span>Photography</span>
-                <span className="text-gold">▲</span>
-                <span>Music</span>
-                <span className="text-terracotta">●</span>
-                <span>Translation</span>
-                <span className="text-gold">■</span>
               </div>
             </div>
           </section>
         </div>
+
+        {/* Skills Marquee from Home Page */}
+        <SkillsMarquee />
 
         {/* PINNED STORY SECTION (OUR STORY) */}
         <section id="story" ref={storyRef} className="relative bg-[#0A1B37] text-[#F3EFE6] h-[170vh] select-text" aria-label="Our story">
@@ -375,29 +365,41 @@ export default function AboutPage(): React.JSX.Element {
             </h2>
 
             {/* Connecting Talent & Opportunity Scene */}
-            <div className="relative w-full max-w-[720px] h-[110px] mb-8 select-text" aria-hidden="true">
+            <div className="relative w-full max-w-[720px] h-[165px] sm:h-[180px] mb-8 select-text" aria-hidden="true">
               {/* Connecting Line */}
               <div
-                className="absolute top-1/2 left-1/2 h-[3px] -translate-x-1/2 -translate-y-1/2 bg-[#F3EFE6] opacity-80"
-                style={{ width: `${sceneProgress * 70}%` }}
+                className="absolute top-[64px] sm:top-[72px] left-1/2 h-[3px] -translate-x-1/2 -translate-y-1/2 bg-[#F3EFE6] opacity-80 z-0"
+                style={{ width: `${sceneProgress * 65}%` }}
               />
 
-              {/* Talent (Circle) */}
+              {/* Talent */}
               <div
-                className="absolute top-2 flex flex-col items-center"
-                style={{ left: `${sceneProgress * 38}%` }}
+                className="absolute top-0 flex flex-col items-center z-10"
+                style={{ left: `${sceneProgress * 30}%` }}
               >
-                <div className="w-16 h-16 rounded-full bg-terracotta shadow-xl" />
-                <span className="mt-2 text-xs font-bold text-[#9FB0D6] tracking-wide select-text">Talent</span>
+                <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-2xl sm:rounded-3xl bg-white shadow-xl shadow-black/30 border border-white/40 p-2 sm:p-2.5 flex items-center justify-center">
+                  <img
+                    src={talentMascotImg}
+                    alt="Talent mascot"
+                    className="w-full h-full object-contain filter drop-shadow-sm pointer-events-none"
+                  />
+                </div>
+                <span className="mt-2 text-xs sm:text-sm font-bold text-[#F3EFE6] tracking-wide select-text">Talent</span>
               </div>
 
-              {/* Opportunity (Square) */}
+              {/* Opportunity */}
               <div
-                className="absolute top-2 flex flex-col items-center"
-                style={{ right: `${sceneProgress * 38}%` }}
+                className="absolute top-0 flex flex-col items-center z-10"
+                style={{ right: `${sceneProgress * 30}%` }}
               >
-                <div className="w-16 h-16 rounded-xl bg-gold shadow-xl" />
-                <span className="mt-2 text-xs font-bold text-[#9FB0D6] tracking-wide select-text">Opportunity</span>
+                <div className="w-24 h-32 sm:w-28 sm:h-36 rounded-2xl sm:rounded-3xl bg-white shadow-xl shadow-black/30 border border-white/40 p-2 sm:p-2.5 flex items-center justify-center">
+                  <img
+                    src={opportunityMascotImg}
+                    alt="Opportunity mascot"
+                    className="w-full h-full object-contain filter drop-shadow-sm pointer-events-none"
+                  />
+                </div>
+                <span className="mt-2 text-xs sm:text-sm font-bold text-[#F3EFE6] tracking-wide select-text">Opportunity</span>
               </div>
             </div>
 
@@ -445,18 +447,17 @@ export default function AboutPage(): React.JSX.Element {
             {/* Right Column: Dashed Jar Box with Falling Chips and Top-Right Wolf Mascot */}
             <div
               ref={jarRef}
-              className="lg:col-span-7 relative h-[380px] sm:h-[400px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
+              className="lg:col-span-7 relative h-[390px] sm:h-[420px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
             >
               {/* Top-Right Wolf Mascot (Exact location from user design) */}
               <img
                 src={wolfJarImg}
                 alt="Hunhar wolf mascot winking and giving thumbs up"
-                className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-                  isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-                }`}
+                className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                  }`}
                 style={{
                   transformOrigin: 'top right',
-                  transitionDelay: '1100ms',
+                  transitionDelay: '700ms',
                 }}
               />
 
@@ -465,7 +466,7 @@ export default function AboutPage(): React.JSX.Element {
                 return (
                   <span
                     key={chip.name}
-                    className={`absolute px-5 py-2.5 rounded-full font-display font-bold text-sm sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
+                    className={`absolute px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-display font-bold text-xs sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
                     style={{
                       left: chip.left,
                       bottom: chip.bottom,
@@ -474,7 +475,7 @@ export default function AboutPage(): React.JSX.Element {
                       transitionDelay: `${chip.delay}ms`,
                       transform: isJarVisible
                         ? `translateY(0px) rotate(${chip.rotate}deg)`
-                        : `translateY(-420px) rotate(${chip.rotate * 4}deg)`,
+                        : `translateY(-480px) rotate(${chip.rotate * 3}deg)`,
                       opacity: isJarVisible ? 1 : 0,
                     }}
                   >
@@ -502,15 +503,16 @@ export default function AboutPage(): React.JSX.Element {
                     className="relative h-80 sm:h-[320px] rounded-3xl cursor-pointer [perspective:1000px] select-text group"
                   >
                     <div
-                      className={`relative w-full h-full rounded-3xl transition-transform duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] ${
-                        isFlipped ? '[transform:rotateY(180deg)]' : ''
-                      }`}
+                      className={`relative w-full h-full rounded-3xl transition-transform duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] ${isFlipped ? '[transform:rotateY(180deg)]' : ''
+                        }`}
                     >
                       {/* Front Face */}
                       <div className="absolute inset-0 w-full h-full rounded-3xl bg-[#0E1E38] border border-white/10 p-7 flex flex-col justify-between [backface-visibility:hidden] shadow-2xl transition-colors select-text">
                         <small className="text-gold font-bold text-sm tracking-wider select-text">{b.number}</small>
                         <div className="select-text">
-                          <div className={`w-16 h-16 rounded-2xl ${b.iconBg} mb-5 shadow-md`} />
+                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl ${b.iconBg} mb-5 shadow-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-110`}>
+                            <b.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${b.iconColor}`} strokeWidth={2.2} />
+                          </div>
                           <h3 className="font-display font-extrabold text-2xl text-[#F3EFE6] leading-tight select-text">
                             {b.title}
                           </h3>
