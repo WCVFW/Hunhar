@@ -1,6 +1,6 @@
 import { ArrowUpRight } from 'lucide-react'
 import mascotBusiness from '../../assets/mascot_business.png'
-import mascotStudent from '../../assets/mascot_student.png'
+import mascotStudent from '../../assets/image.png'
 
 const cards = [
   {
@@ -12,6 +12,8 @@ const cards = [
     mascotAlt: 'Client mascot in business suit',
     href: '/signup?role=client',
     cta: 'Post a Task',
+    imageWrapperClass: 'bottom-[2.75rem] right-3 sm:right-5 w-[42%] max-w-[14rem]',
+    imageClass: '',
   },
   {
     badge: 'I WANT TO EARN',
@@ -19,9 +21,11 @@ const cards = [
     description:
       'Create your profile, showcase your skills, bid on real work and get paid.',
     mascot: mascotStudent,
-    mascotAlt: 'Student mascot Luna in suit',
+    mascotAlt: 'Student mascot Luna with laptop',
     href: '/signup?role=freelancer',
     cta: 'Create Profile',
+    imageWrapperClass: 'bottom-[2.75rem] right-2 sm:right-3 w-[48%] max-w-[16rem]',
+    imageClass: '',
   },
 ]
 
@@ -78,11 +82,11 @@ export default function TwoSides({ onOpenSignup }: TwoSidesProps) {
               </div>
 
               {/* Mascot Image */}
-              <div className="pointer-events-none absolute bottom-[4.25rem] right-2 z-10 w-[46%] max-w-[15.5rem] select-none">
+              <div className={`pointer-events-none absolute z-10 select-none ${card.imageWrapperClass}`}>
                 <img
                   src={card.mascot}
                   alt={card.mascotAlt}
-                  className="block h-auto w-full object-contain mix-blend-multiply"
+                  className={`block h-auto w-full object-contain mix-blend-multiply ${card.imageClass}`}
                   loading="lazy"
                 />
               </div>

@@ -48,12 +48,12 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
   const [activeIndex, setActiveIndex] = useState<number>(1)
   const [isPaused, setIsPaused] = useState<boolean>(false)
 
-  // Auto-slide every 3.5 seconds
+  // Auto-slide faster & smoother (1.2 seconds interval with smooth glide)
   useEffect(() => {
     if (isPaused) return
     const timer = setInterval(() => {
       setActiveIndex((prev) => prev + 1)
-    }, 3500)
+    }, 1200)
     return () => clearInterval(timer)
   }, [isPaused])
 
@@ -159,7 +159,7 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
                       if (d === -1) setActiveIndex((prev) => prev - 1)
                       if (d === 1) setActiveIndex((prev) => prev + 1)
                     }}
-                    className={`absolute top-1/2 left-1/2 w-[260px] sm:w-[280px] lg:w-[300px] transition-all duration-700 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${getCardClasses(d)}`}
+                    className={`absolute top-1/2 left-1/2 w-[260px] sm:w-[280px] lg:w-[300px] transition-all duration-800 [transition-timing-function:cubic-bezier(0.25,1,0.5,1)] ${getCardClasses(d)}`}
                   >
                     <div className="bg-white border border-[#E5E5E5]/60 rounded-[20px] p-3 shadow-[0_20px_25px_-5px_rgba(23,23,23,0.08),0_8px_10px_-6px_rgba(23,23,23,0.08)]">
                       {/* Photo with rounded border */}

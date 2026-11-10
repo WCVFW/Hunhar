@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import LandingPage from './pages/LandingPage'
 import AboutPage from './pages/AboutPage'
 import FeaturesPage from './pages/FeaturesPage'
+import BlogPage from './pages/BlogPage'
+import ContactPage from './pages/ContactPage'
 import SignUpPage from './pages/SignUpPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
@@ -65,10 +67,11 @@ export default function App(): React.JSX.Element {
             <Route path="/" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/blog" element={<BlogPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/terms" element={<LegalPage kind="terms" />} />
             <Route path="/privacy" element={<LegalPage kind="privacy" />} />
             <Route path="/refund-policy" element={<LegalPage kind="refund" />} />
-            <Route path="/contact" element={<LegalPage kind="contact" />} />
             <Route path="/signup" element={<GuestRoute><SignUpPage /></GuestRoute>} />
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
 

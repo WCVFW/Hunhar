@@ -17,8 +17,8 @@ const navLinks: NavLink[] = [
   { name: 'Home', href: '/' },
   { name: 'About', href: '/about' },
   { name: 'Features', href: '/features' },
-  { name: 'How It Works', href: '/#how-it-works' },
-  { name: 'Guides', href: '/#start-smarter' },
+  { name: 'Blog', href: '/blog' },
+  { name: 'Contact', href: '/contact' },
 ]
 
 const isSection = (href: string) => href.includes('#')
