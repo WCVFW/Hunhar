@@ -71,12 +71,22 @@ public class PayloadEncryptionFilter implements GlobalFilter, Ordered {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<String, Long> seenNonces = new ConcurrentHashMap<>();
     private final boolean required;
+    /** Plain JSON is accepted on requests that reach the gateway directly (SSH tunnel, server itself), not through nginx. */
+    private final boolean directPlainAllowed;
 
     public PayloadEncryptionFilter(ApiCryptoKeys keys,
-                                   @Value("${theunoia.gateway.encryption.required:true}") boolean required) {
+                                   @Value("${theunoia.gateway.encryption.required:true}") boolean required,
+                                   @Value("${theunoia.gateway.encryption.allow-direct-plain:true}") boolean directPlainAllowed) {
         this.keys = keys;
         this.required = required;
-        log.info("API payload encryption: {}", required ? "REQUIRED for /api/**" : "optional (plain JSON also accepted)");
+        this.directPlainAllowed = directPlainAllowed;
+        log.info("API payload encryption: {}{}", required ? "REQUIRED for /api/**" : "optional (plain JSON also accepted)",
+                required && directPlainAllowed ? " (plain JSON allowed on direct, non-proxied requests)" : "");
+    }
+
+    /** nginx always adds these headers; a request without them came straight to the gateway port, which is not public. */
+    private static boolean viaProxy(HttpHeaders h) {
+        return h.containsKey("X-Forwarded-For") || h.containsKey("X-Real-IP") || h.containsKey("Forwarded");
     }
 
     @Override
@@ -98,8 +108,9 @@ public class PayloadEncryptionFilter implements GlobalFilter, Ordered {
         HttpHeaders h = request.getHeaders();
         String clientKey = h.getFirst(H_KEY);
         if (clientKey == null) {
-            return required ? reject(exchange, HttpStatus.BAD_REQUEST, "required", "Encrypted connection required. Please refresh the page.")
-                    : chain.filter(exchange);
+            boolean plainOk = !required || (directPlainAllowed && !viaProxy(h));
+            return plainOk ? chain.filter(exchange)
+                    : reject(exchange, HttpStatus.BAD_REQUEST, "required", "Encrypted connection required. Please refresh the page.");
         }
 
         String ts = h.getFirst(H_TS);

@@ -203,7 +203,7 @@ public class InvoiceService {
             document.add(table);
 
             Paragraph foot = new Paragraph("\nThank you for using Hunhar. This is a computer-generated document and needs no signature.\n"
-                    + "Questions about this invoice? Write to support@hunhar.in with the invoice number.", label);
+                    + "Questions about this invoice? Write to howdy@theunoia.com with the invoice number.", label);
             foot.setAlignment(Element.ALIGN_CENTER);
             foot.setSpacingBefore(24);
             document.add(foot);

@@ -31,6 +31,7 @@ public class AuthController {
     private final UserService userService;
     private final EmailOtpService emailOtpService;
     private final MobileOtpService mobileOtpService;
+    private final com.theunoia.identity.service.FirebasePhoneVerifier firebasePhoneVerifier;
 
     @PostMapping("/otp/send")
     public ResponseEntity<ApiResponse<Void>> sendSignupOtp(@Valid @RequestBody SendOtpDto dto) {
@@ -54,6 +55,24 @@ public class AuthController {
     @PostMapping("/mobile-otp/verify")
     public ResponseEntity<ApiResponse<Void>> verifyMobileOtp(@Valid @RequestBody MobileOtpDto dto) {
         mobileOtpService.verify(dto.getMobile(), dto.getOtp());
+        return ResponseEntity.ok(ApiResponse.ok("Mobile number verified successfully", null));
+    }
+
+    /** Public: how the website should verify mobile numbers - FIREBASE (with its public web config) or SMS (Fast2SMS). */
+    @GetMapping("/mobile-otp/config")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> mobileOtpConfig() {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        boolean firebase = firebasePhoneVerifier.isEnabled();
+        body.put("provider", firebase ? "FIREBASE" : "SMS");
+        body.put("required", mobileOtpService.isRequired());
+        if (firebase) body.put("firebase", firebasePhoneVerifier.webConfig());
+        return ResponseEntity.ok(ApiResponse.ok(body));
+    }
+
+    /** Firebase phone sign-in finished in the browser: verify its ID token and mark the number as verified. */
+    @PostMapping("/mobile-otp/firebase")
+    public ResponseEntity<ApiResponse<Void>> verifyFirebaseMobile(@RequestBody java.util.Map<String, String> body) {
+        mobileOtpService.verifyFirebase(body == null ? null : body.get("idToken"));
         return ResponseEntity.ok(ApiResponse.ok("Mobile number verified successfully", null));
     }
 

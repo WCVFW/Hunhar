@@ -77,7 +77,7 @@ public class BillingEmailNotifier {
                         <tr><td style="padding:10px 14px;color:#64748B">Status</td><td style="padding:10px 14px;text-align:right;font-weight:bold;color:#16A34A">PAID</td></tr>
                       </table>
                       <p style="font-size:13px;color:#64748B;margin:18px 0 0">Your invoice is attached as a PDF. You can also download it any time from your Hunhar dashboard (Wallet / Payments &rarr; Invoices).</p>
-                      <p style="font-size:12px;color:#94A3B8;margin:24px 0 0">This is an automated email from hunhar.in. If you did not make this payment, contact support@hunhar.in.</p>
+                      <p style="font-size:12px;color:#94A3B8;margin:24px 0 0">This is an automated email from hunhar.in. If you did not make this payment, contact howdy@theunoia.com.</p>
                     </div>
                     """.formatted(HtmlUtils.htmlEscape(name), HtmlUtils.htmlEscape(messageText), number, amountText);
             String text = "Hi " + name + ",\n\n" + messageText + "\n\nInvoice number: " + number + "\nAmount: " + amountText

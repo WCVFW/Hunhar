@@ -5,6 +5,7 @@ import mascotBeanbag from '../assets/Signup_Mascot.png'
 
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { authApi, startSession } from '../services/api'
+import { sendPhoneOtp, verifyPhoneOtp } from '../services/phoneOtp'
 import GoogleAuthButton from '../components/auth/GoogleAuthButton'
 
 const labelClass =
@@ -89,7 +90,7 @@ export default function SignUpPage(): React.JSX.Element {
     }
     setMSending(true)
     try {
-      await authApi.sendMobileOtp(formData.phone)
+      await sendPhoneOtp(formData.phone)
       setMOtpSent(true)
       setMOtp('')
       setMCountdown(30)
@@ -109,7 +110,7 @@ export default function SignUpPage(): React.JSX.Element {
     }
     setMVerifying(true)
     try {
-      await authApi.verifyMobileOtp(formData.phone, mOtp)
+      await verifyPhoneOtp(formData.phone, mOtp)
       setMVerified(true)
       setMNotice('')
     } catch (err: any) {

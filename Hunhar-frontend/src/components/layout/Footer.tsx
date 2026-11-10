@@ -16,7 +16,7 @@ const columns: FooterColumn[] = [
   {
     title: 'For Businesses',
     links: [
-      { label: 'How to hire', href: '#how-to-hire' },
+      { label: 'How to hire', href: '/#how-it-works' },
       { label: 'Post a Task', href: '/signup?role=client' },
       // { label: 'Browse Categories', href: '#categories' },
       // { label: 'Pricing', href: '#pricing' },
@@ -25,7 +25,7 @@ const columns: FooterColumn[] = [
   {
     title: 'For Students',
     links: [
-      { label: 'How to find work', href: '#how-it-works' },
+      { label: 'How to find work', href: '/#how-it-works' },
       { label: 'Create Profile', href: '/signup?role=freelancer' },
       // { label: 'How Payments Work', href: '#payments' },
       // { label: 'Student Resources', href: '#resources' },
@@ -34,9 +34,9 @@ const columns: FooterColumn[] = [
   {
     title: 'Company',
     links: [
-      { label: 'About', href: '#about' },
-      { label: 'Success Stories', href: '#success-stories' },
-      { label: 'Careers', href: '/careers' },
+      { label: 'About', href: '/about' },
+      { label: 'Features', href: '/features' },
+      { label: 'Contact Us', href: '/contact' },
     ],
   },
   {
@@ -44,7 +44,7 @@ const columns: FooterColumn[] = [
     links: [
       { label: 'Terms of Service', href: '/terms' },
       { label: 'Privacy Policy', href: '/privacy' },
-      // { label: 'Trust & Safety', href: '/trust' },
+      { label: 'Refund Policy', href: '/refund-policy' },
     ],
   },
 ]

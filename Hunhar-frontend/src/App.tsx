@@ -6,6 +6,7 @@ import FeaturesPage from './pages/FeaturesPage'
 import SignUpPage from './pages/SignUpPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
+import LegalPage from './pages/LegalPage'
 import { RoleRoute, GuestRoute } from './components/auth/RoleRoute'
 import DashboardLayout from './components/dashboard/DashboardLayout'
 import { PageLoader, LoaderProvider } from './components/common/Loader'
@@ -64,6 +65,10 @@ export default function App(): React.JSX.Element {
             <Route path="/" element={<LandingPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/features" element={<FeaturesPage />} />
+            <Route path="/terms" element={<LegalPage kind="terms" />} />
+            <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+            <Route path="/refund-policy" element={<LegalPage kind="refund" />} />
+            <Route path="/contact" element={<LegalPage kind="contact" />} />
             <Route path="/signup" element={<GuestRoute><SignUpPage /></GuestRoute>} />
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
 

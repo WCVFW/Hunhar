@@ -218,6 +218,7 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
                         {/* 'Hire →' pill outline button */}
                         <button
                           type="button"
+                          onClick={() => (onOpenSignup ? onOpenSignup() : window.location.assign('/signup'))}
                           className="group border border-[#171717] bg-white hover:bg-[#fafafa] active:scale-95 px-4 py-1.5 rounded-full font-manrope text-[0.8125rem] font-semibold text-[#171717] inline-flex items-center gap-1.5 transition-all duration-150 cursor-pointer"
                         >
                           <span>Hire</span>

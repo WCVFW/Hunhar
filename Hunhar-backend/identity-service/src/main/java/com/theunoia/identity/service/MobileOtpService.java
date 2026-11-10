@@ -28,6 +28,7 @@ public class MobileOtpService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final SmsService smsService;
+    private final FirebasePhoneVerifier firebasePhoneVerifier;
 
     @Value("${theunoia.otp.expiry-minutes:10}")
     private int expiryMinutes;
@@ -123,6 +124,30 @@ public class MobileOtpService {
         record.setVerified(true);
         record.setVerifiedAt(Instant.now());
         mobileOtpRepository.save(record);
+    }
+
+    /**
+     * Firebase phone sign-in: the browser already sent the SMS and checked the code with Firebase. We verify Firebase's
+     * ID token and mark that number as verified, exactly as a correct Fast2SMS code would.
+     */
+    @Transactional
+    public String verifyFirebase(String idToken) {
+        String mobile = normalize(firebasePhoneVerifier.verifyPhoneToken(idToken));
+        if (userRepository.existsByMobile(mobile)) {
+            throw new BadRequestException("This mobile number is already registered. Please log in instead.");
+        }
+        Instant now = Instant.now();
+        MobileOtp record = mobileOtpRepository.findByMobile(mobile).orElse(null);
+        if (record == null) record = MobileOtp.builder().mobile(mobile).sentOn(LocalDate.now(IST)).build();
+        // No code of ours exists for this number; store an unguessable hash so the SMS-code path can never match it
+        record.setOtpHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+        record.setExpiresAt(now);
+        record.setLastSentAt(now);
+        record.setAttempts(0);
+        record.setVerified(true);
+        record.setVerifiedAt(now);
+        mobileOtpRepository.save(record);
+        return mobile;
     }
 
     /** Called during registration: the number must have been verified recently. The record is then removed. */

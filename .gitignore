@@ -15,6 +15,9 @@ node_modules/
 !**/.env.example
 # Frontend build settings hold only public URLs (no secrets); Vercel/EC2 builds need them
 !Hunhar-frontend/.env.production
+!Hunhar-frontend/.env.development
+!Hunhar-frontend/.env.live-ip
+!Hunhar-frontend/.env.localapi
 
 # Build outputs
 dist/

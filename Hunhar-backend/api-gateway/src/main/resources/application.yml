@@ -45,6 +45,8 @@ theunoia:
     encryption:
       # true = every /api/** call must use the encrypted envelope (the web app always does). false = plain JSON also accepted.
       required: ${API_ENCRYPTION_REQUIRED:true}
+      # true = plain JSON is still accepted on requests that reach the gateway port directly (SSH tunnel), never through nginx
+      allow-direct-plain: ${API_ALLOW_DIRECT_PLAIN:true}
       # "<pkcs8-base64>.<x509-base64>"; leave empty to use (and on first start create) the key file below
       key-pair: ${API_ENC_KEY_PAIR:}
       key-file: ${API_ENC_KEY_FILE:.api-enc-key}

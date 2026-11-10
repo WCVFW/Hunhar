@@ -7,7 +7,8 @@ import { secureFetch } from './secureTransport'
 
 // Empty (production, .env.production) = the website's own address: nginx passes /api/* to the gateway, so the
 // site works on https://www.hunhar.in and on the server's IP alike. A full URL calls another host instead.
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8080')).replace(/\/$/, '')
+// Production build: '' = same address as the website. Local dev: the live server unless .env.<mode> says otherwise.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'https://www.hunhar.in')).replace(/\/$/, '')
 
 export interface ApiResponse<T> {
   success: boolean
@@ -176,6 +177,12 @@ export const startSession = (res: AuthResult, remember = true): string => {
   return DASHBOARD_BY_ROLE[res.role || 'FREELANCER']
 }
 
+export interface MobileOtpConfig {
+  provider: 'SMS' | 'FIREBASE'
+  required: boolean
+  firebase?: { apiKey: string; authDomain: string; projectId: string; appId: string }
+}
+
 export const authApi = {
   registerFreelancer: (data: {
     fullName: string
@@ -225,6 +232,12 @@ export const authApi = {
 
   verifyMobileOtp: (mobile: string, otp: string) =>
     apiRequest<void>('/api/v1/auth/mobile-otp/verify', { method: 'POST', body: JSON.stringify({ mobile, otp }) }),
+
+  /** SMS = server sends the code (Fast2SMS); FIREBASE = the browser sends it with Firebase (see services/phoneOtp.ts). */
+  mobileOtpConfig: () => apiRequest<MobileOtpConfig>('/api/v1/auth/mobile-otp/config'),
+
+  verifyFirebaseMobile: (idToken: string) =>
+    apiRequest<void>('/api/v1/auth/mobile-otp/firebase', { method: 'POST', body: JSON.stringify({ idToken }) }),
 
   googleConfig: () => apiRequest<{ enabled: boolean; clientId: string | null }>('/api/v1/auth/google/config'),
 
