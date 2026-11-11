@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { Mail, MapPin, Clock, Send, MessageSquare, CheckCircle, Sparkles } from 'lucide-react'
-import { FaInstagram, FaLinkedinIn, FaYoutube, FaXTwitter } from 'react-icons/fa6'
+import { FaInstagram, FaLinkedinIn, FaYoutube, FaXTwitter, FaFacebookF } from 'react-icons/fa6'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
 
 import wolfJarImg from '../assets/about/wolf_jar.webp'
-import vikashImg from '../assets/vikash.jpg'
-import rihanaImg from '../assets/rihana.jpg'
-import studentLeftImg from '../assets/student_left.jpg'
+import vikashImg from '../assets/about/vikash_arch.jpg'
+import rihanaImg from '../assets/about/rihana_arch.jpg'
 import meeraImg from '../assets/about/meera_arch.jpg'
 import mascotLaptopImg from '../assets/image.png'
 import mascotBusinessImg from '../assets/mascot_business.png'
@@ -113,9 +112,9 @@ export default function ContactPage(): React.JSX.Element {
               </div>
 
               {/* Right Column: Center Mascot + Concentric Orbiting Tracks */}
-              <div className="lg:col-span-6 relative w-full h-[400px] sm:h-[480px] lg:h-[540px] flex items-center justify-center select-text overflow-visible">
+              <div className="lg:col-span-6 relative w-full h-[500px] sm:h-[540px] lg:h-[600px] flex items-center justify-center select-text overflow-visible">
                 {/* Center Mascot Circle with Warm Glow */}
-                <div className="relative z-10 w-36 h-36 sm:w-44 sm:h-44 lg:w-48 lg:h-48 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
+                <div className="relative z-10 w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
                   <img
                     src={wolfJarImg}
                     alt="Hunhar Mascot winking and giving thumbs up"
@@ -125,117 +124,111 @@ export default function ContactPage(): React.JSX.Element {
 
                 {/* Orbit 1: Inner Track (Clockwise) */}
                 <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/30 pointer-events-none will-change-transform w-[260px] h-[260px] sm:w-[300px] sm:h-[300px] lg:w-[330px] lg:h-[330px]"
-                  style={{ animation: 'orbitClockwise 26s linear infinite' }}
+                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/30 pointer-events-none will-change-transform w-[280px] h-[280px] sm:w-[300px] sm:h-[300px] lg:w-[320px] lg:h-[320px]"
+                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
                 >
                   {/* Talent Pill Badge (at ~3 o'clock) */}
                   <div
                     className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 26s linear infinite' }}
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <span className="inline-block px-3.5 py-1 rounded-full bg-terracotta text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
+                    <span className="inline-block px-3.5 py-1.5 rounded-full bg-terracotta text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
                       Talent
                     </span>
                   </div>
-
-                  {/* Student Avatar: Meera (at ~8 o'clock) */}
-                  <div
-                    className="absolute bottom-[16%] left-[12%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 26s linear infinite' }}
-                  >
-                    <img
-                      src={meeraImg}
-                      alt="Student"
-                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-full border-2 border-white shadow-lg object-cover"
-                    />
-                  </div>
                 </div>
 
-                {/* Orbit 2: Middle Track (Counter-Clockwise) */}
+                {/* Orbit 2: Middle Track (Clockwise) */}
                 <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/25 pointer-events-none will-change-transform w-[350px] h-[350px] sm:w-[410px] sm:h-[410px] lg:w-[450px] lg:h-[450px]"
-                  style={{ animation: 'orbitCounterClockwise 36s linear infinite' }}
+                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/25 pointer-events-none will-change-transform w-[420px] h-[420px] sm:w-[440px] sm:h-[440px] lg:w-[460px] lg:h-[460px]"
+                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
                 >
-                  {/* Opportunity Pill Badge (at ~1 o'clock) */}
+                  {/* Opportunity Pill Badge (at ~12:30 o'clock) */}
                   <div
-                    className="absolute top-[6%] right-[22%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateCounterClockwise 36s linear infinite' }}
+                    className="absolute top-[4%] right-[28%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
                     <span className="inline-block px-4 py-1.5 rounded-full bg-[#0A1B37] text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
                       Opportunity
                     </span>
                   </div>
 
-                  {/* Student Avatar: Vikash (at ~11 o'clock) */}
+                  {/* Student Avatar: Vikash (at ~11 o'clock - Enriched Large Avatar) */}
                   <div
-                    className="absolute top-[14%] left-[18%] -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateCounterClockwise 36s linear infinite' }}
+                    className="absolute top-[14%] left-[16%] -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <img
-                      src={vikashImg}
-                      alt="Vikash"
-                      className="w-11 h-11 sm:w-13 sm:h-13 rounded-full border-2 border-white shadow-lg object-cover"
-                    />
+                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                      <img
+                        src={vikashImg}
+                        alt="Vikash Kumar"
+                        className="w-full h-full object-cover object-top scale-130 origin-top select-none pointer-events-none"
+                      />
+                    </div>
                   </div>
 
-                  {/* Terracotta Triangle (at ~4 o'clock) */}
+                  {/* Student Avatar: Rihana (at ~5 o'clock - Enriched Large Avatar) */}
                   <div
-                    className="absolute top-[48%] right-[-6px] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateCounterClockwise 36s linear infinite' }}
+                    className="absolute bottom-[16%] right-[16%] translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <span className="w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[13px] border-b-terracotta inline-block filter drop-shadow-sm" />
+                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                      <img
+                        src={rihanaImg}
+                        alt="Rihana"
+                        className="w-full h-full object-cover object-top scale-135 origin-top select-none pointer-events-none"
+                      />
+                    </div>
                   </div>
 
                   {/* Gold Mini Planet Dot (at ~7 o'clock) */}
                   <div
-                    className="absolute bottom-[20%] left-[22%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateCounterClockwise 36s linear infinite' }}
+                    className="absolute bottom-[18%] left-[24%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <span className="w-3.5 h-3.5 rounded-full bg-[#CDA96B] shadow-sm inline-block" />
+                    <span className="w-4 h-4 rounded-full bg-[#CDA96B] shadow-sm inline-block" />
                   </div>
                 </div>
 
                 {/* Orbit 3: Outer Track (Clockwise) */}
                 <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/20 pointer-events-none will-change-transform w-[450px] h-[450px] sm:w-[530px] sm:h-[530px] lg:w-[580px] lg:h-[580px]"
-                  style={{ animation: 'orbitClockwise 50s linear infinite' }}
+                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/20 pointer-events-none will-change-transform w-[550px] h-[550px] sm:w-[570px] sm:h-[570px] lg:w-[590px] lg:h-[590px]"
+                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
                 >
-                  {/* Student Avatar: Rihana (at ~5 o'clock) */}
+                  {/* Student Avatar: Meera (at ~6 o'clock - Enriched Large Avatar) */}
                   <div
-                    className="absolute bottom-[20%] right-[22%] translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 50s linear infinite' }}
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <img
-                      src={rihanaImg}
-                      alt="Rihana"
-                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-white shadow-lg object-cover"
-                    />
+                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                      <img
+                        src={meeraImg}
+                        alt="Meera"
+                        className="w-full h-full object-cover object-top scale-125 origin-top select-none pointer-events-none"
+                      />
+                    </div>
                   </div>
 
-                  {/* Student Avatar: Ananya (at ~6 o'clock) */}
+                  {/* Terracotta Circle (at ~2:30 o'clock) */}
                   <div
-                    className="absolute bottom-[-14px] left-[52%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 50s linear infinite' }}
+                    className="absolute top-[28%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <img
-                      src={studentLeftImg}
-                      alt="Student"
-                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-white shadow-lg object-cover"
-                    />
+                    <span className="w-4 h-4 rounded-full bg-terracotta inline-block shadow-sm" />
                   </div>
 
-                  {/* Navy Square (at ~4 o'clock) */}
+                  {/* Navy Circle (at ~4 o'clock) */}
                   <div
                     className="absolute top-[68%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 50s linear infinite' }}
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
-                    <span className="w-4 h-4 bg-[#0A1B37] rounded-xs inline-block shadow-sm" />
+                    <span className="w-4 h-4 rounded-full bg-[#0A1B37] inline-block shadow-sm" />
                   </div>
 
                   {/* Gold Planet Orb (at ~9 o'clock) */}
                   <div
                     className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 50s linear infinite' }}
+                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
                   >
                     <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#CDA96B] shadow-md inline-block border-2 border-[#F4EFE6]" />
                   </div>
@@ -292,15 +285,24 @@ export default function ContactPage(): React.JSX.Element {
                   </div>
 
                   {/* Social Media Icons (Above Mascot, No Text) */}
-                  <div className="flex items-center gap-3 z-10 relative mt-4">
+                  <div className="flex items-center gap-2.5 sm:gap-3 z-10 relative mt-4 flex-wrap">
                     <a
-                      href="https://instagram.com"
+                      href="https://www.instagram.com/theunoia_?exln=MXJoeHU1aXMzMmZudw=="
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="Instagram"
                       className="w-10 h-10 rounded-full border border-white/20 text-white/90 hover:text-white hover:border-terracotta hover:bg-terracotta/20 flex items-center justify-center transition-all bg-white/5 cursor-pointer shadow-sm"
                     >
                       <FaInstagram className="w-4 h-4" />
+                    </a>
+                    <a
+                      href="https://www.facebook.com/share/1DJMDqYiUN/?mibextid=wwXIfr"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Facebook"
+                      className="w-10 h-10 rounded-full border border-white/20 text-white/90 hover:text-white hover:border-terracotta hover:bg-terracotta/20 flex items-center justify-center transition-all bg-white/5 cursor-pointer shadow-sm"
+                    >
+                      <FaFacebookF className="w-4 h-4" />
                     </a>
                     <a
                       href="https://linkedin.com"
@@ -312,7 +314,7 @@ export default function ContactPage(): React.JSX.Element {
                       <FaLinkedinIn className="w-4 h-4" />
                     </a>
                     <a
-                      href="https://youtube.com"
+                      href="https://youtube.com/@theunoia?si=4_g5OfQuin4f1fI9"
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="YouTube"
