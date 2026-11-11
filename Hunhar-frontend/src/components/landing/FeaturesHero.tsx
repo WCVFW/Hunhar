@@ -47,7 +47,7 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
             </div>
 
             {/* Main Headline */}
-            <h2 className="font-makira font-bold text-3xl sm:text-4xl md:text-5xl lg:text-[3.25rem] xl:text-[3.65rem] text-[#0A1B37] leading-[1.08] tracking-[-0.02em] m-0">
+            <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.96] tracking-[-0.025em] uppercase m-0">
               Everything You Need
               <br />
               to{' '}
@@ -56,10 +56,10 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
               </span>
               <br />
               & Succeed
-            </h2>
+            </h1>
 
             {/* Subhead / Description */}
-            <p className="font-manrope text-[15px] sm:text-base lg:text-[17px] text-[#555E6D] leading-[1.65] font-normal max-w-xl mt-6 mb-8">
+            <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-xl mt-6 mb-8">
               A complete ecosystem for students and clients — from onboarding to delivery, powered
               by AI and built for real-world impact.
             </p>

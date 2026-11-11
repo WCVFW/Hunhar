@@ -148,7 +148,7 @@ export default function PlatformCapabilities(): React.JSX.Element {
           </div>
 
           {/* Heading */}
-          <h2 className="font-makira font-bold text-3xl sm:text-4xl md:text-5xl text-[#0A1B37] tracking-tight leading-[1.15] m-0">
+          <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight m-0">
             What we’re strong at and how we help your journey
           </h2>
 

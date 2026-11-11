@@ -65,7 +65,7 @@ export default function AIGrowthToolsSection(): React.JSX.Element {
             </div>
 
             {/* Main Headline */}
-            <h2 className="font-Manrope semi-bold text-3xl sm:text-4xl md:text-5xl text-[#0A1B37] tracking-tight leading-[1.12] m-0">
+            <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight m-0">
               Learn, Verify & Stay Ahead
             </h2>
 

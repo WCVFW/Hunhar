@@ -279,10 +279,10 @@ export default function AboutPage(): React.JSX.Element {
                 <span className="inline-block px-4 py-1.5 rounded-full bg-white text-terracotta border border-terracotta/40 font-bold text-xs sm:text-sm tracking-wide shadow-sm select-text">
                   Hunhar, a THE UNOiA brand
                 </span>
-                <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-7xl text-navy tracking-tight leading-[0.95] mt-5 mb-6 max-w-lg select-text">
+                <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.96] uppercase mt-5 mb-6 max-w-xl select-text">
                   Great Talent Deserves to Be <span className="text-terracotta select-text">Discovered.</span>
                 </h1>
-                <p className="font-manrope text-base sm:text-lg text-navy/80 max-w-lg mb-8 leading-relaxed font-medium select-text">
+                <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-lg mb-8 select-text">
                   Hunhar connects talented individuals with real opportunities and businesses with the right skills to bring ideas to life.
                 </p>
                 <button
@@ -360,7 +360,7 @@ export default function AboutPage(): React.JSX.Element {
             <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-gold border border-gold/40 font-bold text-xs sm:text-sm tracking-wide mb-4 select-text">
               Our Story
             </span>
-            <h2 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl text-[#F3EFE6] tracking-tight leading-[1.05] max-w-3xl mb-8 select-text">
+            <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#F3EFE6] leading-tight max-w-3xl mb-8 select-text">
               Talent Is Everywhere. Opportunity Should Be Too.
             </h2>
 
@@ -435,7 +435,7 @@ export default function AboutPage(): React.JSX.Element {
               <span className="inline-block px-4 py-1.5 rounded-full bg-white/20 text-[#FFF8EF] font-bold text-xs sm:text-sm tracking-wide mb-4 select-text">
                 Our Purpose
               </span>
-              <h2 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl text-[#FFF8EF] tracking-tight leading-[1.05] mb-6 select-text">
+              <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#FFF8EF] leading-tight mb-6 select-text">
                 We’re Here to Make <br />
                 Talent Count.
               </h2>
@@ -546,7 +546,7 @@ export default function AboutPage(): React.JSX.Element {
             <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-gold border border-gold/40 font-bold text-xs sm:text-sm tracking-wide mb-4 shadow-sm select-text">
               How Hunhar Works
             </span>
-            <h2 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight mt-3 mb-10 sm:mb-14 max-w-xl mx-auto select-text">
+            <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-white leading-tight mt-3 mb-10 sm:mb-14 max-w-xl mx-auto select-text">
               Two Sides. One Shared Goal.
             </h2>
 
@@ -617,7 +617,7 @@ export default function AboutPage(): React.JSX.Element {
             </span>
             <h2
               ref={visionHeadingRef}
-              className="font-display font-black text-3xl sm:text-5xl lg:text-7xl text-navy tracking-tight max-w-4xl mx-auto mb-12 sm:mb-16 select-text leading-[0.98]"
+              className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-navy leading-tight max-w-4xl mx-auto mb-12 sm:mb-16 select-text"
             >
               {['A', 'Future', 'Where', 'Talent', 'Has', 'No', 'Limits.'].map((word, i) => (
                 <span
@@ -716,7 +716,7 @@ export default function AboutPage(): React.JSX.Element {
           </div>
 
           <div className="max-w-7xl mx-auto relative z-10 flex flex-col items-start justify-center">
-            <h2 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl text-white tracking-tight max-w-[16ch] mb-3 leading-[1.08] select-text">
+            <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-white leading-tight max-w-[18ch] mb-3 select-text">
               Your Potential Deserves a Place to Grow.
             </h2>
             <p className="font-manrope text-base sm:text-lg lg:text-xl text-[#FFF8EF]/95 max-w-[34ch] mb-6 font-medium select-text">

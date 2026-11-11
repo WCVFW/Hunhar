@@ -44,7 +44,7 @@ export default function BlogPage(): React.JSX.Element {
               </div>
 
               {/* Headline */}
-              <h1 className="font-makira font-bold text-3xl sm:text-5xl md:text-6xl text-[#0A1B37] leading-[1.08] tracking-[-0.02em] m-0 max-w-3xl">
+              <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl">
                 Stories, Strategies & Tips{' '}
                 <span className="block mt-2 bg-gradient-to-r from-[#C06B3E] via-[#D8783B] to-[#E39D52] bg-clip-text text-transparent">
                   Brewing Very Soon.
@@ -52,7 +52,7 @@ export default function BlogPage(): React.JSX.Element {
               </h1>
 
               {/* Subtitle */}
-              <p className="font-manrope text-[15px] sm:text-base lg:text-[17px] text-[#555E6D] leading-[1.65] font-normal max-w-2xl mt-5 mb-10">
+              <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-2xl mt-6 mb-10">
                 We&apos;re putting the finishing touches on inspiring student freelancer spotlights, client hiring playbooks, and platform updates. Luna is hard at work crafting our first editions!
               </p>
 

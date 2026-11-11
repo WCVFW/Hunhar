@@ -68,12 +68,12 @@ export default function ContactPage(): React.JSX.Element {
                   Contact Hunhar
                 </span>
 
-                <h1 className="font-display font-black text-3xl sm:text-5xl lg:text-[3.25rem] xl:text-[4.2rem] text-navy tracking-tight leading-[1.02] mt-5 mb-5 select-text">
+                <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.96] uppercase mt-5 mb-5 select-text">
                   <span className="block whitespace-nowrap select-text">Let’s Talk Talent &amp;</span>
                   <span className="block text-terracotta whitespace-nowrap select-text">Opportunity.</span>
                 </h1>
 
-                <p className="font-manrope text-base sm:text-lg text-navy/80 max-w-md mb-8 leading-relaxed font-medium select-text">
+                <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-md mb-8 select-text">
                   Have a question, an idea or feedback? Tell us how we can help. We read every message and reply by email.
                 </p>
 
@@ -252,7 +252,7 @@ export default function ContactPage(): React.JSX.Element {
                     Get in touch
                   </span>
 
-                  <h2 className="font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-[1.08] mb-8">
+                  <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-white leading-tight mb-8">
                     We’d love to <br />
                     hear from you.
                   </h2>
@@ -362,7 +362,7 @@ export default function ContactPage(): React.JSX.Element {
                     Start the conversation
                   </span>
 
-                  <h2 className="font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl text-[#0A1B37] tracking-tight mb-2">
+                  <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight mb-2">
                     Tell us about you.
                   </h2>
 

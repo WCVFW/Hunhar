@@ -116,7 +116,7 @@ export default function HunharBenefits(): React.JSX.Element {
           viewport={{ once: true, amount: 0.3 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
         >
-          <h2 className="font-display text-3xl sm:text-5xl font-medium text-terracotta leading-tight tracking-tight mb-3">
+          <h2 className="font-makira text-2xl sm:text-3xl md:text-4xl font-medium uppercase tracking-wide text-terracotta leading-tight mb-3">
             What’s in it for you?
           </h2>
           <p className="font-sans text-base sm:text-lg font-medium text-navy leading-relaxed m-0">

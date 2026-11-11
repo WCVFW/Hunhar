@@ -104,7 +104,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
           {/* Central Call to Action Content (Selectable & copyable text) */}
           <div className="absolute left-1/2 -translate-x-1/2 top-[55%] w-full max-w-2xl text-center z-20 flex flex-col items-center">
             {/* Heading (Selectable and copyable) */}
-            <h2 className="font-makira semi-bold text-2xl sm:text-3xl lg:text-4xl xl:text-[2.75rem] text-[#0A1B37] tracking-tight leading-[1.14] m-0 select-text cursor-text">
+            <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight m-0 select-text cursor-text">
               Ready to Experience the
               <br />
               Future of Freelancing?
@@ -159,7 +159,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
           </div>
 
           {/* Heading */}
-          <h2 className="font-makira font-bold text-2xl text-[#0A1B37] text-center tracking-tight leading-[1.16] m-0 max-w-sm select-text cursor-text">
+          <h2 className="font-makira font-medium text-xl sm:text-2xl uppercase tracking-wide text-[#0A1B37] text-center leading-tight m-0 max-w-sm select-text cursor-text">
             Ready to Experience the Future of Freelancing?
           </h2>
 
