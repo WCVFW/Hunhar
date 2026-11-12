@@ -289,8 +289,10 @@ export default function AboutPage(): React.JSX.Element {
                 <span className="inline-block px-4 py-1.5 rounded-full bg-white text-terracotta border border-terracotta/40 font-bold text-xs sm:text-sm tracking-wide shadow-sm select-text">
                   Hunhar, a THE UNOiA brand
                 </span>
-                <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.98] sm:leading-[0.96] uppercase mt-5 mb-5 sm:mb-6 max-w-xl select-text">
-                  Great Talent Deserves to Be <span className="text-terracotta select-text">Discovered.</span>
+                <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.25rem] md:text-[3.65rem] lg:text-[3.25rem] xl:text-[4.25rem] 2xl:text-[4.75rem] text-navy tracking-[-0.025em] leading-[0.98] sm:leading-[0.96] uppercase mt-5 mb-5 sm:mb-6 max-w-2xl select-text">
+                  Great Talent <br className="hidden sm:inline" />
+                  <span className="sm:whitespace-nowrap">Deserves to Be</span> <br className="hidden sm:inline" />
+                  <span className="text-terracotta select-text">Discovered.</span>
                 </h1>
                 <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-lg mb-8 select-text">
                   Hunhar connects talented individuals with real opportunities and businesses with the right skills to bring ideas to life.
@@ -307,13 +309,13 @@ export default function AboutPage(): React.JSX.Element {
               {/* Right Column: Arches, Opportunity Badge, Mascot */}
               <div className="lg:col-span-6 relative max-w-lg mx-auto lg:max-w-none w-full select-text">
                 {/* Floating Opportunity Pill Badge */}
-                <div className="absolute -top-7 left-2 sm:left-6 z-20 flex items-center gap-3 bg-navy text-[#F3EFE6] px-4 py-2.5 rounded-2xl -rotate-6 shadow-2xl border border-white/10 select-text">
+                {/* <div className="absolute -top-7 left-2 sm:left-6 z-20 flex items-center gap-3 bg-navy text-[#F3EFE6] px-4 py-2.5 rounded-2xl -rotate-6 shadow-2xl border border-white/10 select-text">
                   <span className="w-8 h-8 rounded-full bg-terracotta flex-shrink-0" />
                   <div className="flex flex-col leading-tight select-text">
                     <b className="text-xs sm:text-sm font-bold select-text">Packaging redesign</b>
                     <small className="text-[#CDA96B] font-bold text-[11px] select-text">Open for bids</small>
                   </div>
-                </div>
+                </div> */}
 
                 {/* 3 Student Arch Cards */}
                 <div className="grid grid-cols-3 gap-3 sm:gap-4 items-end pt-8 select-text">
@@ -549,9 +551,8 @@ export default function AboutPage(): React.JSX.Element {
                 <img
                   src={wolfJarImg}
                   alt="Hunhar wolf mascot winking and giving thumbs up"
-                  className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
-                    isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-                  }`}
+                  className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                    }`}
                   style={{
                     transformOrigin: 'top right',
                     transitionDelay: '700ms',
