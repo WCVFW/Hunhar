@@ -75,8 +75,8 @@ export default function BlogPage(): React.JSX.Element {
                   <span>🎓 Freelancer Playbooks</span>
                 </div>
 
-                {/* Floating Pill: Hiring Tips - far to the right, safely away from Luna's ear */}
-                <div className="hidden sm:flex absolute top-16 -right-4 lg:-right-12 z-20 px-4 py-2 rounded-full bg-[#0A1B37] text-white shadow-xl font-manrope text-xs font-bold items-center gap-2 rotate-3 hover:rotate-0 transition-transform">
+                {/* Floating Pill: Hiring Tips - safely positioned away from Luna's ear */}
+                <div className="hidden sm:flex absolute -top-2 -right-8 lg:-right-16 z-20 px-4 py-2 rounded-full bg-[#0A1B37] text-white shadow-xl font-manrope text-xs font-bold items-center gap-2 rotate-3 hover:rotate-0 transition-transform">
                   <span className="w-2 h-2 rounded-full bg-gold" />
                   <span>💼 Founder Blueprints</span>
                 </div>

@@ -111,12 +111,67 @@ export default function ContactPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Right Column: Center Mascot + Concentric Orbiting Tracks */}
-              <div className="lg:col-span-6 relative w-full h-[380px] sm:h-[480px] lg:h-[600px] flex items-center justify-center select-text overflow-hidden sm:overflow-visible">
-                {/* Responsive Scale Wrapper: Fits perfectly on all phone screens without overflow */}
-                <div className="relative flex items-center justify-center scale-[0.58] min-[380px]:scale-[0.66] min-[440px]:scale-[0.76] sm:scale-90 md:scale-100 origin-center select-none">
+              {/* Right Column: Center Mascot + Visual Representation */}
+              <div className="lg:col-span-6 relative w-full flex items-center justify-center select-text">
+                {/* ---------------------------------------------------------
+                    MOBILE PRESENTATION (lg:hidden): Clean, collision-free, no spinning orbit
+                   --------------------------------------------------------- */}
+                <div className="flex lg:hidden flex-col items-center justify-center w-full py-4 select-none">
+                  {/* Center Mascot with Warm Glow Card & Floating Badges */}
+                  <div className="relative flex items-center justify-center my-4">
+                    {/* Soft decorative background circles */}
+                    <div className="absolute w-56 h-56 rounded-full border border-dashed border-[#0A1B37]/20 pointer-events-none" />
+                    <div className="absolute w-72 h-72 rounded-full border border-dashed border-[#0A1B37]/10 pointer-events-none" />
+
+                    {/* Mascot Circle */}
+                    <div className="relative z-10 w-32 h-32 min-[380px]:w-36 min-[380px]:h-36 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/60 shadow-xl flex items-center justify-center p-2 backdrop-blur-xs">
+                      <img
+                        src={wolfJarImg}
+                        alt="Hunhar Mascot winking and giving thumbs up"
+                        className="w-full h-full object-contain filter drop-shadow-md select-none pointer-events-none"
+                      />
+                    </div>
+
+                    {/* Floating Badge: Talent */}
+                    <div className="absolute -right-3 top-1/2 -translate-y-1/2 z-20">
+                      <span className="inline-block px-3 py-1 rounded-full bg-terracotta text-white font-manrope font-bold text-xs shadow-md">
+                        Talent
+                      </span>
+                    </div>
+
+                    {/* Floating Badge: Opportunity */}
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                      <span className="inline-block px-3.5 py-1 rounded-full bg-[#0A1B37] text-white font-manrope font-bold text-xs shadow-md">
+                        Opportunity
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Student Avatars Row: Clean, non-overlapping, perfectly fitted */}
+                  <div className="mt-4 flex items-center justify-center gap-3 bg-white/70 border border-[#E8DFC9] backdrop-blur-xs px-4 py-2.5 rounded-full shadow-xs">
+                    <span className="text-[11px] font-bold text-[#0A1B37]/75 font-manrope uppercase tracking-wider mr-1">
+                      Top Talent:
+                    </span>
+                    <div className="flex -space-x-2.5 items-center">
+                      <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm overflow-hidden bg-white">
+                        <img src={vikashImg} alt="Vikash" className="w-full h-full object-cover object-top scale-125" />
+                      </div>
+                      <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm overflow-hidden bg-white">
+                        <img src={meeraImg} alt="Meera" className="w-full h-full object-cover object-top scale-125" />
+                      </div>
+                      <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm overflow-hidden bg-white">
+                        <img src={rihanaImg} alt="Rihana" className="w-full h-full object-cover object-top scale-125" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ---------------------------------------------------------
+                    DESKTOP PRESENTATION (hidden lg:flex): Elegant Wide Orbit with Zero Overlaps
+                   --------------------------------------------------------- */}
+                <div className="hidden lg:flex relative w-full h-[600px] items-center justify-center select-none">
                   {/* Center Mascot Circle with Warm Glow */}
-                  <div className="relative z-10 w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
+                  <div className="relative z-10 w-40 h-40 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
                     <img
                       src={wolfJarImg}
                       alt="Hunhar Mascot winking and giving thumbs up"
@@ -124,117 +179,117 @@ export default function ContactPage(): React.JSX.Element {
                     />
                   </div>
 
-                {/* Orbit 1: Inner Track (Clockwise) */}
-                <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/30 pointer-events-none will-change-transform w-[280px] h-[280px] sm:w-[300px] sm:h-[300px] lg:w-[320px] lg:h-[320px]"
-                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
-                >
-                  {/* Talent Pill Badge (at ~3 o'clock) */}
+                  {/* Orbit 1: Inner Track (Clockwise) */}
                   <div
-                    className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
+                    className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/30 pointer-events-none will-change-transform w-[340px] h-[340px]"
+                    style={{ animation: 'orbitClockwise 54s linear infinite' }}
                   >
-                    <span className="inline-block px-3.5 py-1.5 rounded-full bg-terracotta text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
-                      Talent
-                    </span>
-                  </div>
-                </div>
-
-                {/* Orbit 2: Middle Track (Clockwise) */}
-                <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/25 pointer-events-none will-change-transform w-[420px] h-[420px] sm:w-[440px] sm:h-[440px] lg:w-[460px] lg:h-[460px]"
-                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
-                >
-                  {/* Opportunity Pill Badge (at ~12:30 o'clock) */}
-                  <div
-                    className="absolute top-[4%] right-[28%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <span className="inline-block px-4 py-1.5 rounded-full bg-[#0A1B37] text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
-                      Opportunity
-                    </span>
-                  </div>
-
-                  {/* Student Avatar: Vikash (at ~11 o'clock - Enriched Large Avatar) */}
-                  <div
-                    className="absolute top-[14%] left-[16%] -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
-                      <img
-                        src={vikashImg}
-                        alt="Vikash Kumar"
-                        className="w-full h-full object-cover object-top scale-130 origin-top select-none pointer-events-none"
-                      />
+                    {/* Talent Pill Badge (at ~3 o'clock) */}
+                    <div
+                      className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="inline-block px-4 py-1.5 rounded-full bg-terracotta text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
+                        Talent
+                      </span>
                     </div>
                   </div>
 
-                  {/* Student Avatar: Rihana (at ~5 o'clock - Enriched Large Avatar) */}
+                  {/* Orbit 2: Middle Track (Clockwise) */}
                   <div
-                    className="absolute bottom-[16%] right-[16%] translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
+                    className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/25 pointer-events-none will-change-transform w-[480px] h-[480px]"
+                    style={{ animation: 'orbitClockwise 54s linear infinite' }}
                   >
-                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
-                      <img
-                        src={rihanaImg}
-                        alt="Rihana"
-                        className="w-full h-full object-cover object-top scale-135 origin-top select-none pointer-events-none"
-                      />
+                    {/* Opportunity Pill Badge (at ~12:30 o'clock) */}
+                    <div
+                      className="absolute top-[6%] right-[24%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="inline-block px-4 py-1.5 rounded-full bg-[#0A1B37] text-white font-manrope font-bold text-xs shadow-md whitespace-nowrap">
+                        Opportunity
+                      </span>
+                    </div>
+
+                    {/* Student Avatar: Vikash (at ~11 o'clock) */}
+                    <div
+                      className="absolute top-[14%] left-[16%] -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <div className="w-20 h-20 rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                        <img
+                          src={vikashImg}
+                          alt="Vikash Kumar"
+                          className="w-full h-full object-cover object-top scale-130 origin-top select-none pointer-events-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Student Avatar: Rihana (at ~4:30 o'clock - safely spaced from Talent) */}
+                    <div
+                      className="absolute bottom-[12%] right-[22%] translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <div className="w-20 h-20 rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                        <img
+                          src={rihanaImg}
+                          alt="Rihana"
+                          className="w-full h-full object-cover object-top scale-135 origin-top select-none pointer-events-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Gold Mini Planet Dot (at ~7 o'clock) */}
+                    <div
+                      className="absolute bottom-[18%] left-[24%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-[#CDA96B] shadow-sm inline-block" />
                     </div>
                   </div>
 
-                  {/* Gold Mini Planet Dot (at ~7 o'clock) */}
+                  {/* Orbit 3: Outer Track (Clockwise) */}
                   <div
-                    className="absolute bottom-[18%] left-[24%] -translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
+                    className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/20 pointer-events-none will-change-transform w-[620px] h-[620px]"
+                    style={{ animation: 'orbitClockwise 54s linear infinite' }}
                   >
-                    <span className="w-4 h-4 rounded-full bg-[#CDA96B] shadow-sm inline-block" />
-                  </div>
-                </div>
+                    {/* Student Avatar: Meera (at ~6 o'clock) */}
+                    <div
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <div className="w-20 h-20 rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
+                        <img
+                          src={meeraImg}
+                          alt="Meera"
+                          className="w-full h-full object-cover object-top scale-125 origin-top select-none pointer-events-none"
+                        />
+                      </div>
+                    </div>
 
-                {/* Orbit 3: Outer Track (Clockwise) */}
-                <div
-                  className="absolute top-1/2 left-1/2 rounded-full border border-dashed border-[#0A1B37]/20 pointer-events-none will-change-transform w-[550px] h-[550px] sm:w-[570px] sm:h-[570px] lg:w-[590px] lg:h-[590px]"
-                  style={{ animation: 'orbitClockwise 48s linear infinite' }}
-                >
-                  {/* Student Avatar: Meera (at ~6 o'clock - Enriched Large Avatar) */}
-                  <div
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <div className="w-18 h-18 sm:w-20 sm:h-20 lg:w-[5.25rem] lg:h-[5.25rem] rounded-full border-4 border-white shadow-2xl bg-white overflow-hidden flex items-center justify-center transition-transform hover:scale-110">
-                      <img
-                        src={meeraImg}
-                        alt="Meera"
-                        className="w-full h-full object-cover object-top scale-125 origin-top select-none pointer-events-none"
-                      />
+                    {/* Terracotta Circle (at ~2:30 o'clock) */}
+                    <div
+                      className="absolute top-[28%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-terracotta inline-block shadow-sm" />
+                    </div>
+
+                    {/* Navy Circle (at ~4 o'clock) */}
+                    <div
+                      className="absolute top-[68%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-[#0A1B37] inline-block shadow-sm" />
+                    </div>
+
+                    {/* Gold Planet Orb (at ~9 o'clock) */}
+                    <div
+                      className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                      style={{ animation: 'counterRotateClockwise 54s linear infinite' }}
+                    >
+                      <span className="w-6 h-6 rounded-full bg-[#CDA96B] shadow-md inline-block border-2 border-[#F4EFE6]" />
                     </div>
                   </div>
-
-                  {/* Terracotta Circle (at ~2:30 o'clock) */}
-                  <div
-                    className="absolute top-[28%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-terracotta inline-block shadow-sm" />
-                  </div>
-
-                  {/* Navy Circle (at ~4 o'clock) */}
-                  <div
-                    className="absolute top-[68%] right-[4%] translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <span className="w-4 h-4 rounded-full bg-[#0A1B37] inline-block shadow-sm" />
-                  </div>
-
-                  {/* Gold Planet Orb (at ~9 o'clock) */}
-                  <div
-                    className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
-                    style={{ animation: 'counterRotateClockwise 48s linear infinite' }}
-                  >
-                    <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#CDA96B] shadow-md inline-block border-2 border-[#F4EFE6]" />
-                  </div>
-                </div>
                 </div>
               </div>
             </div>

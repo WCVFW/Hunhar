@@ -14,6 +14,7 @@ import {
   Lightbulb,
   CheckCircle2,
   UserCheck,
+  ArrowRight,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -98,19 +99,20 @@ const businessBenefits: BenefitItem[] = [
 
 export default function HunharBenefits(): React.JSX.Element {
   const [activeSide, setActiveSide] = useState<'stu' | 'biz' | null>(null)
+  const [mobileTab, setMobileTab] = useState<'stu' | 'biz'>('stu')
 
   const isStuOpen = activeSide === 'stu'
   const isBizOpen = activeSide === 'biz'
 
   return (
     <section
-      className="relative w-full py-16 sm:py-24 px-6 overflow-hidden bg-white bg-[image:radial-gradient(#E8DFC9_1.1px,transparent_1.1px)] bg-[length:32px_32px]"
+      className="relative w-full py-16 sm:py-24 px-4 sm:px-6 overflow-hidden bg-white bg-[image:radial-gradient(#E8DFC9_1.1px,transparent_1.1px)] bg-[length:32px_32px]"
       id="benefits"
     >
       <div className="max-w-[1240px] mx-auto">
         {/* Section Header matching 'Start smarter' exactly */}
         <motion.div
-          className="text-center max-w-xl mx-auto mb-14"
+          className="text-center max-w-xl mx-auto mb-10 sm:mb-14"
           initial={{ opacity: 0, y: 25 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.3 }}
@@ -124,9 +126,151 @@ export default function HunharBenefits(): React.JSX.Element {
           </p>
         </motion.div>
 
-        {/* Interactive Split Card */}
+        {/* =========================================================
+            MOBILE VIEW (lg:hidden): Clean Segmented Toggle & Full Card
+           ========================================================= */}
+        <div className="block lg:hidden w-full">
+          {/* Segmented Switcher */}
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex p-1 rounded-full bg-[#F3EFEA] border border-[#E8DFC9] shadow-inner">
+              <button
+                type="button"
+                onClick={() => setMobileTab('stu')}
+                className={`px-4 sm:px-6 py-2 rounded-full font-manrope font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                  mobileTab === 'stu'
+                    ? 'bg-terracotta text-white shadow-md'
+                    : 'bg-transparent text-navy/70 hover:text-navy'
+                }`}
+              >
+                🎓 College Talent
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('biz')}
+                className={`px-4 sm:px-6 py-2 rounded-full font-manrope font-bold text-xs sm:text-sm transition-all duration-200 cursor-pointer ${
+                  mobileTab === 'biz'
+                    ? 'bg-navy text-white shadow-md'
+                    : 'bg-transparent text-navy/70 hover:text-navy'
+                }`}
+              >
+                🏢 For Businesses
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Card Display */}
+          {mobileTab === 'stu' ? (
+            <div className="rounded-[28px] overflow-hidden bg-terracotta text-[#FFF8EF] p-6 shadow-xl border border-white/20">
+              <div className="relative w-full h-48 rounded-2xl overflow-hidden mb-6 shadow-md border border-white/20">
+                <img
+                  src={indianStudentsImg}
+                  alt="Indian college students working together"
+                  className="w-full h-full object-cover object-top"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-terracotta/80 via-transparent to-black/20" />
+                <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-md text-terracotta font-manrope font-bold text-xs py-1 px-3 rounded-full">
+                  College Talent
+                </span>
+              </div>
+
+              <h3 className="font-display font-medium text-2xl leading-tight tracking-tight mb-2 text-white">
+                For Students
+              </h3>
+              <p className="font-manrope text-sm font-medium opacity-90 mb-5">
+                Earn while you learn. Gain real experience.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-6">
+                {studentBenefits.map((b) => {
+                  const Icon = b.icon
+                  return (
+                    <div
+                      key={b.title}
+                      className="flex items-start gap-3 p-3 rounded-xl bg-white/10 backdrop-blur-xs border border-white/15"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-manrope font-bold text-sm text-white mb-0.5">{b.title}</h4>
+                        <p className="font-manrope text-xs text-[#FFF8EF]/80 m-0 leading-relaxed">{b.desc}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-white/20">
+                <a
+                  href="/signup?role=freelancer"
+                  className="inline-flex items-center gap-2 bg-[#FFF8EF] text-terracotta hover:bg-white font-manrope text-xs font-bold uppercase px-4 py-2.5 rounded-lg transition-all"
+                >
+                  <span>JOIN AS TALENT</span>
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+                <span className="text-xs font-medium text-[#FFF8EF]/80">Zero commission for students</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[28px] overflow-hidden bg-navy text-[#F3EFE6] p-6 shadow-xl border border-[#CDA96B]/40">
+              <div className="relative w-full h-48 rounded-2xl overflow-hidden mb-6 shadow-md border border-[#CDA96B]/30">
+                <img
+                  src={indianBusinessImg}
+                  alt="Indian business team collaborating"
+                  className="w-full h-full object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-navy/85 via-transparent to-black/20" />
+                <span className="absolute top-3 left-3 bg-navy/90 backdrop-blur-md text-[#CDA96B] font-manrope font-bold text-xs py-1 px-3 rounded-full border border-[#CDA96B]/30">
+                  Growing Companies
+                </span>
+              </div>
+
+              <h3 className="font-display font-medium text-2xl leading-tight tracking-tight mb-2 text-white">
+                For Businesses
+              </h3>
+              <p className="font-manrope text-sm font-medium opacity-90 mb-5">
+                Get work done. Faster. Smarter. Affordably.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-6">
+                {businessBenefits.map((b) => {
+                  const Icon = b.icon
+                  return (
+                    <div
+                      key={b.title}
+                      className="flex items-start gap-3 p-3 rounded-xl bg-white/5 backdrop-blur-xs border border-white/10"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#CDA96B]/20 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-[#CDA96B]" />
+                      </div>
+                      <div>
+                        <h4 className="font-manrope font-bold text-sm text-white mb-0.5">{b.title}</h4>
+                        <p className="font-manrope text-xs text-[#F3EFE6]/75 m-0 leading-relaxed">{b.desc}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                <a
+                  href="/signup?role=client"
+                  className="inline-flex items-center gap-2 bg-[#CDA96B] text-navy hover:bg-[#DFC085] font-manrope text-xs font-bold uppercase px-4 py-2.5 rounded-lg transition-all"
+                >
+                  <span>POST A PROJECT</span>
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+                <span className="text-xs font-medium text-[#F3EFE6]/80">Verified college talent</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* =========================================================
+            DESKTOP VIEW (hidden lg:flex): Interactive Split Accordion
+           ========================================================= */}
         <div
-          className="flex flex-col lg:flex-row gap-3.5 lg:h-[740px] w-full"
+          className="hidden lg:flex flex-row gap-3.5 h-[740px] w-full"
           onMouseLeave={() => setActiveSide(null)}
         >
           {/* For Students Half */}

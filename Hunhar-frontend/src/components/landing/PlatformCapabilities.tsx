@@ -159,10 +159,10 @@ export default function PlatformCapabilities(): React.JSX.Element {
         </div>
 
         {/* =========================================================
-            INTERACTIVE TAB SWITCHER (3 Tabs)
+            INTERACTIVE TAB SWITCHER (3 Tabs) - Fully Responsive Grid
            ========================================================= */}
-        <div className="flex justify-center mb-10 sm:mb-12">
-          <div className="inline-flex items-center p-1.5 rounded-full bg-[#F3EFEA] border border-[#E8DFC9]/70 shadow-inner">
+        <div className="flex justify-center mb-10 sm:mb-12 w-full px-1 sm:px-0">
+          <div className="grid grid-cols-3 w-full max-w-xl p-1 sm:p-1.5 rounded-full bg-[#F3EFEA] border border-[#E8DFC9]/70 shadow-inner">
             {tabs.map((tab, idx) => {
               const TabIcon = tab.icon
               const isActive = activeTab === idx
@@ -171,17 +171,17 @@ export default function PlatformCapabilities(): React.JSX.Element {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(idx)}
-                  className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-manrope font-semibold inline-flex items-center gap-2 transition-all duration-200 cursor-pointer border-none outline-none ${
+                  className={`px-1.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-[11px] min-[380px]:text-xs sm:text-sm font-manrope font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 cursor-pointer border-none outline-none text-center ${
                     isActive
                       ? 'bg-white text-[#0A1B37] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
                       : 'bg-transparent text-[#64748B] hover:text-[#0A1B37]'
                   }`}
                   aria-selected={isActive}
                 >
-                  <TabIcon className={`w-4 h-4 ${isActive ? 'text-[#0A1B37]' : 'text-[#64748B]'}`} />
-                  <span>{tab.name}</span>
+                  <TabIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${isActive ? 'text-[#0A1B37]' : 'text-[#64748B]'}`} />
+                  <span className="truncate">{tab.name}</span>
                   {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#C06B3E] ml-0.5" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C06B3E] shrink-0" />
                   )}
                 </button>
               )

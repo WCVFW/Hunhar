@@ -496,45 +496,91 @@ export default function AboutPage(): React.JSX.Element {
               </p>
             </div>
 
-            {/* Right Column: Dashed Jar Box with Falling Chips and Top-Right Wolf Mascot */}
+            {/* Right Column: Dashed Jar Box */}
             <div
               ref={jarRef}
-              className="lg:col-span-7 relative h-[390px] sm:h-[420px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
+              className="lg:col-span-7 relative min-h-[340px] sm:h-[420px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
             >
-              {/* Top-Right Wolf Mascot (Exact location from user design) */}
-              <img
-                src={wolfJarImg}
-                alt="Hunhar wolf mascot winking and giving thumbs up"
-                className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-                  }`}
-                style={{
-                  transformOrigin: 'top right',
-                  transitionDelay: '700ms',
-                }}
-              />
+              {/* =========================================================
+                  MOBILE VIEW (md:hidden): Clean, Non-Overlapping Pill Cloud
+                 ========================================================= */}
+              <div className="flex md:hidden flex-col h-full justify-between select-text">
+                {/* Top Row: Mascot + Label */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/20">
+                  <div>
+                    <span className="block font-makira font-bold text-sm text-[#FFF8EF] uppercase tracking-wider">
+                      Popular Skills
+                    </span>
+                    <span className="text-[11px] font-manrope text-[#FFF8EF]/80 font-medium">
+                      Verified & In-Demand on Hunhar
+                    </span>
+                  </div>
+                  <img
+                    src={wolfJarImg}
+                    alt="Hunhar wolf mascot"
+                    className="w-16 h-auto object-contain filter drop-shadow-md"
+                  />
+                </div>
 
-              {/* Falling Skill Chips inside the box */}
-              {skillChips.map((chip) => {
-                return (
-                  <span
-                    key={chip.name}
-                    className={`absolute px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-display font-bold text-xs sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
-                    style={{
-                      left: chip.left,
-                      bottom: chip.bottom,
-                      transition:
-                        'transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease',
-                      transitionDelay: `${chip.delay}ms`,
-                      transform: isJarVisible
-                        ? `translateY(0px) rotate(${chip.rotate}deg)`
-                        : `translateY(-480px) rotate(${chip.rotate * 3}deg)`,
-                      opacity: isJarVisible ? 1 : 0,
-                    }}
-                  >
-                    {chip.name}
+                {/* Pill Cloud: Neatly spaced flex-wrap, 100% readable and zero collisions */}
+                <div className="flex flex-wrap gap-2 py-4 items-center justify-center">
+                  {skillChips.map((chip) => (
+                    <span
+                      key={chip.name}
+                      className={`px-3 py-1.5 rounded-full font-manrope font-bold text-xs shadow-md whitespace-nowrap ${chip.color}`}
+                    >
+                      {chip.name}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="text-center pt-2 border-t border-white/10">
+                  <span className="text-[11px] font-manrope font-semibold text-[#FFF8EF]/90">
+                    ✨ Turn your skills into real projects & income
                   </span>
-                )
-              })}
+                </div>
+              </div>
+
+              {/* =========================================================
+                  DESKTOP VIEW (hidden md:block): Falling Chips with Top-Right Mascot
+                 ========================================================= */}
+              <div className="hidden md:block w-full h-full relative">
+                {/* Top-Right Wolf Mascot */}
+                <img
+                  src={wolfJarImg}
+                  alt="Hunhar wolf mascot winking and giving thumbs up"
+                  className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                    isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                  }`}
+                  style={{
+                    transformOrigin: 'top right',
+                    transitionDelay: '700ms',
+                  }}
+                />
+
+                {/* Falling Skill Chips inside the box */}
+                {skillChips.map((chip) => {
+                  return (
+                    <span
+                      key={chip.name}
+                      className={`absolute px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-display font-bold text-xs sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
+                      style={{
+                        left: chip.left,
+                        bottom: chip.bottom,
+                        transition:
+                          'transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease',
+                        transitionDelay: `${chip.delay}ms`,
+                        transform: isJarVisible
+                          ? `translateY(0px) rotate(${chip.rotate}deg)`
+                          : `translateY(-480px) rotate(${chip.rotate * 3}deg)`,
+                        opacity: isJarVisible ? 1 : 0,
+                      }}
+                    >
+                      {chip.name}
+                    </span>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </section>
