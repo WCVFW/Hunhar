@@ -47,7 +47,7 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
             </div>
 
             {/* Main Headline */}
-            <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.96] tracking-[-0.025em] uppercase m-0">
+            <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.98] sm:leading-[0.96] tracking-[-0.025em] uppercase m-0">
               Everything You Need
               <br />
               to{' '}

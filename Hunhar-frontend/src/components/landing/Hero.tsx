@@ -47,6 +47,7 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
   // Default to index 1 (Vikash Kumar) in center to match UI design screenshot
   const [activeIndex, setActiveIndex] = useState<number>(1)
   const [isPaused, setIsPaused] = useState<boolean>(false)
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
   // Auto-slide faster & smoother (1.2 seconds interval with smooth glide)
   useEffect(() => {
@@ -74,10 +75,10 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
       return '-translate-x-1/2 -translate-y-1/2 scale-100 opacity-100 z-30 blur-none pointer-events-auto cursor-default'
     }
     if (d === -1) {
-      return '-translate-x-[144%] -translate-y-1/2 scale-[0.78] opacity-90 z-20 blur-none pointer-events-auto cursor-pointer hover:opacity-70'
+      return '-translate-x-[118%] sm:-translate-x-[144%] -translate-y-1/2 scale-[0.72] sm:scale-[0.78] opacity-50 sm:opacity-90 z-20 blur-none pointer-events-auto cursor-pointer hover:opacity-70'
     }
     if (d === 1) {
-      return 'translate-x-[44%] -translate-y-1/2 scale-[0.78] opacity-90 z-20 blur-none pointer-events-auto cursor-pointer hover:opacity-70'
+      return 'translate-x-[18%] sm:translate-x-[44%] -translate-y-1/2 scale-[0.72] sm:scale-[0.78] opacity-50 sm:opacity-90 z-20 blur-none pointer-events-auto cursor-pointer hover:opacity-70'
     }
     if (d <= -2) {
       return '-translate-x-[240%] -translate-y-1/2 scale-[0.6] opacity-0 z-10 blur-[2px] pointer-events-none'
@@ -93,20 +94,20 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
         className="pointer-events-none absolute inset-3 sm:inset-4 lg:inset-5 rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] z-0"
       />
 
-      <div className="relative z-[1] max-w-[90rem] mx-auto pt-[5.5rem] pb-[3.5rem] px-2 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20">
+      <div className="relative z-[1] max-w-[90rem] mx-auto pt-24 pb-12 px-4 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
 
           {/* Left Column: Headline, Subheadline, CTA */}
           <div className="flex flex-col items-start z-20 lg:col-span-6">
             {/* Forced 3-line headline with responsive sizing */}
-            <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] leading-[0.96] tracking-[-0.025em] uppercase m-0">
+            <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] leading-[0.98] sm:leading-[0.96] tracking-[-0.025em] uppercase m-0">
               <span className="block text-[#C06B3E]">CONNECTING</span>
               <span className="block text-[#0A1B37]">TALENT WITH</span>
               <span className="block text-[#0A1B37]">OPPORTUNITY</span>
             </h1>
 
             {/* Subheadline paragraph */}
-            <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-[32rem] mt-6 mb-8">
+            <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-[32rem] mt-5 sm:mt-6 mb-7 sm:mb-8">
               Hire Skilled Students Or Earn Through Your Skills -
               <br className="hidden sm:inline" />
               {' '}In One Trusted Marketplace.
@@ -133,11 +134,24 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
             )}
           </div>
 
-          {/* Right Column: Center-Focus Coverflow Auto-Slide Carousel */}
+          {/* Right Column: Center-Focus Coverflow Auto-Slide Carousel with Swipe Support */}
           <div
             className="relative w-full overflow-hidden py-2 select-none lg:col-span-6"
             onMouseEnter={() => setIsPaused(true)}
             onMouseLeave={() => setIsPaused(false)}
+            onTouchStart={(e) => {
+              setIsPaused(true)
+              setTouchStartX(e.touches[0].clientX)
+            }}
+            onTouchEnd={(e) => {
+              setIsPaused(false)
+              if (touchStartX !== null) {
+                const diff = touchStartX - e.changedTouches[0].clientX
+                if (diff > 45) setActiveIndex((prev) => prev + 1)
+                if (diff < -45) setActiveIndex((prev) => prev - 1)
+                setTouchStartX(null)
+              }
+            }}
           >
             {/* Left Edge Gradient Fade */}
             <div className="pointer-events-none absolute inset-y-0 left-0 w-10 sm:w-16 bg-gradient-to-r from-white/95 via-white/50 to-transparent z-40" />

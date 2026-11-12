@@ -68,9 +68,9 @@ export default function ContactPage(): React.JSX.Element {
                   Contact Hunhar
                 </span>
 
-                <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.96] uppercase mt-5 mb-5 select-text">
-                  <span className="block whitespace-nowrap select-text">Let’s Talk Talent &amp;</span>
-                  <span className="block text-terracotta whitespace-nowrap select-text">Opportunity.</span>
+                <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.98] sm:leading-[0.96] uppercase mt-5 mb-5 select-text">
+                  <span className="block whitespace-normal sm:whitespace-nowrap select-text">Let’s Talk Talent &amp;</span>
+                  <span className="block text-terracotta whitespace-normal sm:whitespace-nowrap select-text">Opportunity.</span>
                 </h1>
 
                 <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-md mb-8 select-text">
@@ -112,15 +112,17 @@ export default function ContactPage(): React.JSX.Element {
               </div>
 
               {/* Right Column: Center Mascot + Concentric Orbiting Tracks */}
-              <div className="lg:col-span-6 relative w-full h-[500px] sm:h-[540px] lg:h-[600px] flex items-center justify-center select-text overflow-visible">
-                {/* Center Mascot Circle with Warm Glow */}
-                <div className="relative z-10 w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
-                  <img
-                    src={wolfJarImg}
-                    alt="Hunhar Mascot winking and giving thumbs up"
-                    className="w-full h-full object-contain filter drop-shadow-md select-none pointer-events-none"
-                  />
-                </div>
+              <div className="lg:col-span-6 relative w-full h-[380px] sm:h-[480px] lg:h-[600px] flex items-center justify-center select-text overflow-hidden sm:overflow-visible">
+                {/* Responsive Scale Wrapper: Fits perfectly on all phone screens without overflow */}
+                <div className="relative flex items-center justify-center scale-[0.58] min-[380px]:scale-[0.66] min-[440px]:scale-[0.76] sm:scale-90 md:scale-100 origin-center select-none">
+                  {/* Center Mascot Circle with Warm Glow */}
+                  <div className="relative z-10 w-32 h-32 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full border-4 border-[#E2B48D] bg-[#FBE7D4]/50 shadow-2xl flex items-center justify-center p-2 backdrop-blur-xs">
+                    <img
+                      src={wolfJarImg}
+                      alt="Hunhar Mascot winking and giving thumbs up"
+                      className="w-full h-full object-contain filter drop-shadow-md select-none pointer-events-none"
+                    />
+                  </div>
 
                 {/* Orbit 1: Inner Track (Clockwise) */}
                 <div
@@ -232,6 +234,7 @@ export default function ContactPage(): React.JSX.Element {
                   >
                     <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#CDA96B] shadow-md inline-block border-2 border-[#F4EFE6]" />
                   </div>
+                </div>
                 </div>
               </div>
             </div>

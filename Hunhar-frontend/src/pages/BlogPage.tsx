@@ -44,7 +44,7 @@ export default function BlogPage(): React.JSX.Element {
               </div>
 
               {/* Headline */}
-              <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl">
+              <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.98] sm:leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl">
                 Stories, Strategies & Tips{' '}
                 <span className="block mt-2 bg-gradient-to-r from-[#C06B3E] via-[#D8783B] to-[#E39D52] bg-clip-text text-transparent">
                   Brewing Very Soon.
