@@ -40,7 +40,7 @@ const tabs: TabData[] = [
       step: '01',
       title: 'Smart Sign-Up & Onboarding',
       description:
-        'A streamlined sign-up process for students and clients — quick profile creation, preference setup, and instant access to projects and talent without unnecessary complexity.',
+        'Create your profile, showcase your skills, set your preferences, and get started with opportunities that match your goals.',
       tag: 'Onboarding',
       icon: Rocket,
     },
@@ -49,15 +49,15 @@ const tabs: TabData[] = [
         step: '02',
         title: 'DigiLocker Identity Verification',
         description:
-          'Secure verification via DigiLocker ensures authentic profiles, builds client trust, and prevents fraudulent activity on the platform.',
+          'Build trust with authentic profiles and verified information, helping clients connect with genuine and capable talent.',
         tag: 'Security',
         icon: ShieldCheck,
       },
       {
         step: '03',
-        title: 'College-Based Communities',
+        title: 'Student & Professional Communities',
         description:
-          'Join dedicated college communities, fostering peer learning, collaboration, and trust within a familiar academic environment.',
+          'Connect with people from your community, discover opportunities, collaborate on projects, and grow through meaningful connections.',
         tag: 'Community',
         icon: GraduationCap,
       },
@@ -65,7 +65,7 @@ const tabs: TabData[] = [
   },
   {
     id: 'communication',
-    name: 'Communication',
+    name: 'Collaborate',
     icon: MessageCircle,
     featured: {
       step: '04',
@@ -154,7 +154,9 @@ export default function PlatformCapabilities(): React.JSX.Element {
 
           {/* Subtitle */}
           <p className="font-manrope text-sm sm:text-base text-[#555E6D] mt-4 mb-0 leading-relaxed max-w-2xl">
-            Every tool students and clients need — from onboarding to project delivery, all in one place.
+            Everything you need to find opportunities, showcase your skills, and get work done — all in one
+            Place.
+
           </p>
         </div>
 
@@ -171,11 +173,10 @@ export default function PlatformCapabilities(): React.JSX.Element {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(idx)}
-                  className={`px-1.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-[11px] min-[380px]:text-xs sm:text-sm font-manrope font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 cursor-pointer border-none outline-none text-center ${
-                    isActive
-                      ? 'bg-white text-[#0A1B37] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
-                      : 'bg-transparent text-[#64748B] hover:text-[#0A1B37]'
-                  }`}
+                  className={`px-1.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-[11px] min-[380px]:text-xs sm:text-sm font-manrope font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 cursor-pointer border-none outline-none text-center ${isActive
+                    ? 'bg-white text-[#0A1B37] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
+                    : 'bg-transparent text-[#64748B] hover:text-[#0A1B37]'
+                    }`}
                   aria-selected={isActive}
                 >
                   <TabIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${isActive ? 'text-[#0A1B37]' : 'text-[#64748B]'}`} />
@@ -299,10 +300,10 @@ export default function PlatformCapabilities(): React.JSX.Element {
                   </div>
                   <div>
                     <span className="font-manrope font-bold text-xs sm:text-[13px] text-[#0A1B37] block leading-tight">
-                      3 of 9 capabilities
+                      3 of 9 features
                     </span>
                     <span className="font-manrope text-[11px] text-[#71717A] leading-tight block">
-                      in this category
+                      in this journey
                     </span>
                   </div>
                 </div>

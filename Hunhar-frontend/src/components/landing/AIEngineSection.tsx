@@ -21,7 +21,7 @@ export default function AIEngineSection(): React.JSX.Element {
 
           {/* Heading */}
           <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight m-0">
-            Powered by AI. Built for Growth
+            Smarter Connections, Better Opportunities.
           </h2>
 
           {/* Subtitle */}

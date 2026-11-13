@@ -7,7 +7,7 @@ const cards = [
     badge: 'I NEED WORK DONE',
     title: ['Hire students.', 'Get it done.'],
     description:
-      'Post a task, receive bids from skilled students and get your work done affordably.',
+      'Post your task, connect with skilled students and freelancers, and get quality work done within your budget',
     mascot: mascotBusiness,
     mascotAlt: 'Client mascot in business suit',
     href: '/signup?role=client',
@@ -17,9 +17,9 @@ const cards = [
   },
   {
     badge: 'I WANT TO EARN',
-    title: ['Find work.', 'Earn money.'],
+    title: ['Find work.', 'Earn from skills.'],
     description:
-      'Create your profile, showcase your skills, bid on real work and get paid.',
+      'Create your profile, showcase your skills, find relevant opportunities, and get paid for your work.',
     mascot: mascotStudent,
     mascotAlt: 'Student mascot Luna with laptop',
     href: '/signup?role=freelancer',
@@ -44,10 +44,9 @@ export default function TwoSides({ onOpenSignup }: TwoSidesProps) {
             TWO SIDES. ONE OPPORTUNITY
           </h2>
           <p className="mt-3 font-[family-name:var(--font-manrope)] text-sm leading-relaxed text-[#404040] sm:text-base">
-            Great work happens when the right talent meets the right opportunity.
+            Great work happens when the right talent meets the right opportunity.<strong className="font-bold text-[color:var(--color-navy,#0F1B3D)]">HUNHAR</strong>{' '} makes that connection simple.
             <br className="hidden sm:inline" />{' '}
-            <strong className="font-bold text-[color:var(--color-navy,#0F1B3D)]">HUNHAR</strong>{' '}
-            makes that connection simple.
+
           </p>
         </div>
 

@@ -24,7 +24,7 @@ const columns: FooterColumn[] = [
     ],
   },
   {
-    title: 'For Students',
+    title: 'For Talent',
     links: [
       { label: 'How to find work', href: '/#how-it-works' },
       { label: 'Create Profile', href: '/signup?role=freelancer' },
@@ -81,9 +81,7 @@ export default function Footer({ onOpenSignup }: FooterProps): React.JSX.Element
               />
             </a>
             <p className="font-manrope text-[0.95rem] font-medium text-white/80 leading-[1.55] m-0">
-              Built by students.
-              <br />
-              Powered by opportunity.
+              Connecting talent with opportunity.
               <br />
               Made for everyone ready to grow.
             </p>

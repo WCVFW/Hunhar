@@ -19,8 +19,8 @@ const options: {
   subtitle: string
   Icon: typeof Search
 }[] = [
-    { role: 'client', title: 'Hire talent', subtitle: 'I am a client', Icon: Search },
-    { role: 'freelancer', title: 'Find work', subtitle: 'I am a freelancer', Icon: Code2 },
+    { role: 'client', title: 'Hire talent', subtitle: 'I need work done', Icon: Search },
+    { role: 'freelancer', title: 'Find work', subtitle: 'I want to earn', Icon: Code2 },
   ]
 
 const mascots: Record<Role, { src: string; alt: string }> = {
@@ -119,14 +119,14 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps): Reac
                     id="signup-modal-title"
                     className="m-0 font-makira text-[30px] font-extrabold leading-[1.08] tracking-[-0.01em]"
                   >
-                    <span className="block text-[#0F1B3D]">Select</span>
-                    <span className="block text-[#C06B3E]">Domain</span>
+                    <span className="block text-[#0F1B3D]">CHOOSE YOUR</span>
+                    <span className="block text-[#C06B3E]">PATH</span>
                   </h3>
 
                   <div className="mb-3 mt-2.5 h-[2.5px] w-12 rounded-full bg-[#0F1B3D]" />
 
                   <p className="m-0 max-w-[150px] font-manrope text-[13px] font-medium leading-[1.4] text-[#64748B]">
-                    Are you looking for IT or Non IT?
+                    How would you like to use Hunhar?
                   </p>
                 </div>
 
@@ -140,8 +140,8 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps): Reac
                         src={mascots[role].src}
                         alt={mascots[role].alt}
                         className={`absolute bottom-0 right-0 h-full w-full object-contain object-bottom transition-all duration-300 ease-out ${isActive
-                            ? 'translate-x-0 scale-100 opacity-100'
-                            : 'translate-x-2 scale-95 opacity-0'
+                          ? 'translate-x-0 scale-100 opacity-100'
+                          : 'translate-x-2 scale-95 opacity-0'
                           }`}
                       />
                     )
@@ -159,8 +159,8 @@ export default function SignupModal({ isOpen, onClose }: SignupModalProps): Reac
                     onMouseEnter={() => setActiveRole(role)}
                     onFocus={() => setActiveRole(role)}
                     className={`group flex cursor-pointer flex-col items-start rounded-[16px] border p-3.5 text-left transition-all duration-200 hover:-translate-y-1 hover:border-[#C06B3E] hover:bg-white hover:shadow-[0_10px_24px_-8px_rgba(192,107,62,0.35)] focus-visible:-translate-y-1 focus-visible:border-[#C06B3E] focus-visible:bg-white focus-visible:outline-none ${activeRole === role
-                        ? 'border-[#C06B3E]/60 bg-white/80'
-                        : 'border-[#DDD4C5] bg-[#F7F3EB]/90'
+                      ? 'border-[#C06B3E]/60 bg-white/80'
+                      : 'border-[#DDD4C5] bg-[#F7F3EB]/90'
                       }`}
                   >
                     <span className="mb-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-sm transition-transform duration-200 group-hover:scale-110">

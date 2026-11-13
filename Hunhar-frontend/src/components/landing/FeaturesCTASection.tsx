@@ -122,7 +122,7 @@ export default function FeaturesCTASection({ onOpenSignup }: FeaturesCTASectionP
                 onClick={handleSignup}
                 className="relative z-30 group bg-terracotta hover:bg-[#AA572D] active:scale-95 text-white font-manrope font-semibold text-xs sm:text-sm tracking-wider uppercase px-7 sm:px-8 py-3.5 rounded-xl shadow-[0_8px_24px_rgba(192,107,62,0.35)] hover:shadow-[0_10px_28px_rgba(192,107,62,0.45)] transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
               >
-                <span>GET STARTED FREE</span>
+                <span>Ready to Get Started?</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
               </button>
             ) : (

@@ -151,12 +151,13 @@ export default function Sidebar({
               <img
                 src={promoMascotCard}
                 alt="Hunhar Mascot"
-                className="h-14 w-14 -mr-1 object-contain drop-shadow-md"
+                className="h-14 w-14 -mr-1 object-contain drop-shadow-md select-none"
               />
             </div>
             <NavLink
               to="/freelancer/credits"
-              className="mt-2 block w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] no-underline shadow-sm transition-all hover:bg-white"
+              onClick={() => setMobileOpen(false)}
+              className="mt-2 block w-full rounded-[10px] bg-[#F4EFE6] py-1.5 text-center font-manrope text-[11px] font-semibold text-[#C06B3E] no-underline shadow-sm transition-all hover:bg-white active:scale-98"
             >
               Buy Credits
             </NavLink>
@@ -191,7 +192,7 @@ export default function Sidebar({
           }`}
         >
           <LogOut size={14} strokeWidth={2} />
-          {!collapsed && <span>Logut</span>}
+          {!collapsed && <span>Logout</span>}
         </button>
       </div>
     </div>
