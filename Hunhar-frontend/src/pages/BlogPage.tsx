@@ -44,7 +44,7 @@ export default function BlogPage(): React.JSX.Element {
               </div>
 
               {/* Headline */}
-              <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl">
+              <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-[#0A1B37] leading-[0.98] sm:leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl">
                 Stories, Strategies & Tips{' '}
                 <span className="block mt-2 bg-gradient-to-r from-[#C06B3E] via-[#D8783B] to-[#E39D52] bg-clip-text text-transparent">
                   Brewing Very Soon.
@@ -75,8 +75,8 @@ export default function BlogPage(): React.JSX.Element {
                   <span>🎓 Freelancer Playbooks</span>
                 </div>
 
-                {/* Floating Pill: Hiring Tips - far to the right, safely away from Luna's ear */}
-                <div className="hidden sm:flex absolute top-16 -right-4 lg:-right-12 z-20 px-4 py-2 rounded-full bg-[#0A1B37] text-white shadow-xl font-manrope text-xs font-bold items-center gap-2 rotate-3 hover:rotate-0 transition-transform">
+                {/* Floating Pill: Hiring Tips - safely positioned away from Luna's ear */}
+                <div className="hidden sm:flex absolute -top-2 -right-8 lg:-right-16 z-20 px-4 py-2 rounded-full bg-[#0A1B37] text-white shadow-xl font-manrope text-xs font-bold items-center gap-2 rotate-3 hover:rotate-0 transition-transform">
                   <span className="w-2 h-2 rounded-full bg-gold" />
                   <span>💼 Founder Blueprints</span>
                 </div>

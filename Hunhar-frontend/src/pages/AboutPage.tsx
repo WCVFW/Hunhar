@@ -130,6 +130,7 @@ const confettiParticles: ConfettiParticle[] = [
 export default function AboutPage(): React.JSX.Element {
   const [isSignupModalOpen, setIsSignupModalOpen] = useState<boolean>(false)
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({})
+  const [isMobile, setIsMobile] = useState<boolean>(false)
 
   // Animation values for scroll-driven story section
   const [sceneProgress, setSceneProgress] = useState<number>(0)
@@ -167,6 +168,15 @@ export default function AboutPage(): React.JSX.Element {
   const toggleCard = (id: string) => {
     setFlippedCards((prev) => ({ ...prev, [id]: !prev[id] }))
   }
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Scroll observer for story section
   useEffect(() => {
@@ -279,8 +289,10 @@ export default function AboutPage(): React.JSX.Element {
                 <span className="inline-block px-4 py-1.5 rounded-full bg-white text-terracotta border border-terracotta/40 font-bold text-xs sm:text-sm tracking-wide shadow-sm select-text">
                   Hunhar, a THE UNOiA brand
                 </span>
-                <h1 className="font-makira font-medium text-[2.5rem] sm:text-[3.5rem] md:text-[4rem] lg:text-[3.75rem] xl:text-[5rem] text-navy tracking-[-0.025em] leading-[0.96] uppercase mt-5 mb-6 max-w-xl select-text">
-                  Great Talent Deserves to Be <span className="text-terracotta select-text">Discovered.</span>
+                <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.25rem] md:text-[3.65rem] lg:text-[3.25rem] xl:text-[4.25rem] 2xl:text-[4.75rem] text-navy tracking-[-0.025em] leading-[0.98] sm:leading-[0.96] uppercase mt-5 mb-5 sm:mb-6 max-w-2xl select-text">
+                  Great Talent <br className="hidden sm:inline" />
+                  <span className="sm:whitespace-nowrap">Deserves to Be</span> <br className="hidden sm:inline" />
+                  <span className="text-terracotta select-text">Discovered.</span>
                 </h1>
                 <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.125rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-lg mb-8 select-text">
                   Hunhar connects talented individuals with real opportunities and businesses with the right skills to bring ideas to life.
@@ -297,13 +309,13 @@ export default function AboutPage(): React.JSX.Element {
               {/* Right Column: Arches, Opportunity Badge, Mascot */}
               <div className="lg:col-span-6 relative max-w-lg mx-auto lg:max-w-none w-full select-text">
                 {/* Floating Opportunity Pill Badge */}
-                <div className="absolute -top-7 left-2 sm:left-6 z-20 flex items-center gap-3 bg-navy text-[#F3EFE6] px-4 py-2.5 rounded-2xl -rotate-6 shadow-2xl border border-white/10 select-text">
+                {/* <div className="absolute -top-7 left-2 sm:left-6 z-20 flex items-center gap-3 bg-navy text-[#F3EFE6] px-4 py-2.5 rounded-2xl -rotate-6 shadow-2xl border border-white/10 select-text">
                   <span className="w-8 h-8 rounded-full bg-terracotta flex-shrink-0" />
                   <div className="flex flex-col leading-tight select-text">
                     <b className="text-xs sm:text-sm font-bold select-text">Packaging redesign</b>
                     <small className="text-[#CDA96B] font-bold text-[11px] select-text">Open for bids</small>
                   </div>
-                </div>
+                </div> */}
 
                 {/* 3 Student Arch Cards */}
                 <div className="grid grid-cols-3 gap-3 sm:gap-4 items-end pt-8 select-text">
@@ -355,7 +367,8 @@ export default function AboutPage(): React.JSX.Element {
         <SkillsMarquee />
 
         {/* PINNED STORY SECTION (OUR STORY) */}
-        <section id="story" ref={storyRef} className="relative bg-[#0A1B37] text-[#F3EFE6] h-[170vh] select-text" aria-label="Our story">
+        {/* Desktop Experience: Smooth Scroll-driven Pinned Animation */}
+        <section id="story" ref={storyRef} className="hidden md:block relative bg-[#0A1B37] text-[#F3EFE6] h-[170vh] select-text" aria-label="Our story">
           <div className="sticky top-0 h-screen flex flex-col justify-center items-center text-center px-6 pt-20 pb-8 overflow-hidden max-w-5xl mx-auto select-text">
             <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-gold border border-gold/40 font-bold text-xs sm:text-sm tracking-wide mb-4 select-text">
               Our Story
@@ -427,6 +440,47 @@ export default function AboutPage(): React.JSX.Element {
           </div>
         </section>
 
+        {/* Mobile Story Experience: Clean, immediate, non-sticky presentation */}
+        <section className="md:hidden bg-[#0A1B37] text-[#F3EFE6] py-14 px-4 text-center select-text">
+          <div className="max-w-md mx-auto">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-white/10 text-gold border border-gold/40 font-bold text-xs tracking-wide mb-3 select-text">
+              Our Story
+            </span>
+            <h2 className="font-makira font-medium text-2xl uppercase tracking-wide text-[#F3EFE6] leading-tight mb-8 select-text">
+              Talent Is Everywhere. Opportunity Should Be Too.
+            </h2>
+
+            {/* Side-by-side Connected Mascots */}
+            <div className="flex items-center justify-center gap-3 relative mb-8">
+              <div className="flex flex-col items-center z-10">
+                <div className="w-20 h-26 rounded-2xl bg-white shadow-xl border border-white/40 p-2 flex items-center justify-center">
+                  <img src={talentMascotImg} alt="Talent mascot" className="w-full h-full object-contain" />
+                </div>
+                <span className="mt-2 text-xs font-bold text-[#F3EFE6]">Talent</span>
+              </div>
+
+              {/* Connecting Dashed Line */}
+              <div className="w-14 h-0.5 border-t-2 border-dashed border-white/60 -mt-6" />
+
+              <div className="flex flex-col items-center z-10">
+                <div className="w-20 h-26 rounded-2xl bg-white shadow-xl border border-white/40 p-2 flex items-center justify-center">
+                  <img src={opportunityMascotImg} alt="Opportunity mascot" className="w-full h-full object-contain" />
+                </div>
+                <span className="mt-2 text-xs font-bold text-[#F3EFE6]">Opportunity</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 font-manrope text-sm leading-relaxed text-[#F3EFE6]/90 bg-white/5 border border-white/10 rounded-2xl p-5">
+              <p className="m-0">
+                Getting the first opportunity can be difficult, even when you have the skills.
+              </p>
+              <p className="m-0 font-bold text-white">
+                Hunhar bridges that gap by connecting emerging talent with businesses that value fresh ideas and real skills.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* OUR PURPOSE (EXACT MATCH TO DESIGN WITH FALLING CHIPS & TOP-RIGHT WOLF) */}
         <section className="bg-terracotta text-[#FFF8EF] py-20 sm:py-28 px-6 sm:px-12 lg:px-20 select-text">
           <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center select-text">
@@ -444,45 +498,90 @@ export default function AboutPage(): React.JSX.Element {
               </p>
             </div>
 
-            {/* Right Column: Dashed Jar Box with Falling Chips and Top-Right Wolf Mascot */}
+            {/* Right Column: Dashed Jar Box */}
             <div
               ref={jarRef}
-              className="lg:col-span-7 relative h-[390px] sm:h-[420px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
+              className="lg:col-span-7 relative min-h-[340px] sm:h-[420px] rounded-[2.5rem] border-2 border-dashed border-[#FFF8EF]/50 bg-black/5 overflow-hidden p-6 select-text"
             >
-              {/* Top-Right Wolf Mascot (Exact location from user design) */}
-              <img
-                src={wolfJarImg}
-                alt="Hunhar wolf mascot winking and giving thumbs up"
-                className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-                  }`}
-                style={{
-                  transformOrigin: 'top right',
-                  transitionDelay: '700ms',
-                }}
-              />
+              {/* =========================================================
+                  MOBILE VIEW (md:hidden): Clean, Non-Overlapping Pill Cloud
+                 ========================================================= */}
+              <div className="flex md:hidden flex-col h-full justify-between select-text">
+                {/* Top Row: Mascot + Label */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/20">
+                  <div>
+                    <span className="block font-makira font-bold text-sm text-[#FFF8EF] uppercase tracking-wider">
+                      Popular Skills
+                    </span>
+                    <span className="text-[11px] font-manrope text-[#FFF8EF]/80 font-medium">
+                      Verified & In-Demand on Hunhar
+                    </span>
+                  </div>
+                  <img
+                    src={wolfJarImg}
+                    alt="Hunhar wolf mascot"
+                    className="w-16 h-auto object-contain filter drop-shadow-md"
+                  />
+                </div>
 
-              {/* Falling Skill Chips inside the box */}
-              {skillChips.map((chip) => {
-                return (
-                  <span
-                    key={chip.name}
-                    className={`absolute px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-display font-bold text-xs sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
-                    style={{
-                      left: chip.left,
-                      bottom: chip.bottom,
-                      transition:
-                        'transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease',
-                      transitionDelay: `${chip.delay}ms`,
-                      transform: isJarVisible
-                        ? `translateY(0px) rotate(${chip.rotate}deg)`
-                        : `translateY(-480px) rotate(${chip.rotate * 3}deg)`,
-                      opacity: isJarVisible ? 1 : 0,
-                    }}
-                  >
-                    {chip.name}
+                {/* Pill Cloud: Neatly spaced flex-wrap, 100% readable and zero collisions */}
+                <div className="flex flex-wrap gap-2 py-4 items-center justify-center">
+                  {skillChips.map((chip) => (
+                    <span
+                      key={chip.name}
+                      className={`px-3 py-1.5 rounded-full font-manrope font-bold text-xs shadow-md whitespace-nowrap ${chip.color}`}
+                    >
+                      {chip.name}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="text-center pt-2 border-t border-white/10">
+                  <span className="text-[11px] font-manrope font-semibold text-[#FFF8EF]/90">
+                    ✨ Turn your skills into real projects & income
                   </span>
-                )
-              })}
+                </div>
+              </div>
+
+              {/* =========================================================
+                  DESKTOP VIEW (hidden md:block): Falling Chips with Top-Right Mascot
+                 ========================================================= */}
+              <div className="hidden md:block w-full h-full relative">
+                {/* Top-Right Wolf Mascot */}
+                <img
+                  src={wolfJarImg}
+                  alt="Hunhar wolf mascot winking and giving thumbs up"
+                  className={`absolute top-2 right-4 sm:right-6 w-36 sm:w-44 h-auto object-contain z-20 pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isJarVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                    }`}
+                  style={{
+                    transformOrigin: 'top right',
+                    transitionDelay: '700ms',
+                  }}
+                />
+
+                {/* Falling Skill Chips inside the box */}
+                {skillChips.map((chip) => {
+                  return (
+                    <span
+                      key={chip.name}
+                      className={`absolute px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-display font-bold text-xs sm:text-base shadow-xl whitespace-nowrap cursor-default select-text ${chip.color}`}
+                      style={{
+                        left: chip.left,
+                        bottom: chip.bottom,
+                        transition:
+                          'transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease',
+                        transitionDelay: `${chip.delay}ms`,
+                        transform: isJarVisible
+                          ? `translateY(0px) rotate(${chip.rotate}deg)`
+                          : `translateY(-480px) rotate(${chip.rotate * 3}deg)`,
+                        opacity: isJarVisible ? 1 : 0,
+                      }}
+                    >
+                      {chip.name}
+                    </span>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </section>
@@ -553,10 +652,10 @@ export default function AboutPage(): React.JSX.Element {
             <div className="grid grid-cols-1 md:grid-cols-[1fr_90px_1fr] gap-6 max-w-5xl mx-auto text-left items-stretch select-text">
               {/* Card A: For Talent */}
               <article
-                className="relative overflow-hidden bg-white text-navy rounded-[32px] p-8 sm:p-10 min-h-[340px] shadow-2xl flex flex-col justify-start select-text"
+                className="relative overflow-hidden bg-white text-navy rounded-[32px] p-6 sm:p-10 min-h-[300px] sm:min-h-[340px] shadow-2xl flex flex-col justify-start select-text"
                 style={{
-                  transform: `translateX(calc((1 - ${howProgress}) * -45vw))`,
-                  opacity: 0.2 + howProgress * 0.8,
+                  transform: isMobile ? 'none' : `translateX(calc((1 - ${howProgress}) * -45vw))`,
+                  opacity: isMobile ? 1 : 0.2 + howProgress * 0.8,
                 }}
               >
                 <h3 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-navy tracking-tight mb-3 select-text">
@@ -587,10 +686,10 @@ export default function AboutPage(): React.JSX.Element {
 
               {/* Card B: For Businesses */}
               <article
-                className="relative overflow-hidden bg-white text-navy rounded-[32px] p-8 sm:p-10 min-h-[340px] shadow-2xl flex flex-col justify-start select-text"
+                className="relative overflow-hidden bg-white text-navy rounded-[32px] p-6 sm:p-10 min-h-[300px] sm:min-h-[340px] shadow-2xl flex flex-col justify-start select-text"
                 style={{
-                  transform: `translateX(calc((1 - ${howProgress}) * 45vw))`,
-                  opacity: 0.2 + howProgress * 0.8,
+                  transform: isMobile ? 'none' : `translateX(calc((1 - ${howProgress}) * 45vw))`,
+                  opacity: isMobile ? 1 : 0.2 + howProgress * 0.8,
                 }}
               >
                 <h3 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-navy tracking-tight mb-3 select-text">
@@ -640,9 +739,11 @@ export default function AboutPage(): React.JSX.Element {
             {/* Studio Window Card with Scroll-driven Arch Morph & Zoom */}
             <div ref={visionRef} className="relative max-w-6xl mx-auto select-text">
               <div
-                className="overflow-hidden shadow-2xl transition-[clip-path] duration-75 ease-out"
+                className="overflow-hidden shadow-2xl rounded-2xl sm:rounded-[40px] transition-[clip-path] duration-75 ease-out"
                 style={{
-                  clipPath: `inset(${(14 * (1 - visionProgress)).toFixed(1)}% ${(32 * (1 - visionProgress)).toFixed(1)}% round ${(40 + 140 * (1 - visionProgress)).toFixed(0)}px)`,
+                  clipPath: isMobile
+                    ? 'none'
+                    : `inset(${(14 * (1 - visionProgress)).toFixed(1)}% ${(32 * (1 - visionProgress)).toFixed(1)}% round ${(40 + 140 * (1 - visionProgress)).toFixed(0)}px)`,
                 }}
               >
                 <img
@@ -660,8 +761,8 @@ export default function AboutPage(): React.JSX.Element {
                 ref={visionCardRef}
                 className="bg-navy text-[#F3EFE6] rounded-[28px] p-6 sm:p-7 max-w-[520px] text-left shadow-[0_20px_40px_rgba(10,27,55,0.3)] mt-6 sm:-mt-16 mx-4 relative min-[900px]:absolute min-[900px]:-left-6 min-[900px]:-bottom-8 min-[900px]:m-0 transition-all duration-800 ease-[cubic-bezier(0.2,0.8,0.2,1)] select-text"
                 style={{
-                  opacity: isVisionCardInView ? 1 : 0,
-                  transform: isVisionCardInView ? 'none' : 'translateY(34px)',
+                  opacity: isMobile ? 1 : (isVisionCardInView ? 1 : 0),
+                  transform: isMobile ? 'none' : (isVisionCardInView ? 'none' : 'translateY(34px)'),
                 }}
               >
                 <p className="font-manrope text-base sm:text-lg lg:text-xl font-normal leading-relaxed text-[#F3EFE6] m-0 select-text">

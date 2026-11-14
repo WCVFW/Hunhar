@@ -74,17 +74,15 @@ export default function ClientSidebar({
 
   const renderNavContent = (collapsed: boolean = false) => (
     <div
-      className={`flex h-full flex-col justify-between overflow-y-auto pb-4 pt-[clamp(14px,2.5vh,20px)] transition-all duration-300 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-        collapsed ? 'px-2.5 items-center' : 'px-4'
-      }`}
+      className={`flex h-full flex-col justify-between overflow-y-auto pb-4 pt-[clamp(14px,2.5vh,20px)] transition-all duration-300 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${collapsed ? 'px-2.5 items-center' : 'px-4'
+        }`}
     >
       {/* Top: Header (Logo) + Menu */}
       <div className="flex w-full flex-col">
         {/* Top Header Row with Logo (Always centered) */}
         <div
-          className={`mb-[clamp(14px,3.5vh,28px)] flex w-full items-center justify-center transition-all duration-300 ${
-            collapsed ? 'px-0' : 'px-2'
-          }`}
+          className={`mb-[clamp(14px,3.5vh,28px)] flex w-full items-center justify-center transition-all duration-300 ${collapsed ? 'px-0' : 'px-2'
+            }`}
         >
           <NavLink
             to="/client/dashboard"
@@ -120,8 +118,7 @@ export default function ClientSidebar({
               onClick={() => setMobileOpen(false)}
               title={collapsed ? name : undefined}
               className={({ isActive }) =>
-                `${linkBase} ${collapsed ? 'justify-center px-0 w-9 h-9 mx-auto' : 'px-3 gap-3'} ${
-                  isActive ? activeClass : idleClass
+                `${linkBase} ${collapsed ? 'justify-center px-0 w-9 h-9 mx-auto' : 'px-3 gap-3'} ${isActive ? activeClass : idleClass
                 }`
               }
             >
@@ -166,8 +163,7 @@ export default function ClientSidebar({
           onClick={() => setMobileOpen(false)}
           title={collapsed ? 'Settings' : undefined}
           className={({ isActive }) =>
-            `${linkBase} ${collapsed ? 'justify-center px-0 w-9 h-9' : 'px-3 gap-3'} ${
-              isActive ? activeClass : idleClass
+            `${linkBase} ${collapsed ? 'justify-center px-0 w-9 h-9' : 'px-3 gap-3'} ${isActive ? activeClass : idleClass
             }`
           }
         >
@@ -179,14 +175,13 @@ export default function ClientSidebar({
           type="button"
           onClick={handleLogout}
           title={collapsed ? 'Logout' : undefined}
-          className={`flex cursor-pointer items-center justify-center rounded-[10px] border-none bg-[#F4EFE6] font-manrope font-semibold text-[#08182B] transition-colors duration-200 hover:bg-white active:scale-[0.99] ${
-            collapsed
+          className={`flex cursor-pointer items-center justify-center rounded-[10px] border-none bg-[#F4EFE6] font-manrope font-semibold text-[#08182B] transition-colors duration-200 hover:bg-white active:scale-[0.99] ${collapsed
               ? 'h-9 w-9 p-0'
               : 'h-[36px] w-full gap-2 text-[12px]'
-          }`}
+            }`}
         >
           <LogOut size={14} strokeWidth={2} />
-          {!collapsed && <span>Logut</span>}
+          {!collapsed && <span>Logout</span>}
         </button>
       </div>
     </div>
@@ -215,9 +210,8 @@ export default function ClientSidebar({
 
       {/* Desktop Fixed Floating Rounded Sidebar (Exact same shape & floating collapse button as Freelancer) */}
       <div
-        className={`fixed inset-y-2.5 left-2.5 z-40 hidden transition-[width] duration-300 ease-in-out lg:block ${
-          isCollapsed ? 'w-[74px]' : 'w-[245px]'
-        }`}
+        className={`fixed inset-y-2.5 left-2.5 z-40 hidden transition-[width] duration-300 ease-in-out lg:block ${isCollapsed ? 'w-[74px]' : 'w-[245px]'
+          }`}
       >
         <aside className="relative flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-[#08182B] shadow-2xl">
           {renderNavContent(isCollapsed)}
@@ -233,9 +227,8 @@ export default function ClientSidebar({
             className="group absolute -right-3.5 bottom-24 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-[#08182B] bg-[#C06B3E] text-[#F4EFE6] shadow-[0_4px_14px_rgba(192,107,62,0.45)] transition-all duration-200 hover:scale-110 hover:bg-[#D98F62] hover:text-white active:scale-95"
           >
             <SidebarToggleIcon
-              className={`h-[15px] w-[15px] text-[#F4EFE6] transition-transform duration-300 group-hover:text-white ${
-                isCollapsed ? 'scale-x-[-1]' : 'scale-x-100'
-              }`}
+              className={`h-[15px] w-[15px] text-[#F4EFE6] transition-transform duration-300 group-hover:text-white ${isCollapsed ? 'scale-x-[-1]' : 'scale-x-100'
+                }`}
             />
           </button>
         )}
@@ -251,9 +244,8 @@ export default function ClientSidebar({
 
       {/* Mobile drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[270px] bg-[#08182B] shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-[270px] bg-[#08182B] shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <button
           type="button"

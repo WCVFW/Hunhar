@@ -21,7 +21,7 @@ export default function AIEngineSection(): React.JSX.Element {
 
           {/* Heading */}
           <h2 className="font-makira font-medium text-2xl sm:text-3xl md:text-4xl uppercase tracking-wide text-[#0A1B37] leading-tight m-0">
-            Powered by AI. Built for Growth
+            Smarter Connections, Better Opportunities.
           </h2>
 
           {/* Subtitle */}
@@ -371,33 +371,36 @@ export default function AIEngineSection(): React.JSX.Element {
         {/* =========================================================
             MOBILE RESPONSIVE FLOW (Hidden on md and above)
            ========================================================= */}
-        <div className="md:hidden flex flex-col items-center gap-6">
-          {/* Central AI Node with animation */}
-          <div className="relative flex flex-col items-center my-4">
+        <div className="md:hidden flex flex-col items-center gap-4">
+          {/* Central AI Node with animation & badges */}
+          <div className="relative flex flex-col items-center my-3">
             {/* Badges */}
             <div className="flex items-center gap-2 mb-3">
-              <div className="bg-white px-2.5 py-1 rounded-full shadow-xs border border-black/5 flex items-center gap-1.5">
+              <div className="bg-white px-3 py-1 rounded-full shadow-xs border border-black/5 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
-                <span className="font-manrope text-[11px] font-bold text-[#0A1B37]">3.2× faster</span>
+                <span className="font-manrope text-xs font-bold text-[#0A1B37]">3.2× faster</span>
               </div>
-              <div className="bg-white px-2.5 py-1 rounded-full shadow-xs border border-black/5 flex items-center gap-1.5">
+              <div className="bg-white px-3 py-1 rounded-full shadow-xs border border-black/5 flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-[#EF4444]" />
-                <span className="font-manrope text-[11px] font-bold text-[#0A1B37]">99.1% match</span>
+                <span className="font-manrope text-xs font-bold text-[#0A1B37]">99.1% match</span>
               </div>
             </div>
 
             {/* Glowing Orb */}
             <motion.div
-              animate={{ scale: [1, 1.06, 1] }}
+              animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-24 h-24 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(230,92,0,0.4)] relative"
+              className="w-20 h-20 rounded-full flex items-center justify-center shadow-[0_8px_25px_rgba(230,92,0,0.35)] relative"
               style={{
                 background:
                   'radial-gradient(circle at 35% 32%, #FFA25B 0%, #E65C00 48%, #9E3C00 100%)',
               }}
             >
-              <span className="font-makira font-bold text-2xl text-white">AI</span>
+              <span className="font-makira font-bold text-xl text-white">AI</span>
             </motion.div>
+
+            {/* Subtle Connector to Cards */}
+            <div className="w-0.5 h-5 border-l-2 border-dashed border-[#E65C00]/40 mt-3" />
           </div>
 
           {/* Card 1 */}
