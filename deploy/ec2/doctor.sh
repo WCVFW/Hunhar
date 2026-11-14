@@ -117,7 +117,7 @@ if [ -f "$ENV_FILE" ]; then
     rzp_test_*) warn "Razorpay TEST key — payments are not real" ;;
     *) fail "RAZORPAY_KEY_ID missing" ;;
   esac
-  for key in MAIL_PASSWORD GOOGLE_CLIENT_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET ADMIN_EMAIL JWT_SECRET INTERNAL_API_KEY FAST2SMS_API_KEY; do
+  for key in MAIL_PASSWORD GOOGLE_CLIENT_ID RAZORPAY_KEY_SECRET RAZORPAY_WEBHOOK_SECRET ADMIN_EMAIL JWT_SECRET INTERNAL_API_KEY APITXT_API_KEY; do
     v="$(env_get "$key")"
     if [ -z "$v" ]; then warn "$key is empty"
     elif echo "$v" | grep -qiE 'change-me|xxxx|placeholder|1234567890-abcdefg|yourdomain'; then fail "$key still has the example value"

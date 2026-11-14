@@ -56,7 +56,8 @@ echo "Google sign-in"
 ask GOOGLE_CLIENT_ID "OAuth client ID (…apps.googleusercontent.com)" plain identity
 echo
 echo "SMS (Fast2SMS)"
-ask FAST2SMS_API_KEY "Fast2SMS API key" secret identity
+ask APITXT_API_KEY "APITXT API key (SMS OTP, apitxt.com)" secret identity
+ask FAST2SMS_API_KEY "Fast2SMS API key (only if not using APITXT)" secret identity
 echo
 echo "Payments (Razorpay — live keys start with rzp_live_)"
 ask RAZORPAY_KEY_ID "Razorpay key ID" plain billing

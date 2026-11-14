@@ -10,6 +10,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -17,8 +19,11 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Map;
 
 /**
- * Sends OTP SMS through Fast2SMS.
+ * Sends OTP SMS through APITXT (apitxt.com, POST /api/sendOTP) or Fast2SMS. SMS_PROVIDER picks one:
+ * "apitxt", "fast2sms", or "auto" (default) = APITXT when APITXT_API_KEY is set, otherwise Fast2SMS.
+ * In both cases Hunhar generates the 6-digit code and checks it; the provider only delivers it.
  *
+ * Fast2SMS:
  * Routes: "otp" (needs website verification in Fast2SMS > OTP Message), "q" Quick SMS (needs one
  * recharge of at least ₹100), or "auto" = try otp, then q. Fast2SMS's exact reason is logged on failure.
  */
@@ -45,6 +50,19 @@ public class SmsService {
     @Value("${theunoia.otp.expiry-minutes:10}")
     private int expiryMinutes;
 
+    @Value("${theunoia.sms.provider:auto}")
+    private String provider;
+
+    @Value("${theunoia.sms.apitxt.url:https://apitxt.com/api/sendOTP}")
+    private String apitxtUrl;
+
+    @Value("${theunoia.sms.apitxt.api-key:}")
+    private String apitxtKey;
+
+    /** Optional: your SMS template id from the APITXT dashboard (blank = APITXT's default OTP template). */
+    @Value("${theunoia.sms.apitxt.template-id:}")
+    private String apitxtTemplateId;
+
     public SmsService() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
@@ -52,8 +70,19 @@ public class SmsService {
         this.restTemplate = new RestTemplate(factory);
     }
 
+    private boolean useApitxt() {
+        String p = provider == null ? "auto" : provider.trim().toLowerCase();
+        boolean hasKey = apitxtKey != null && !apitxtKey.isBlank();
+        return "apitxt".equals(p) || ("auto".equals(p) && hasKey);
+    }
+
     public boolean isConfigured() {
-        return apiKey != null && !apiKey.isBlank();
+        return useApitxt() ? apitxtKey != null && !apitxtKey.isBlank() : apiKey != null && !apiKey.isBlank();
+    }
+
+    @jakarta.annotation.PostConstruct
+    void logProvider() {
+        log.info("SMS OTP delivery: {}{}", useApitxt() ? "APITXT" : "Fast2SMS", isConfigured() ? "" : " (NO API KEY - codes are only logged)");
     }
 
     private record Result(boolean ok, int code, String message, String requestId) {}
@@ -61,7 +90,11 @@ public class SmsService {
     public void sendOtp(String mobile, String otp) {
         // Local development without an SMS key: print the code so signup can still be tested.
         if (!isConfigured()) {
-            log.warn("FAST2SMS_API_KEY is not configured - SMS NOT sent. OTP for {} is {}", mask(mobile), otp);
+            log.warn("{} is not configured - SMS NOT sent. OTP for {} is {}", useApitxt() ? "APITXT_API_KEY" : "FAST2SMS_API_KEY", mask(mobile), otp);
+            return;
+        }
+        if (useApitxt()) {
+            sendApitxt(mobile, otp);
             return;
         }
 
@@ -88,6 +121,57 @@ public class SmsService {
         }
         if (res.code() == 0) {
             throw new BadRequestException("Could not reach the SMS service. Please try again in a minute.");
+        }
+        throw new BadRequestException("Could not send the SMS to this number. Please check the number and try again.");
+    }
+
+    /** APITXT: POST form fields authkey, mobile (91 + 10 digits), otp, channel=sms, optional template_id. */
+    private void sendApitxt(String mobile, String otp) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("authkey", apitxtKey.trim());
+        form.add("mobile", "91" + mobile);
+        form.add("otp", otp);
+        form.add("channel", "sms");
+        form.add("country", "91");
+        if (apitxtTemplateId != null && !apitxtTemplateId.isBlank()) form.add("template_id", apitxtTemplateId.trim());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        int http;
+        String raw;
+        try {
+            raw = restTemplate.postForObject(apitxtUrl, new HttpEntity<>(form, headers), String.class);
+            http = 200;
+        } catch (HttpStatusCodeException e) {
+            raw = e.getResponseBodyAsString();
+            http = e.getStatusCode().value();
+        } catch (RestClientException e) {
+            log.error("APITXT unreachable for SMS to {}: {}", mask(mobile), e.getMessage());
+            throw new BadRequestException("Could not reach the SMS service. Please try again in a minute.");
+        }
+        String status = "";
+        String message = "";
+        String requestId = null;
+        try {
+            JsonNode n = mapper.readTree(raw == null ? "{}" : raw);
+            status = n.path("status").asText("");
+            message = n.path("message").asText("");
+            requestId = n.path("data").path("request_id").asText(null);
+        } catch (Exception ignored) {
+            message = raw == null ? "" : raw.substring(0, Math.min(200, raw.length()));
+        }
+        if (http == 200 && "success".equalsIgnoreCase(status)) {
+            log.info("OTP SMS sent to {} via APITXT (request {})", mask(mobile), requestId);
+            return;
+        }
+        log.error("APITXT rejected SMS to {}: [HTTP {}] {}", mask(mobile), http, message);
+        String m = message.toLowerCase();
+        if (http == 429 || m.contains("rate") || m.contains("per minute")) {
+            throw new BadRequestException("Too many codes requested for this number. Please wait a minute and try again.");
+        }
+        if (http == 401 || http == 402 || http == 403 || m.contains("balance") || m.contains("credit") || m.contains("key")) {
+            // Account / key / wallet problem: retrying will not help
+            throw new BadRequestException("SMS verification is temporarily unavailable. Please try again later or contact support.");
         }
         throw new BadRequestException("Could not send the SMS to this number. Please check the number and try again.");
     }

@@ -73,6 +73,12 @@ theunoia:
     auth-domain: ${FIREBASE_AUTH_DOMAIN:}
     app-id: ${FIREBASE_APP_ID:}
   sms:
+    # apitxt | fast2sms | auto (= APITXT when APITXT_API_KEY is set, otherwise Fast2SMS)
+    provider: ${SMS_PROVIDER:auto}
+    apitxt:
+      url: ${APITXT_OTP_URL:https://apitxt.com/api/sendOTP}
+      api-key: ${APITXT_API_KEY:}
+      template-id: ${APITXT_TEMPLATE_ID:}
     fast2sms:
       url: ${FAST2SMS_API_URL:https://www.fast2sms.com/dev/bulkV2}
       api-key: ${FAST2SMS_API_KEY:}
