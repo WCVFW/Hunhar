@@ -665,6 +665,19 @@ export const profileApi = {
 
   getPublic: (userId: string) => apiRequest<FreelancerProfile>(`/api/v1/users/${userId}/profile`),
 
+  getUserSummary: (userId: string) =>
+    apiRequest<{
+      id: string
+      email?: string
+      fullName: string
+      role: 'CLIENT' | 'FREELANCER' | 'ADMIN'
+      status?: string
+      kycStatus?: 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED'
+      avatarUrl?: string
+      profile?: any
+      createdAt?: string
+    }>(`/api/v1/users/${userId}`),
+
   searchFreelancers: (params: { search?: string; skill?: string; limit?: number } = {}) =>
     apiRequest<FreelancerProfile[]>('/api/v1/users/freelancers' + qs(params)),
 }
