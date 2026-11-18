@@ -26,6 +26,7 @@ import {
   type PortfolioItem,
 } from '../../services/api'
 import { formatDate, formatINR, initials } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 const PORTFOLIO_COLORS = ['bg-[#EEF2FF]', 'bg-[#ECFDF5]', 'bg-[#FFFBEB]', 'bg-[#FFF1F2]', 'bg-[#F0F9FF]', 'bg-[#FDF4FF]']
 
@@ -334,7 +335,7 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                   {profile.avatarUrl ? (
                     <img src={fileUrl(profile.avatarUrl)} alt={profile.fullName} className="h-full w-full object-cover" />
                   ) : (
-                    <span className="font-manrope text-[32px] font-extrabold text-white">{initials(profile.fullName)}</span>
+                    <img src={getCharacterAvatar(profile.id || profile.fullName)} alt={profile.fullName} className="h-full w-full object-cover" />
                   )}
                   {uploadingImage === 'avatar' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[11px] font-bold text-white">Uploading…</div>

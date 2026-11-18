@@ -148,10 +148,12 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   return data.data
 }
 
+import { getCharacterAvatar } from './characterAvatars'
+
 /** Turns a server file path (/api/v1/projects/files/...) into a full URL for <img>/<a>. */
 export const fileUrl = (path?: string | null): string => {
   if (!path) return ''
-  return path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') ? path : `${API_BASE_URL}${path}`
+  return path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('/assets/') || path.includes('/CHARACTERS/') ? path : `${API_BASE_URL}${path}`
 }
 
 // =============================================================================
@@ -173,7 +175,8 @@ export interface AuthResult {
 /** Stores the session from a login/register/Google response and returns the dashboard path for the role. */
 export const startSession = (res: AuthResult, remember = true): string => {
   tokenStorage.setToken(res.token!, remember)
-  tokenStorage.setUser({ id: res.userId, userId: res.userId, fullName: res.fullName, email: res.email, role: res.role, avatarUrl: res.avatarUrl, kycStatus: res.kycStatus })
+  const avatar = res.avatarUrl || getCharacterAvatar(res.userId || res.email || res.fullName)
+  tokenStorage.setUser({ id: res.userId, userId: res.userId, fullName: res.fullName, email: res.email, role: res.role, avatarUrl: avatar, kycStatus: res.kycStatus })
   return DASHBOARD_BY_ROLE[res.role || 'FREELANCER']
 }
 

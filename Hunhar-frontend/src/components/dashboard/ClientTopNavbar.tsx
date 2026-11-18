@@ -11,6 +11,7 @@ import {
   User,
 } from 'lucide-react'
 import { clientApi, fileUrl, logout, notificationsApi, tokenStorage } from '../../services/api'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 const POLL_MS = 60_000
 
@@ -52,10 +53,10 @@ export default function ClientTopNavbar(): React.JSX.Element {
   }, [])
 
   const initial = (name || 'C').trim().charAt(0).toUpperCase()
-  const avatar = (size: string) =>
-    avatarUrl ? (
-      <img src={fileUrl(avatarUrl)} alt={name} className={`${size} rounded-full object-cover ring-2 ring-[#E5DACD]`} />
-    ) : null
+  const avatar = (size: string) => {
+    const src = avatarUrl ? fileUrl(avatarUrl) : getCharacterAvatar(name || company || 'client')
+    return <img src={src} alt={name} className={`${size} rounded-full object-cover ring-2 ring-[#E5DACD]`} />
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

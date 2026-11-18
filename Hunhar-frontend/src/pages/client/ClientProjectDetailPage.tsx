@@ -12,6 +12,7 @@ import {
   ArrowDownCircle,
   Plus,
   ShieldAlert,
+  ShieldCheck,
   Users2,
   Pencil,
 } from 'lucide-react'
@@ -47,6 +48,7 @@ import {
   timeAgo,
 } from '../../services/format'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 type Tab = 'proposals' | 'workspace' | 'files' | 'disputes'
@@ -78,12 +80,9 @@ const MILESTONE_STYLE: Record<MilestoneStatus, string> = {
 const input =
   'h-10 w-full rounded-[12px] border border-[#E2E8F0] bg-white px-3 font-manrope text-[13px] text-[#08182B] outline-none focus:border-[#C06B3E] focus:ring-2 focus:ring-[#C06B3E]/15'
 
-function Avatar({ name, url, size = 'h-11 w-11' }: { name?: string; url?: string | null; size?: string }) {
-  return url ? (
-    <img src={fileUrl(url)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
-  ) : (
-    <div className={`flex ${size} shrink-0 items-center justify-center rounded-full bg-[#5249DE] text-[14px] font-bold text-white`}>{initials(name)}</div>
-  )
+function Avatar({ name, url, id, size = 'h-11 w-11' }: { name?: string; url?: string | null; id?: string; size?: string }) {
+  const src = url ? fileUrl(url) : getCharacterAvatar(id || name)
+  return <img src={src} alt={name || 'Avatar'} className={`${size} shrink-0 rounded-full object-cover ring-1 ring-[#DECFBE]/60`} />
 }
 
 export default function ClientProjectDetailPage(): React.JSX.Element {
@@ -103,6 +102,8 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
 
   const [profile, setProfile] = useState<FreelancerProfile | null>(null)
+  const [hireModalBid, setHireModalBid] = useState<Bid | null>(null)
+  const [declineModalBid, setDeclineModalBid] = useState<Bid | null>(null)
   const [msForm, setMsForm] = useState<{ title: string; amount: string; due: string; description: string } | null>(null)
   const [disputeText, setDisputeText] = useState('')
   const filesRef = useRef<HTMLInputElement>(null)
@@ -179,8 +180,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   const openDispute = disputes.find((d) => d.status === 'OPEN')
 
   const hire = (bid: Bid) => {
-    if (!window.confirm(`Hire ${bid.freelancerName || 'this freelancer'} for ${formatINR(bid.proposedCost)}? Other proposals will be declined.`)) return
-    act('hire-' + bid.id, () => bidsApi.awardBid(bid.id), `${bid.freelancerName || 'Freelancer'} hired! A chat has been opened with them.`)
+    setHireModalBid(bid)
   }
 
   const message = async (freelancerId: string) => {
@@ -419,10 +419,20 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                       >
                         <Star size={13} className={b.status === 'SHORTLISTED' ? 'fill-[#6D28D9]' : ''} /> {b.status === 'SHORTLISTED' ? 'Shortlisted' : 'Shortlist'}
                       </button>
-                      <button type="button" disabled={busy !== null} onClick={() => window.confirm('Decline this proposal?') && act('rj-' + b.id, () => clientApi.rejectBid(b.id), 'Proposal declined')} className="rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold text-[#EF4444] hover:bg-[#FEF2F2] disabled:opacity-60">
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => setDeclineModalBid(b)}
+                        className="rounded-[10px] px-3 py-1.5 text-[12.5px] font-bold text-[#EF4444] hover:bg-[#FEF2F2] disabled:opacity-60 cursor-pointer transition-colors"
+                      >
                         Decline
                       </button>
-                      <button type="button" disabled={busy !== null} onClick={() => hire(b)} className="ml-auto rounded-[10px] bg-[#C06B3E] px-4 py-1.5 text-[12.5px] font-bold text-white hover:bg-[#A95A30] disabled:opacity-60">
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => hire(b)}
+                        className="ml-auto rounded-[10px] bg-[#C06B3E] px-4 py-1.5 text-[12.5px] font-bold text-white hover:bg-[#A95A30] disabled:opacity-60 cursor-pointer transition-colors"
+                      >
                         {busy === 'hire-' + b.id ? 'Hiring…' : 'Hire'}
                       </button>
                     </>
@@ -681,6 +691,137 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Hire / Accept Bid Confirmation Modal */}
+      {hireModalBid && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 font-manrope backdrop-blur-xs animate-fade-in"
+          onClick={() => setHireModalBid(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-[24px] border border-[#E5DACD] bg-white p-6 shadow-2xl sm:p-7"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setHireModalBid(null)}
+              aria-label="Close"
+              className="absolute right-4 top-4 rounded-full p-1.5 text-[#94A3B8] transition-colors hover:bg-[#FAF8F5] hover:text-[#08182B] cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Header Icon */}
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EBF7EE] text-[#16A34A] shadow-xs">
+              <ShieldCheck size={30} strokeWidth={2.2} />
+            </div>
+
+            {/* Title & Description */}
+            <h3 className="text-center text-[19px] sm:text-[20px] font-extrabold text-[#08182B]">
+              Hire {hireModalBid.freelancerName || 'this freelancer'}?
+            </h3>
+            <p className="mt-2 text-center text-[12.5px] sm:text-[13px] leading-relaxed text-[#64748B]">
+              The project will be awarded and other proposals will be declined. No payment moves now — you&apos;ll fund milestones as work progresses.
+            </p>
+
+            {/* Summary Box */}
+            <div className="my-5 space-y-2.5 rounded-[18px] border border-[#F0ECE6] bg-[#FAF8F5] p-4 text-[12.5px] sm:text-[13px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[#7A7065]">Freelancer:</span>
+                <span className="font-bold text-[#08182B] flex items-center gap-2">
+                  <Avatar name={hireModalBid.freelancerName} url={hireModalBid.freelancerAvatarUrl} size="h-6 w-6" />
+                  <span className="truncate max-w-[160px]">{hireModalBid.freelancerName || 'Freelancer'}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#7A7065]">Agreed Price:</span>
+                <span className="font-extrabold text-[#C06B3E] text-[15px]">{formatINR(hireModalBid.proposedCost)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#7A7065]">Delivery Timeline:</span>
+                <span className="font-semibold text-[#08182B]">
+                  {hireModalBid.deliveryTimelineDays} day{hireModalBid.deliveryTimelineDays === 1 ? '' : 's'}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setHireModalBid(null)}
+                className="flex-1 cursor-pointer rounded-[12px] border border-[#E5DACD] bg-white py-2.5 text-[13px] font-bold text-[#64748B] transition-colors hover:bg-[#FAF8F5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={async () => {
+                  const b = hireModalBid
+                  setHireModalBid(null)
+                  await act(
+                    'hire-' + b.id,
+                    () => bidsApi.awardBid(b.id),
+                    `${b.freelancerName || 'Freelancer'} hired! A chat has been opened with them.`
+                  )
+                }}
+                className="flex-1 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-[12px] bg-[#C06B3E] py-2.5 text-[13px] font-extrabold text-white shadow-sm transition-all hover:bg-[#A95A30] active:scale-98 disabled:opacity-60"
+              >
+                <CheckCircle2 size={16} />
+                <span>Confirm & Hire</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Decline Confirmation Modal */}
+      {declineModalBid && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 font-manrope backdrop-blur-xs animate-fade-in"
+          onClick={() => setDeclineModalBid(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-sm rounded-[24px] border border-[#FEE2E2] bg-white p-6 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF2F2] text-[#EF4444]">
+              <X size={24} strokeWidth={2.5} />
+            </div>
+            <h3 className="text-[18px] font-extrabold text-[#08182B]">Decline Proposal?</h3>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#64748B]">
+              Are you sure you want to decline {declineModalBid.freelancerName || 'this freelancer'}&apos;s proposal? They will be notified.
+            </p>
+            <div className="mt-5 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeclineModalBid(null)}
+                className="flex-1 cursor-pointer rounded-[12px] border border-[#E5DACD] bg-white py-2.5 text-[13px] font-bold text-[#64748B] hover:bg-[#FAF8F5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={async () => {
+                  const b = declineModalBid
+                  setDeclineModalBid(null)
+                  await act('rj-' + b.id, () => clientApi.rejectBid(b.id), 'Proposal declined')
+                }}
+                className="flex-1 cursor-pointer rounded-[12px] bg-[#EF4444] hover:bg-[#DC2626] py-2.5 text-[13px] font-bold text-white transition-colors disabled:opacity-60"
+              >
+                Decline
+              </button>
+            </div>
           </div>
         </div>
       )}

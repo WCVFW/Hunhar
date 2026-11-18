@@ -1,6 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Search, Send, Paperclip, MessageSquare, ArrowLeft, Briefcase, FileText, X } from 'lucide-react'
+import {
+  Search,
+  Send,
+  Paperclip,
+  MessageSquare,
+  ArrowLeft,
+  Briefcase,
+  FileText,
+  X,
+  Smile,
+  Reply,
+  Copy,
+  Check,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import messageDoodleBg from '../../assets/Message doodle 6.png'
 import {
   fileUrl,
@@ -17,25 +32,14 @@ import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 type ConversationTab = 'Client' | 'Hustlers'
 
-const AVATAR_COLORS = [
-  'bg-[#FFD7D0] text-[#E04B35]',
-  'bg-[#CFF3F9] text-[#0284C7]',
-  'bg-[#DCD8FE] text-[#6366F1]',
-  'bg-[#E0F2CE] text-[#65A30D]',
-]
-
-const colorFor = (id: string) => AVATAR_COLORS[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length]
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 const MESSAGE_POLL_MS = 5000
 const LIST_POLL_MS = 15000
 
 function Avatar({ name, url, id, size = 'h-10 w-10' }: { name?: string; url?: string; id: string; size?: string }) {
-  if (url) return <img src={fileUrl(url)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
-  return (
-    <div className={`flex ${size} shrink-0 items-center justify-center rounded-full font-manrope text-[14px] font-bold ${colorFor(id)}`}>
-      {initials(name)}
-    </div>
-  )
+  const src = url ? fileUrl(url) : getCharacterAvatar(id || name)
+  return <img src={src} alt={name || 'Avatar'} className={`${size} shrink-0 rounded-full object-cover ring-1 ring-[#DECFBE]/60`} />
 }
 
 export default function MessagesPage(): React.JSX.Element {
@@ -53,8 +57,25 @@ export default function MessagesPage(): React.JSX.Element {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null)
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [activeReactionId, setActiveReactionId] = useState<string | null>(null)
+  const [reactions, setReactions] = useState<Record<string, string[]>>({})
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const toggleReaction = (msgId: string, emoji: string) => {
+    setReactions((prev) => {
+      const current = prev[msgId] || []
+      const updated = current.includes(emoji)
+        ? current.filter((e) => e !== emoji)
+        : [...current, emoji]
+      return { ...prev, [msgId]: updated }
+    })
+    setActiveReactionId(null)
+  }
 
   const loadConversations = useCallback(async () => {
     try {
@@ -101,7 +122,9 @@ export default function MessagesPage(): React.JSX.Element {
   }, [selectedId, loadMessages])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages.length])
 
   const selectConversation = (id: string) => {
@@ -141,12 +164,23 @@ export default function MessagesPage(): React.JSX.Element {
     e.preventDefault()
     const content = inputText.trim()
     if ((!content && !attachment) || !selectedId || sending) return
+
+    if (editingMsg) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === editingMsg.id ? { ...m, content } : m))
+      )
+      setEditingMsg(null)
+      setInputText('')
+      return
+    }
+
     setSending(true)
     try {
       const msg = await messagesApi.sendMessage(selectedId, content, attachment?.url)
       setMessages((prev) => [...prev, msg])
       setInputText('')
       setAttachment(null)
+      setReplyingTo(null)
       setConversations((prev) =>
         prev.map((c) => (c.id === selectedId ? { ...c, lastMessage: content || '📎 Attachment', lastMessageAt: msg.createdAt } : c))
       )
@@ -162,16 +196,16 @@ export default function MessagesPage(): React.JSX.Element {
 
   return (
     <div className="w-full font-manrope">
-      <div className="w-full rounded-[24px] border border-[#E9EBEF]/60 bg-[#FFFFFF] p-2 shadow-xs sm:p-6 lg:p-7">
-        <div className="flex h-[calc(100vh-170px)] min-h-[520px] overflow-hidden rounded-[20px] border border-[#DECFBE] lg:h-[750px]">
+      <div className="flex h-[calc(100vh-140px)] sm:h-[calc(100vh-140px)] lg:h-[calc(100vh-145px)] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-140px)] lg:max-h-[calc(100dvh-145px)] w-full flex-col rounded-[24px] border border-[#E9EBEF]/60 bg-[#FFFFFF] p-2 shadow-xs sm:p-3 lg:p-4">
+        <div className="flex flex-1 min-h-0 overflow-hidden rounded-[20px] border border-[#DECFBE]">
           {/* LEFT: conversations */}
-          <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px]`}>
-            <div className="p-4 pb-2">
+          <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px] min-h-0 h-full`}>
+            <div className="shrink-0 p-4 pb-2">
               <h1 className="font-manrope text-[20px] font-bold text-[#08182B]">Messages</h1>
               <p className="mt-0.5 text-[12px] text-[#786D61]">Conversations with clients & collaborators</p>
             </div>
 
-            <div className="px-4 py-2">
+            <div className="shrink-0 px-4 py-2">
               <div className="flex rounded-full bg-[#E5D7CA] p-1" role="tablist">
                 {(['Client', 'Hustlers'] as ConversationTab[]).map((tab) => (
                   <button
@@ -195,7 +229,7 @@ export default function MessagesPage(): React.JSX.Element {
               </div>
             </div>
 
-            <div className="px-4 py-2">
+            <div className="shrink-0 px-4 py-2">
               <div className="relative">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9A8E80]" />
                 <input
@@ -209,7 +243,7 @@ export default function MessagesPage(): React.JSX.Element {
               </div>
             </div>
 
-            <div className="flex-1 divide-y divide-[#F2E8DC] overflow-y-auto">
+            <div className="min-h-0 flex-1 divide-y divide-[#F2E8DC] overflow-y-auto">
               {loading ? (
                 <div className="p-6 text-center text-xs text-[#8E8376]">Loading conversations…</div>
               ) : filtered.length === 0 ? (
@@ -263,7 +297,7 @@ export default function MessagesPage(): React.JSX.Element {
           </div>
 
           {/* RIGHT: chat */}
-          <div className={`${selectedId ? 'flex' : 'hidden md:flex'} relative min-w-0 flex-1 flex-col bg-[#FDFBF7]`}>
+          <div className={`${selectedId ? 'flex' : 'hidden md:flex'} relative min-w-0 flex-1 flex-col bg-[#FDFBF7] h-full min-h-0`}>
             <div
               className="pointer-events-none absolute inset-0 bg-repeat opacity-[0.06]"
               style={{ backgroundImage: `url("${messageDoodleBg}")`, backgroundSize: '360px' }}
@@ -304,10 +338,10 @@ export default function MessagesPage(): React.JSX.Element {
             </div>
 
             {error && (
-              <div className="relative z-10 border-b border-red-200 bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700">{error}</div>
+              <div className="relative z-10 shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-[12px] font-semibold text-red-700">{error}</div>
             )}
 
-            <div className="relative z-10 flex flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-6">
+            <div ref={messagesContainerRef} className="relative z-10 flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-3 sm:p-6">
               {!active || messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center p-8 text-center">
                   <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#FAF3EC] text-[#C06B3E]">
@@ -320,20 +354,107 @@ export default function MessagesPage(): React.JSX.Element {
                 </div>
               ) : (
                 messages.map((msg) => {
-                  const isMe = msg.senderId === me?.id
+                  const isMe = msg.senderId === me?.id || msg.senderId === me?.userId || (active ? msg.senderId !== active.otherPartyId : false)
                   const day = formatDate(msg.createdAt, true)
                   const showDay = day !== lastDay
                   lastDay = day
+                  const msgReactions = reactions[msg.id] || []
                   return (
                     <React.Fragment key={msg.id}>
                       {showDay && (
                         <div className="my-1 self-center rounded-full bg-white/80 px-3 py-0.5 text-[11px] font-semibold text-[#8E8376] shadow-2xs">{day}</div>
                       )}
-                      <div className={`flex max-w-[85%] items-end gap-2 sm:max-w-[75%] ${isMe ? 'flex-row-reverse self-end' : 'self-start'}`}>
+                      <div className={`group relative flex max-w-[85%] items-end gap-2 sm:max-w-[75%] ${isMe ? 'flex-row-reverse self-end' : 'self-start'}`}>
                         {!isMe && <Avatar name={msg.senderName} url={active.otherPartyAvatarUrl} id={msg.senderId} size="h-8 w-8" />}
-                        <div className="min-w-0">
+                        <div className="relative min-w-0">
+                          {/* Hover Action Bar */}
                           <div
-                            className={`whitespace-pre-wrap break-words rounded-[16px] p-3 font-manrope text-[13px] leading-relaxed shadow-2xs ${
+                            className={`absolute -top-3.5 z-20 hidden items-center gap-0.5 rounded-full border border-[#DECFBE] bg-white px-1.5 py-0.5 shadow-md group-hover:flex ${
+                              isMe ? 'right-2' : 'left-2'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              title="React"
+                              onClick={() => setActiveReactionId(activeReactionId === msg.id ? null : msg.id)}
+                              className="rounded-full p-1 text-[#7A7065] transition-colors hover:bg-[#FAF4EE] hover:text-[#C06B3E]"
+                            >
+                              <Smile size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Reply"
+                              onClick={() => {
+                                setReplyingTo(msg)
+                                setEditingMsg(null)
+                              }}
+                              className="rounded-full p-1 text-[#7A7065] transition-colors hover:bg-[#FAF4EE] hover:text-[#C06B3E]"
+                            >
+                              <Reply size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              title={copiedId === msg.id ? 'Copied!' : 'Copy'}
+                              onClick={() => {
+                                navigator.clipboard?.writeText(msg.content)
+                                setCopiedId(msg.id)
+                                setTimeout(() => setCopiedId(null), 2000)
+                              }}
+                              className="rounded-full p-1 text-[#7A7065] transition-colors hover:bg-[#FAF4EE] hover:text-[#C06B3E]"
+                            >
+                              {copiedId === msg.id ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
+                            </button>
+                            {isMe && (
+                              <>
+                                <button
+                                  type="button"
+                                  title="Edit"
+                                  onClick={() => {
+                                    setEditingMsg(msg)
+                                    setReplyingTo(null)
+                                    setInputText(msg.content)
+                                  }}
+                                  className="rounded-full p-1 text-[#7A7065] transition-colors hover:bg-[#FAF4EE] hover:text-[#C06B3E]"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete"
+                                  onClick={() => {
+                                    setMessages((prev) => prev.filter((m) => m.id !== msg.id))
+                                  }}
+                                  className="rounded-full p-1 text-[#7A7065] transition-colors hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Quick Reaction Popup */}
+                          {activeReactionId === msg.id && (
+                            <div
+                              className={`absolute -top-11 z-30 flex items-center gap-1 rounded-full border border-[#DECFBE] bg-white px-2 py-1 shadow-lg ${
+                                isMe ? 'right-2' : 'left-2'
+                              }`}
+                            >
+                              {['👍', '❤️', '😂', '😮', '🙏', '🔥'].map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => toggleReaction(msg.id, emoji)}
+                                  className="transform text-base transition-transform hover:scale-125"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Message Bubble with cursor-pointer */}
+                          <div
+                            className={`cursor-pointer whitespace-pre-wrap break-words rounded-[16px] p-3 font-manrope text-[13px] leading-relaxed shadow-2xs transition-all hover:brightness-[0.98] ${
                               isMe ? 'rounded-br-none bg-[#C06B3E] text-white' : 'rounded-bl-none border border-[#DECFBE] bg-white text-[#08182B]'
                             }`}
                           >
@@ -347,6 +468,22 @@ export default function MessagesPage(): React.JSX.Element {
                               </a>
                             )}
                           </div>
+
+                          {/* Reactions Badge */}
+                          {msgReactions.length > 0 && (
+                            <div className={`mt-1 flex flex-wrap gap-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                              {msgReactions.map((emoji) => (
+                                <span
+                                  key={emoji}
+                                  onClick={() => toggleReaction(msg.id, emoji)}
+                                  className="inline-flex cursor-pointer items-center rounded-full border border-[#DECFBE] bg-white px-1.5 py-0.5 text-[11px] shadow-2xs hover:bg-[#FAF4EE]"
+                                >
+                                  {emoji}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           <span className={`mt-1 block text-[10px] text-[#9A8E80] ${isMe ? 'text-right' : 'text-left'}`}>{formatTime(msg.createdAt)}</span>
                         </div>
                       </div>
@@ -358,7 +495,42 @@ export default function MessagesPage(): React.JSX.Element {
             </div>
 
             {active && (
-              <div className="relative z-10 border-t border-[#DECFBE] bg-white p-2.5 sm:p-4">
+              <div className="relative z-10 shrink-0 border-t border-[#DECFBE] bg-white p-2.5 sm:p-4">
+                {editingMsg && (
+                  <div className="mb-2 flex items-center justify-between rounded-lg border-l-4 border-l-[#C06B3E] bg-[#FAF4EE] px-3 py-1.5 text-[12px] font-medium text-[#08182B]">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-[#C06B3E]">Editing message</span>
+                      <p className="line-clamp-1 text-[11px] text-[#7A7065]">{editingMsg.content}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingMsg(null)
+                        setInputText('')
+                      }}
+                      className="p-1 text-[#8E8376] hover:text-[#08182B]"
+                      title="Cancel edit"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                {replyingTo && (
+                  <div className="mb-2 flex items-center justify-between rounded-lg border-l-4 border-l-[#C06B3E] bg-[#FAF4EE] px-3 py-1.5 text-[12px] font-medium text-[#08182B]">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-[#C06B3E]">Replying to {replyingTo.senderName || 'user'}</span>
+                      <p className="line-clamp-1 text-[11px] text-[#7A7065]">{replyingTo.content}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 text-[#8E8376] hover:text-[#08182B]"
+                      title="Cancel reply"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
                 {attachment && (
                   <div className="mb-2 flex items-center gap-2 rounded-full bg-[#FAF4EE] px-3 py-1 text-[12px] font-semibold text-[#08182B]">
                     <FileText size={13} /> <span className="truncate">{attachment.originalName}</span>
