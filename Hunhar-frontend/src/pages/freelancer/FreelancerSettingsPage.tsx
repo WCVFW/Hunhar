@@ -915,10 +915,10 @@ export default function FreelancerSettingsPage(): React.JSX.Element {
                     />
                     <div>
                       <span className="text-[13px] font-bold text-[#08182B] block">
-                        Auto-withdraw earnings weekly (coming soon)
+                        Auto-withdraw earnings weekly
                       </span>
                       <span className="text-[12px] text-[#7A7065] block">
-                        Your choice is saved now and will apply when automatic withdrawals launch
+                        Every Monday your available balance is withdrawn to this payout account (needs KYC and the minimum payout amount)
                       </span>
                     </div>
                   </label>

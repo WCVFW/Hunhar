@@ -100,10 +100,9 @@ public class BillingAdminService {
         s.put("escrowHeld", transactionRepository.sumByTypeBetween(TransactionType.ESCROW_HOLD, epoch, now)
                 .subtract(gross).subtract(transactionRepository.sumByTypeBetween(TransactionType.REFUND, epoch, now)).max(BigDecimal.ZERO));
         s.put("walletTopups", orderRepository.sumByPurposeAndStatus(PaymentOrder.Purpose.WALLET_TOPUP, PaymentOrder.Status.PAID));
-        // Credit packs paid by UPI/card (payment orders) plus those paid from wallet balance
-        BigDecimal gatewayCredits = orderRepository.sumByPurposeAndStatus(PaymentOrder.Purpose.CREDIT_PACKAGE, PaymentOrder.Status.PAID);
-        BigDecimal walletCredits = transactionRepository.sumByType(TransactionType.CREDIT_PURCHASE);
-        s.put("creditSales", (gatewayCredits == null ? BigDecimal.ZERO : gatewayCredits).add(walletCredits == null ? BigDecimal.ZERO : walletCredits));
+        // Every credit pack sale (paid by UPI/card or from the wallet) is recorded as a CREDIT_PURCHASE transaction
+        BigDecimal creditSales = transactionRepository.sumByType(TransactionType.CREDIT_PURCHASE);
+        s.put("creditSales", creditSales == null ? BigDecimal.ZERO : creditSales);
 
         List<PayoutRequest> pending = Stream.concat(
                 payoutRepository.findByStatus(PayoutStatus.REQUESTED).stream(),

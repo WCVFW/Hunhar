@@ -351,6 +351,45 @@ public class FreelancerProfileService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Full payout details for billing (internal only): billing needs the real account number to pay out,
+     * while the website only ever sees it masked.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> payoutDetailsForBilling(UUID userId) {
+        java.util.Map<String, Object> out = new java.util.HashMap<>();
+        FreelancerProfile p = profileRepository.findById(userId).orElse(null);
+        if (p == null || p.getPayoutMethod() == null) {
+            out.put("configured", false);
+            return out;
+        }
+        out.put("configured", true);
+        out.put("autoWithdrawal", p.isAutoWithdrawal());
+        if ("UPI".equals(p.getPayoutMethod())) {
+            out.put("method", "UPI");
+            out.put("details", p.getUpiId());
+        } else {
+            out.put("method", "BANK_TRANSFER");
+            String account = decryptOrNull(p.getAccountNumberEnc());
+            out.put("details", String.join(", ",
+                    nz(p.getAccountHolder()),
+                    (nz(p.getBankName()) + " A/c " + nz(account)).trim(),
+                    "IFSC " + nz(p.getIfscCode())));
+        }
+        return out;
+    }
+
+    /** Ids of freelancers with weekly auto-withdraw on and payout details saved. */
+    @Transactional(readOnly = true)
+    public java.util.List<UUID> autoWithdrawFreelancers() {
+        return profileRepository.findByAutoWithdrawalTrueAndPayoutMethodIsNotNull().stream()
+                .map(FreelancerProfile::getUserId).toList();
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s.trim();
+    }
+
     private String decryptOrNull(String enc) {
         if (enc == null) return null;
         try {

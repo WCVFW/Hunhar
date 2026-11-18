@@ -13,6 +13,9 @@ import java.util.UUID;
 @Repository
 public interface FreelancerProfileRepository extends JpaRepository<FreelancerProfile, UUID> {
 
+    /** Freelancers who turned on weekly automatic withdrawals and saved payout details. */
+    java.util.List<FreelancerProfile> findByAutoWithdrawalTrueAndPayoutMethodIsNotNull();
+
     @Query("SELECT p FROM FreelancerProfile p ORDER BY p.leaderboardScore DESC")
     List<FreelancerProfile> findTopByOrderByLeaderboardScoreDesc(Pageable pageable);
 

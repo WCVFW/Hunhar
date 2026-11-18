@@ -52,6 +52,25 @@ public class InternalUserController {
         return Map.of("ok", true);
     }
 
+    /** Ids of suspended accounts: the gateway refuses their requests even with a still-valid token. */
+    @GetMapping("/users/suspended")
+    public List<UUID> suspendedUsers() {
+        return userRepository.findByStatus(com.theunoia.identity.domain.UserStatus.SUSPENDED).stream()
+                .map(com.theunoia.identity.domain.User::getId).toList();
+    }
+
+    /** Full payout details of a freelancer (billing uses them for withdrawals). */
+    @GetMapping("/freelancers/{id}/payout")
+    public Map<String, Object> payoutDetails(@PathVariable UUID id) {
+        return profileService.payoutDetailsForBilling(id);
+    }
+
+    /** Freelancers who turned on weekly automatic withdrawals. */
+    @GetMapping("/freelancers/auto-withdraw")
+    public List<UUID> autoWithdrawFreelancers() {
+        return profileService.autoWithdrawFreelancers();
+    }
+
     @PostMapping("/email/send")
     public Map<String, Object> sendEmail(@RequestBody EmailRequest req) {
         byte[] attachment = req.attachmentBase64() == null || req.attachmentBase64().isBlank()

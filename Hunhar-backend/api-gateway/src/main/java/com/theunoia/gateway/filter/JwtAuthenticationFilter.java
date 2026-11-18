@@ -28,6 +28,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     );
 
     private final SecretKey key;
+    private final com.theunoia.gateway.security.SuspendedUsers suspendedUsers;
 
     private static final List<String> PUBLIC_PATH_PREFIXES = List.of(
             "/api/v1/auth/",
@@ -42,8 +43,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/v3/api-docs"
     );
 
-    public JwtAuthenticationFilter(@Value("${theunoia.gateway.jwt-secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}") String secret) {
+    public JwtAuthenticationFilter(@Value("${theunoia.gateway.jwt-secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}") String secret,
+                                   com.theunoia.gateway.security.SuspendedUsers suspendedUsers) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.suspendedUsers = suspendedUsers;
         if (secret.startsWith("404E635266556A586E32")) {
             org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class)
                     .warn("JWT_SECRET is not set - using the development secret. Set it in Hunhar-backend/.env before going live.");
@@ -85,6 +88,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             }
 
             String userId = claims.getSubject();
+            // Suspended after this token was issued: block now, not when the token expires
+            if (suspendedUsers.isSuspended(userId)) {
+                return unauthorized(exchange, "Account is suspended. Please contact platform administration.");
+            }
             String role = claims.get("role", String.class);
             String status = claims.get("status", String.class);
             String email = claims.get("email", String.class);

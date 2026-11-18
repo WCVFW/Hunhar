@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
 @ComponentScan(basePackages = {"com.theunoia.common", "com.theunoia.billing"})
 public class BillingServiceApplication {
     public static void main(String[] args) {

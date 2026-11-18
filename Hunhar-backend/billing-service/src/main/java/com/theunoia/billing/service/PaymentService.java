@@ -40,6 +40,7 @@ public class PaymentService {
     private final ObjectMapper objectMapper;
     private final BillingEmailNotifier billingEmailNotifier;
     private final InvoiceService invoiceService;
+    private final com.theunoia.billing.repository.TransactionRepository transactionRepository;
 
     /** Starts a payment. The browser then opens the gateway checkout with the returned order id. */
     @Transactional
@@ -164,6 +165,15 @@ public class PaymentService {
             var wallet = creditService.addPurchasedCredits(order.getUserId(), order.getPackageId(), paymentId);
             CreditPackage pkg = packageRepository.findById(order.getPackageId()).orElse(null);
             String what = pkg != null ? pkg.getName() + " - " + pkg.getCredits() + " credits" : "Credit pack";
+            // Record the purchase so it appears in the buyer's history and the admin's transactions / revenue
+            transactionRepository.save(com.theunoia.billing.domain.Transaction.builder()
+                    .userId(order.getUserId())
+                    .amount(order.getAmount())
+                    .type(com.theunoia.billing.domain.TransactionType.CREDIT_PURCHASE)
+                    .status(com.theunoia.billing.domain.TransactionStatus.COMPLETED)
+                    .gatewayRefId(paymentId)
+                    .description(what + " (paid by UPI / card)")
+                    .build());
             Invoice inv = invoiceService.generatePaymentInvoice(order.getUserId(), InvoiceService.TYPE_CREDITS, what,
                     order.getAmount(), paymentId, method);
             billingEmailNotifier.sendInvoice(order.getUserId(), inv, "Payment successful - " + what + " (" + inv.getInvoiceNumber() + ")",

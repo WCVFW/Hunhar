@@ -173,6 +173,14 @@ public class WalletService {
 
     @Transactional
     public PayoutRequest requestPayout(UUID freelancerId, BigDecimal amount, String method, String accountDetails) {
+        // The website only shows the saved bank account masked (••••1234); use the saved full details so the
+        // admin can actually pay it out.
+        if ("BANK_TRANSFER".equals(method) && accountDetails != null && accountDetails.contains("\u2022")) {
+            Map<String, Object> saved = savedPayoutDetails(freelancerId);
+            if (saved != null && "BANK_TRANSFER".equals(saved.get("method")) && saved.get("details") != null) {
+                accountDetails = String.valueOf(saved.get("details"));
+            }
+        }
         int minPayout = settings.getInt(PlatformSettingsService.MIN_PAYOUT);
         if (amount == null || amount.compareTo(BigDecimal.valueOf(minPayout)) < 0) {
             throw new BadRequestException("Minimum withdrawal amount is ₹" + minPayout);
@@ -264,6 +272,27 @@ public class WalletService {
                 .build());
         notifications.notify(clientId, "PAYMENT_RECEIVED", "Escrow refunded",
                 "₹" + refund.toPlainString() + " was returned to your wallet. " + reason, "/client/payments");
+    }
+
+    /** Saved payout details of a freelancer from identity-service (null if unavailable). */
+    public Map<String, Object> savedPayoutDetails(UUID freelancerId) {
+        try {
+            return internalClient.get(internalClient.identity() + "/internal/freelancers/" + freelancerId + "/payout",
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(WalletService.class).warn("Could not load payout details for {}: {}", freelancerId, e.getMessage());
+            return null;
+        }
+    }
+
+    /** True when the freelancer already has a withdrawal waiting for admin approval. */
+    public boolean hasPendingPayout(UUID freelancerId) {
+        return payoutRequestRepository.findByFreelancerIdOrderByCreatedAtDesc(freelancerId).stream()
+                .anyMatch(p -> p.getStatus() == PayoutStatus.REQUESTED);
+    }
+
+    public BigDecimal availableBalance(UUID userId) {
+        return walletRepository.findById(userId).map(Wallet::getAvailableBalance).orElse(BigDecimal.ZERO);
     }
 
     private boolean isKycVerified(UUID userId) {
