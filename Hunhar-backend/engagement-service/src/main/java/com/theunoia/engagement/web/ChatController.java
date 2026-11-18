@@ -58,7 +58,7 @@ public class ChatController {
             @RequestBody SendMessageRequest req
     ) {
         ChatMessage msg = chatService.sendMessage(conversationId, requireUser(currentUser).id(), req.getContent(), req.getAttachmentUrl(),
-                req.getAttachmentName(), req.getAttachmentType(), req.getAttachmentSize());
+                req.getAttachmentName(), req.getAttachmentType(), req.getAttachmentSize(), req.getReplyToId());
         return ResponseEntity.ok(ApiResponse.ok("Message sent", msg));
     }
 
@@ -72,6 +72,18 @@ public class ChatController {
     ) {
         return ResponseEntity.ok(ApiResponse.ok("Message updated",
                 chatService.editMessage(conversationId, messageId, requireUser(currentUser).id(), req.getContent())));
+    }
+
+    /** React to a message with an emoji; sending the same emoji again removes your reaction. */
+    @PostMapping("/conversations/{conversationId}/messages/{messageId}/reactions")
+    public ResponseEntity<ApiResponse<ChatMessage>> react(
+            @CurrentUser AuthUser currentUser,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId,
+            @RequestBody ReactionRequest req
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                chatService.toggleReaction(conversationId, messageId, requireUser(currentUser).id(), req.getEmoji())));
     }
 
     /** Delete your own message (both sides then see "This message was deleted"). */
@@ -101,6 +113,13 @@ public class ChatController {
         @Size(max = 120)
         private String attachmentType;
         private Long attachmentSize;
+        private UUID replyToId;
+    }
+
+    @Data
+    public static class ReactionRequest {
+        @Size(max = 16)
+        private String emoji;
     }
 
     @Data

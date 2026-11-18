@@ -12,6 +12,7 @@ import {
 import leadershipLuna from '../../assets/Leadership_luna.png'
 import { fileUrl, leaderboardApi, tokenStorage, type LeaderboardEntry } from '../../services/api'
 import { formatINR, initials } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 interface LeaderboardUser {
   rank: number
@@ -55,7 +56,7 @@ const toUser = (entry: LeaderboardEntry, myId?: string): LeaderboardUser => {
     title: entry.professionalTitle || (entry.skills.length ? entry.skills.slice(0, 2).join(' · ') : 'Freelancer'),
     category: categoryOf(entry.skills),
     avatarText: initials(entry.fullName),
-    avatarUrl: entry.avatarUrl,
+    avatarUrl: entry.avatarUrl || getCharacterAvatar(entry.userId || entry.fullName),
     score: Math.round(entry.leaderboardScore),
     bidsWon: entry.completedProjects,
     rating: entry.rating,

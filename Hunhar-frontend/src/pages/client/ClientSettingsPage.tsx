@@ -20,6 +20,7 @@ import {
 import ImageCropModal from '../../components/common/ImageCropModal'
 import { clientApi, fileUrl, filesApi, profileApi, tokenStorage, walletApi, type ClientProfile } from '../../services/api'
 import { formatINR } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 type SettingsTab = 'Company Profile' | 'Notifications' | 'Billing & Invoicing' | 'Security'
 
@@ -294,9 +295,11 @@ export default function ClientSettingsPage(): React.JSX.Element {
                     className="h-20 w-20 rounded-full object-cover border-2 border-white shadow-md transition-opacity group-hover:opacity-85"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#08182B] text-[24px] font-extrabold text-white shadow-md transition-opacity group-hover:opacity-85">
-                    {logoInitials}
-                  </div>
+                  <img
+                    src={getCharacterAvatar(companyName || fullName || 'client')}
+                    alt={companyName}
+                    className="h-20 w-20 rounded-full object-cover border-2 border-white shadow-md transition-opacity group-hover:opacity-85"
+                  />
                 )}
                 <div
                   className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-sm transition-transform duration-200 group-hover:scale-110 group-hover:bg-[#A95A30]"

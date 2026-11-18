@@ -148,10 +148,12 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   return data.data
 }
 
+import { getCharacterAvatar } from './characterAvatars'
+
 /** Turns a server file path (/api/v1/projects/files/...) into a full URL for <img>/<a>. */
 export const fileUrl = (path?: string | null): string => {
   if (!path) return ''
-  return path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') ? path : `${API_BASE_URL}${path}`
+  return path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('/assets/') || path.includes('/CHARACTERS/') ? path : `${API_BASE_URL}${path}`
 }
 
 // =============================================================================
@@ -173,7 +175,8 @@ export interface AuthResult {
 /** Stores the session from a login/register/Google response and returns the dashboard path for the role. */
 export const startSession = (res: AuthResult, remember = true): string => {
   tokenStorage.setToken(res.token!, remember)
-  tokenStorage.setUser({ id: res.userId, userId: res.userId, fullName: res.fullName, email: res.email, role: res.role, avatarUrl: res.avatarUrl, kycStatus: res.kycStatus })
+  const avatar = res.avatarUrl || getCharacterAvatar(res.userId || res.email || res.fullName)
+  tokenStorage.setUser({ id: res.userId, userId: res.userId, fullName: res.fullName, email: res.email, role: res.role, avatarUrl: avatar, kycStatus: res.kycStatus })
   return DASHBOARD_BY_ROLE[res.role || 'FREELANCER']
 }
 
@@ -495,6 +498,11 @@ export interface ChatMessage {
   attachmentSize?: number | null
   editedAt?: string | null
   deletedAt?: string | null
+  replyToId?: string | null
+  replyToSenderName?: string | null
+  replyToPreview?: string | null
+  /** emoji -> ids of the users who reacted with it */
+  reactions?: Record<string, string[]>
   createdAt: string
 }
 
@@ -667,6 +675,19 @@ export const profileApi = {
 
   getPublic: (userId: string) => apiRequest<FreelancerProfile>(`/api/v1/users/${userId}/profile`),
 
+  getUserSummary: (userId: string) =>
+    apiRequest<{
+      id: string
+      email?: string
+      fullName: string
+      role: 'CLIENT' | 'FREELANCER' | 'ADMIN'
+      status?: string
+      kycStatus?: 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED'
+      avatarUrl?: string
+      profile?: any
+      createdAt?: string
+    }>(`/api/v1/users/${userId}`),
+
   searchFreelancers: (params: { search?: string; skill?: string; limit?: number } = {}) =>
     apiRequest<FreelancerProfile[]>('/api/v1/users/freelancers' + qs(params)),
 }
@@ -729,14 +750,19 @@ export const messagesApi = {
 
   getMessages: (conversationId: string) => apiRequest<ChatMessage[]>(`/api/v1/messages/conversations/${conversationId}`),
 
-  sendMessage: (conversationId: string, content: string, attachment?: StoredFile | null) =>
+  sendMessage: (conversationId: string, content: string, attachment?: StoredFile | null, replyToId?: string | null) =>
     apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}`, json('POST', {
       content,
       attachmentUrl: attachment?.url,
       attachmentName: attachment?.originalName,
       attachmentType: attachment?.contentType,
       attachmentSize: attachment?.sizeBytes,
+      replyToId: replyToId || undefined,
     })),
+
+  /** Adds your emoji reaction, or removes it when you already reacted with that emoji. */
+  react: (conversationId: string, messageId: string, emoji: string) =>
+    apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}/messages/${messageId}/reactions`, json('POST', { emoji })),
 
   editMessage: (conversationId: string, messageId: string, content: string) =>
     apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}/messages/${messageId}`, json('PUT', { content })),

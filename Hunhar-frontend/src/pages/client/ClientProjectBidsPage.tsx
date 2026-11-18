@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Search, Star, CheckCircle2, Clock, MessageSquare, Check, X, ExternalLink, GraduationCap, FileText, Eye, ShieldCheck, Paperclip } from 'lucide-react'
 import { bidsApi, clientApi, fileUrl, messagesApi, profileApi, projectsApi, type Bid, type FreelancerProfile, type Project } from '../../services/api'
 import { formatINR, initials, PROJECT_STATUS_LABEL, splitList, timeAgo } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 import { fromRouteId, toRouteId } from '../../services/routeIds'
 
 type Tab = 'all' | 'shortlisted' | 'accepted' | 'rejected'
@@ -253,13 +254,11 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex items-start gap-4">
                       <div className="relative">
-                        {bid.freelancerAvatarUrl || pr?.avatarUrl ? (
-                          <img src={fileUrl(bid.freelancerAvatarUrl || pr?.avatarUrl)} alt="" className="h-12 w-12 shrink-0 rounded-2xl object-cover shadow-xs sm:h-14 sm:w-14" />
-                        ) : (
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#08182B] font-manrope text-[18px] font-bold text-white shadow-xs sm:h-14 sm:w-14">
-                            {initials(bid.freelancerName)}
-                          </div>
-                        )}
+                        <img
+                          src={bid.freelancerAvatarUrl || pr?.avatarUrl ? fileUrl(bid.freelancerAvatarUrl || pr?.avatarUrl) : getCharacterAvatar(bid.freelancerId || bid.freelancerName)}
+                          alt=""
+                          className="h-12 w-12 shrink-0 rounded-2xl object-cover shadow-xs sm:h-14 sm:w-14 ring-1 ring-[#DECFBE]/60"
+                        />
                         {pr?.kycStatus === 'VERIFIED' && (
                           <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#16A34A] text-white ring-2 ring-white" title="KYC verified">
                             <Check size={11} strokeWidth={3} />

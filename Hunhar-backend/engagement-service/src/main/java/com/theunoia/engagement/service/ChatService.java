@@ -53,7 +53,32 @@ public class ChatService {
 
     @Transactional
     public ChatMessage sendMessage(UUID conversationId, UUID senderId, String content, String attachmentUrl) {
-        return sendMessage(conversationId, senderId, content, attachmentUrl, null, null, null);
+        return sendMessage(conversationId, senderId, content, attachmentUrl, null, null, null, null);
+    }
+
+    /** Reactions people can add to a message (same set as the website shows). */
+    private static final java.util.Set<String> ALLOWED_REACTIONS = java.util.Set.of(
+            "\uD83D\uDC4D", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83D\uDE2E", "\uD83D\uDE4F", "\uD83D\uDD25");
+
+    /** Adds the user's reaction, or removes it if they already reacted with that emoji. */
+    @Transactional
+    public ChatMessage toggleReaction(UUID conversationId, UUID messageId, UUID userId, String emoji) {
+        participantConversation(conversationId, userId);
+        if (emoji == null || !ALLOWED_REACTIONS.contains(emoji)) {
+            throw new BadRequestException("Unsupported reaction");
+        }
+        ChatMessage msg = chatMessageRepository.findById(messageId)
+                .filter(m -> m.getConversationId().equals(conversationId))
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        if (msg.getDeletedAt() != null) throw new BadRequestException("This message was deleted");
+        java.util.Map<String, java.util.List<String>> all = msg.getReactions();
+        java.util.List<String> users = new java.util.ArrayList<>(all.getOrDefault(emoji, java.util.List.of()));
+        String uid = userId.toString();
+        if (!users.remove(uid)) users.add(uid);
+        if (users.isEmpty()) all.remove(emoji);
+        else all.put(emoji, users);
+        msg.setReactions(all);
+        return chatMessageRepository.save(msg);
     }
 
     /** Only files uploaded to Hunhar can be attached (no outside links). */
@@ -62,7 +87,7 @@ public class ChatService {
 
     @Transactional
     public ChatMessage sendMessage(UUID conversationId, UUID senderId, String content, String attachmentUrl,
-                                   String attachmentName, String attachmentType, Long attachmentSize) {
+                                   String attachmentName, String attachmentType, Long attachmentSize, UUID replyToId) {
         String text = content == null ? "" : content.trim();
         String url = attachmentUrl == null || attachmentUrl.isBlank() ? null : attachmentUrl.trim();
         if (url != null && !FILE_URL.matcher(url).matches()) {
@@ -76,6 +101,11 @@ public class ChatService {
         }
         Conversation conv = participantConversation(conversationId, senderId);
 
+        // Reply: quote a message from the same conversation
+        ChatMessage replyTo = replyToId == null ? null : chatMessageRepository.findById(replyToId)
+                .filter(m -> m.getConversationId().equals(conversationId))
+                .orElseThrow(() -> new BadRequestException("The message you are replying to was not found"));
+
         String senderName = userDirectory.nameOf(senderId);
         ChatMessage message = chatMessageRepository.save(ChatMessage.builder()
                 .conversationId(conversationId)
@@ -86,6 +116,9 @@ public class ChatService {
                 .attachmentName(url == null ? null : clip(attachmentName, 255, "Attachment"))
                 .attachmentType(url == null ? null : clip(attachmentType, 120, null))
                 .attachmentSize(url == null || attachmentSize == null || attachmentSize < 0 ? null : attachmentSize)
+                .replyToId(replyTo == null ? null : replyTo.getId())
+                .replyToSenderName(replyTo == null ? null : clip(replyTo.getSenderName(), 100, "User"))
+                .replyToPreview(replyTo == null ? null : clip(replyTo.getDeletedAt() != null ? "This message was deleted" : preview(replyTo), 200, ""))
                 .build());
 
         Instant previous = conv.getLastMessageAt();
@@ -135,6 +168,7 @@ public class ChatService {
         msg.setAttachmentName(null);
         msg.setAttachmentType(null);
         msg.setAttachmentSize(null);
+        msg.setReactions(null);
         msg.setDeletedAt(Instant.now());
         chatMessageRepository.save(msg);
         refreshLastMessage(conv);

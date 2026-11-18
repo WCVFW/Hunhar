@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import hunharLogo from '../../assets/hunha Logo.png'
 import sidebarCollapseLogo from '../../assets/Sidebar_collaps.png'
-import promoMascotCard from '../../assets/promo_mascot_card.png'
+import leadershipLuna from '../../assets/Leadership_luna.png'
 import { logout } from '../../services/api'
 
 interface MenuItem {
@@ -149,8 +149,8 @@ export default function Sidebar({
                 </p>
               </div>
               <img
-                src={promoMascotCard}
-                alt="Hunhar Mascot"
+                src={leadershipLuna}
+                alt="Hunhar Mascot Luna"
                 className="h-14 w-14 -mr-1 object-contain drop-shadow-md select-none"
               />
             </div>

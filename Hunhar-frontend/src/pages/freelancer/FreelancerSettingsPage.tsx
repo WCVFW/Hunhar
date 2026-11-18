@@ -27,6 +27,7 @@ import { Link } from 'react-router-dom'
 import ImageCropModal from '../../components/common/ImageCropModal'
 import { fileUrl, filesApi, profileApi, tokenStorage, walletApi, type FreelancerProfile } from '../../services/api'
 import { formatINR, initials } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 type FreelancerSettingsTab =
   | 'Profile & Skills'
@@ -385,9 +386,11 @@ export default function FreelancerSettingsPage(): React.JSX.Element {
                     className="h-20 w-20 rounded-full object-cover border-2 border-white shadow-md transition-opacity group-hover:opacity-85"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white bg-[#C06B3E] text-[24px] font-extrabold text-white shadow-md">
-                    {initials(fullName)}
-                  </div>
+                  <img
+                    src={getCharacterAvatar(profile?.id || fullName || 'freelancer')}
+                    alt={fullName}
+                    className="h-20 w-20 rounded-full object-cover border-2 border-white shadow-md transition-opacity group-hover:opacity-85"
+                  />
                 )}
                 {uploadingAvatar && (
                   <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-[10px] font-bold text-white">Uploading…</div>

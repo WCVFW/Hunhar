@@ -28,6 +28,7 @@ import {
   type AppNotification,
 } from '../../services/api'
 import { formatINR, initials, timeAgo } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 import { hideIdsInPath } from '../../services/routeIds'
 
 const POLL_MS = 60_000
@@ -141,12 +142,10 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
     }
   }
 
-  const avatar = (size: string, text: string) =>
-    avatarUrl ? (
-      <img src={fileUrl(avatarUrl)} alt="" className={`${size} rounded-full object-cover`} />
-    ) : (
-      <span className={text}>{userInitial}</span>
-    )
+  const avatar = (size: string, _text: string) => {
+    const src = avatarUrl ? fileUrl(avatarUrl) : getCharacterAvatar(userName || userHeadline || 'freelancer')
+    return <img src={src} alt="" className={`${size} rounded-full object-cover`} />
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8">

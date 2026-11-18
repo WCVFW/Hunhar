@@ -38,6 +38,7 @@ import {
   isOverdue,
   splitList,
 } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
 
@@ -570,13 +571,11 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
             <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
               <h3 className="font-manrope text-[14px] font-bold text-[#08182B]">Client</h3>
               <div className="mt-4 flex items-center gap-3">
-                {project.clientAvatarUrl ? (
-                  <img src={fileUrl(project.clientAvatarUrl)} alt="" className="h-11 w-11 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5249DE] font-manrope text-[16px] font-bold text-white shadow-xs">
-                    {initials(clientName)}
-                  </div>
-                )}
+                <img
+                  src={project.clientAvatarUrl ? fileUrl(project.clientAvatarUrl) : getCharacterAvatar(project.clientId || clientName)}
+                  alt=""
+                  className="h-11 w-11 rounded-full object-cover ring-1 ring-[#DECFBE]/60"
+                />
                 <div>
                   <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">{clientName}</h4>
                   <span className="text-[12px] text-[#8E8376]">{project.category}</span>
@@ -715,13 +714,11 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
 
             {team.map((t) => (
               <div key={t.id} className="mt-3 flex items-center gap-3.5 rounded-[16px] bg-[#F7F7F7] p-4">
-                {t.collaboratorAvatarUrl ? (
-                  <img src={fileUrl(t.collaboratorAvatarUrl)} alt="" className="h-11 w-11 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#00966D] font-manrope text-[16px] font-bold text-white">
-                    {initials(t.collaboratorName)}
-                  </div>
-                )}
+                <img
+                  src={t.collaboratorAvatarUrl ? fileUrl(t.collaboratorAvatarUrl) : getCharacterAvatar(t.collaboratorFreelancerId || t.collaboratorName)}
+                  alt=""
+                  className="h-11 w-11 rounded-full object-cover ring-1 ring-[#DECFBE]/60"
+                />
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">{t.collaboratorName || 'Freelancer'}</h4>

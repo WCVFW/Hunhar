@@ -23,6 +23,7 @@ import {
 } from '../../services/format'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 
 export default function ProjectDetailsPage(): React.JSX.Element {
   const { creditsPerBid: CREDITS_PER_BID } = usePlatformSettings()
@@ -288,13 +289,11 @@ export default function ProjectDetailsPage(): React.JSX.Element {
 
             {/* Client Avatar + Rating */}
             <div className="mt-4 flex items-center gap-3">
-              {project.clientAvatarUrl ? (
-                <img src={fileUrl(project.clientAvatarUrl)} alt="" className="h-11 w-11 rounded-full object-cover" />
-              ) : (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5249DE] font-manrope text-[16px] font-bold text-white shadow-xs">
-                  {clientInitial}
-                </div>
-              )}
+              <img
+                src={project.clientAvatarUrl ? fileUrl(project.clientAvatarUrl) : getCharacterAvatar(project.clientId || clientName)}
+                alt=""
+                className="h-11 w-11 rounded-full object-cover ring-1 ring-[#DECFBE]/60"
+              />
 
               <div>
                 <h4 className="font-manrope text-[15px] font-bold text-[#08182B]">

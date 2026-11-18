@@ -12,6 +12,7 @@ import {
   type TeamMember,
 } from '../../services/api'
 import { formatDate, formatINR, initials, timeAgo } from '../../services/format'
+import { getCharacterAvatar } from '../../services/characterAvatars'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
 
 type Tab = 'find' | 'invites' | 'sent'
@@ -27,13 +28,9 @@ const STATUS_STYLE: Record<TeamMember['status'], string> = {
   DECLINED: 'bg-[#FEE2E2] text-[#B91C1C]',
 }
 
-function Avatar({ p, size = 'h-12 w-12', text = 'text-[16px]' }: { p: { id: string; fullName: string; avatarUrl?: string }; size?: string; text?: string }) {
-  if (p.avatarUrl) return <img src={fileUrl(p.avatarUrl)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
-  return (
-    <div className={`flex ${size} shrink-0 items-center justify-center rounded-full font-manrope font-bold text-white shadow-xs ${text} ${colorFor(p.id)}`}>
-      {initials(p.fullName)}
-    </div>
-  )
+function Avatar({ p, size = 'h-12 w-12' }: { p: { id: string; fullName: string; avatarUrl?: string }; size?: string; text?: string }) {
+  const src = p.avatarUrl ? fileUrl(p.avatarUrl) : getCharacterAvatar(p.id || p.fullName)
+  return <img src={src} alt={p.fullName} className={`${size} shrink-0 rounded-full object-cover ring-1 ring-[#DECFBE]/60`} />
 }
 
 const ratingLabel = (p: FreelancerProfile) => (p.completedProjects > 0 && p.rating > 0 ? p.rating.toFixed(1) : null)
