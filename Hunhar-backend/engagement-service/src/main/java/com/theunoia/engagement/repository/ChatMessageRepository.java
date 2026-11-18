@@ -11,8 +11,10 @@ import java.util.UUID;
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
     List<ChatMessage> findByConversationIdOrderByCreatedAtAsc(UUID conversationId);
 
+    java.util.Optional<ChatMessage> findFirstByConversationIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID conversationId);
+
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.conversationId = :conversationId " +
-            "AND m.senderId <> :userId AND (:since IS NULL OR m.createdAt > :since)")
+            "AND m.senderId <> :userId AND m.deletedAt IS NULL AND (:since IS NULL OR m.createdAt > :since)")
     long countUnread(@org.springframework.data.repository.query.Param("conversationId") UUID conversationId,
                      @org.springframework.data.repository.query.Param("userId") UUID userId,
                      @org.springframework.data.repository.query.Param("since") java.time.Instant since);

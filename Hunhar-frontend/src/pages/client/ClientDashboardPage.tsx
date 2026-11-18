@@ -28,6 +28,8 @@ export default function ClientDashboardPage(): React.JSX.Element {
   const [activeProject, setActiveProject] = useState<Project | null>(null)
   const [ws, setWs] = useState<Workspace | null>(null)
   const [recentBids, setRecentBids] = useState<Bid[]>([])
+  // Milestones of every active project, for the upcoming-deadlines list
+  const [allMilestones, setAllMilestones] = useState<Workspace['milestones'][number]['milestone'][]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -47,6 +49,10 @@ export default function ClientDashboardPage(): React.JSX.Element {
         if (featured && (featured.status === 'ACTIVE' || featured.status === 'COMPLETED')) {
           workspaceApi.get(featured.id).then(setWs).catch(() => {})
         }
+        const active = list.value.filter((p) => p.status === 'ACTIVE').slice(0, 10)
+        Promise.allSettled(active.map((p) => workspaceApi.get(p.id))).then((results) =>
+          setAllMilestones(results.flatMap((r) => (r.status === 'fulfilled' ? r.value.milestones.map((m) => m.milestone) : [])))
+        )
       } else {
         setError(list.reason?.message || 'Could not load your projects')
       }
@@ -93,7 +99,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
         link: `/client/projects/${toRouteId(p.id)}`,
         at: new Date(p.deadline!).getTime(),
       })),
-    ...milestones
+    ...(allMilestones.length ? allMilestones : milestones)
       .filter((m) => m.dueDate && m.status !== 'PAID' && m.status !== 'APPROVED')
       .map((m) => {
         const days = Math.ceil((new Date(m.dueDate!).getTime() - Date.now()) / 86_400_000)

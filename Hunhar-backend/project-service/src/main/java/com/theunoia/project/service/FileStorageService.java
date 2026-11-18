@@ -52,12 +52,14 @@ public class FileStorageService {
 
     private static final long MAX_SIZE_BYTES = 20L * 1024 * 1024;
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "png", "jpg", "jpeg", "gif", "webp", "svg",
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "md",
-            "zip", "rar", "7z",
-            "fig", "psd", "ai", "sketch", "xd",
-            "mp4", "mov", "webm", "mp3", "wav"
+    /**
+     * Any file type can be uploaded except programs and scripts that could harm the person who downloads them.
+     * Files are always served as downloads (images/PDF inline) with a sandbox CSP, see FileController.
+     */
+    private static final Set<String> BLOCKED_EXTENSIONS = Set.of(
+            "exe", "msi", "msp", "bat", "cmd", "com", "scr", "pif", "cpl", "dll", "sys", "drv",
+            "ps1", "psm1", "vbs", "vbe", "jse", "wsf", "wsh", "hta", "lnk", "reg", "inf", "scf", "msc",
+            "jar", "app", "dmg", "pkg", "deb", "rpm", "run", "sh", "bash", "command", "gadget", "appx", "msix"
     );
 
     private final StoredFileRepository storedFileRepository;
@@ -176,8 +178,8 @@ public class FileStorageService {
         }
         String originalName = sanitizeName(file.getOriginalFilename());
         String ext = extensionOf(originalName);
-        if (!ALLOWED_EXTENSIONS.contains(ext)) {
-            throw new BadRequestException("File type ." + ext + " is not allowed");
+        if (BLOCKED_EXTENSIONS.contains(ext)) {
+            throw new BadRequestException("Program and script files (." + ext + ") cannot be uploaded. Put them in a .zip if you need to share them.");
         }
 
         UUID storageId = UUID.randomUUID();
@@ -284,6 +286,17 @@ public class FileStorageService {
             case "mp4" -> "video/mp4";
             case "webm" -> "video/webm";
             case "mp3" -> "audio/mpeg";
+            case "mov" -> "video/quicktime";
+            case "wav" -> "audio/wav";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xls" -> "application/vnd.ms-excel";
+            case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "ppt" -> "application/vnd.ms-powerpoint";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "zip" -> "application/zip";
+            case "csv" -> "text/csv";
+            case "txt", "md" -> "text/plain";
             default -> "application/octet-stream";
         };
     }

@@ -490,6 +490,11 @@ export interface ChatMessage {
   senderName?: string
   content: string
   attachmentUrl?: string | null
+  attachmentName?: string | null
+  attachmentType?: string | null
+  attachmentSize?: number | null
+  editedAt?: string | null
+  deletedAt?: string | null
   createdAt: string
 }
 
@@ -724,8 +729,20 @@ export const messagesApi = {
 
   getMessages: (conversationId: string) => apiRequest<ChatMessage[]>(`/api/v1/messages/conversations/${conversationId}`),
 
-  sendMessage: (conversationId: string, content: string, attachmentUrl?: string) =>
-    apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}`, json('POST', { content, attachmentUrl })),
+  sendMessage: (conversationId: string, content: string, attachment?: StoredFile | null) =>
+    apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}`, json('POST', {
+      content,
+      attachmentUrl: attachment?.url,
+      attachmentName: attachment?.originalName,
+      attachmentType: attachment?.contentType,
+      attachmentSize: attachment?.sizeBytes,
+    })),
+
+  editMessage: (conversationId: string, messageId: string, content: string) =>
+    apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}/messages/${messageId}`, json('PUT', { content })),
+
+  deleteMessage: (conversationId: string, messageId: string) =>
+    apiRequest<ChatMessage>(`/api/v1/messages/conversations/${conversationId}/messages/${messageId}`, json('DELETE')),
 
   getUnreadCount: () => apiRequest<number>('/api/v1/messages/unread-count'),
 }

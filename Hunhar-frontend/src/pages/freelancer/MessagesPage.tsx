@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Search, Send, Paperclip, MessageSquare, ArrowLeft, Briefcase, FileText, X } from 'lucide-react'
+import { Search, Send, Paperclip, MessageSquare, ArrowLeft, Briefcase, FileText, X, Pencil, Trash2, Download } from 'lucide-react'
 import messageDoodleBg from '../../assets/Message doodle 6.png'
 import {
   fileUrl,
@@ -28,6 +28,15 @@ const colorFor = (id: string) => AVATAR_COLORS[[...id].reduce((a, c) => a + c.ch
 
 const MESSAGE_POLL_MS = 5000
 const LIST_POLL_MS = 15000
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+// Same list the server refuses (programs and scripts); everything else can be sent
+const BLOCKED_EXT = new Set(['exe', 'msi', 'msp', 'bat', 'cmd', 'com', 'scr', 'pif', 'cpl', 'dll', 'sys', 'drv', 'ps1', 'psm1', 'vbs', 'vbe', 'jse', 'wsf', 'wsh', 'hta', 'lnk', 'reg', 'inf', 'scf', 'msc', 'jar', 'app', 'dmg', 'pkg', 'deb', 'rpm', 'run', 'sh', 'bash', 'command', 'gadget', 'appx', 'msix'])
+
+const formatBytes = (n?: number | null) =>
+  !n ? '' : n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`
+
+// Changes when any message is added, edited or deleted, so polling picks those up too
+const signature = (list: ChatMessage[]) => list.map((m) => `${m.id}:${m.editedAt ?? ''}:${m.deletedAt ?? ''}`).join('|')
 
 function Avatar({ name, url, id, size = 'h-10 w-10' }: { name?: string; url?: string; id: string; size?: string }) {
   if (url) return <img src={fileUrl(url)} alt="" className={`${size} shrink-0 rounded-full object-cover`} />
@@ -53,6 +62,8 @@ export default function MessagesPage(): React.JSX.Element {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [editing, setEditing] = useState<ChatMessage | null>(null)
+  const [busyId, setBusyId] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -85,7 +96,7 @@ export default function MessagesPage(): React.JSX.Element {
     if (!selectedId) return
     try {
       const list = await messagesApi.getMessages(selectedId)
-      setMessages((prev) => (prev.length === list.length && prev[prev.length - 1]?.id === list[list.length - 1]?.id ? prev : list))
+      setMessages((prev) => (signature(prev) === signature(list) ? prev : list))
       setConversations((prev) => prev.map((c) => (c.id === selectedId ? { ...c, unreadCount: 0 } : c)))
     } catch (err: any) {
       setError(err.message)
@@ -94,6 +105,7 @@ export default function MessagesPage(): React.JSX.Element {
 
   useEffect(() => {
     setMessages([])
+    setEditing(null)
     if (!selectedId) return
     loadMessages()
     const t = window.setInterval(loadMessages, MESSAGE_POLL_MS)
@@ -127,6 +139,16 @@ export default function MessagesPage(): React.JSX.Element {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+    if (BLOCKED_EXT.has(ext)) {
+      setError(`Program and script files (.${ext}) cannot be sent. Put them in a .zip if you need to share them.`)
+      return
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`"${file.name}" is ${formatBytes(file.size)}. The maximum file size is 20 MB.`)
+      return
+    }
+    setError('')
     setUploading(true)
     try {
       setAttachment(await filesApi.upload(file, active?.projectId || undefined))
@@ -137,18 +159,67 @@ export default function MessagesPage(): React.JSX.Element {
     }
   }
 
+  const startEdit = (msg: ChatMessage) => {
+    setEditing(msg)
+    setAttachment(null)
+    setInputText(msg.content)
+    setError('')
+  }
+
+  const cancelEdit = () => {
+    setEditing(null)
+    setInputText('')
+  }
+
+  const handleDelete = async (msg: ChatMessage) => {
+    if (!selectedId || busyId) return
+    if (!window.confirm('Delete this message for everyone?')) return
+    setBusyId(msg.id)
+    try {
+      const updated = await messagesApi.deleteMessage(selectedId, msg.id)
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? updated : m)))
+      if (editing?.id === msg.id) cancelEdit()
+      loadConversations()
+    } catch (err: any) {
+      setError(err.message || 'Message not deleted')
+    } finally {
+      setBusyId('')
+    }
+  }
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const content = inputText.trim()
-    if ((!content && !attachment) || !selectedId || sending) return
+    if (!selectedId || sending) return
+    if (editing) {
+      if (!content && !editing.attachmentUrl) return
+      setSending(true)
+      try {
+        const updated = await messagesApi.editMessage(selectedId, editing.id, content)
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+        setEditing(null)
+        setInputText('')
+        loadConversations()
+      } catch (err: any) {
+        setError(err.message || 'Message not updated')
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+    if (!content && !attachment) return
     setSending(true)
     try {
-      const msg = await messagesApi.sendMessage(selectedId, content, attachment?.url)
+      const msg = await messagesApi.sendMessage(selectedId, content, attachment)
       setMessages((prev) => [...prev, msg])
       setInputText('')
       setAttachment(null)
       setConversations((prev) =>
-        prev.map((c) => (c.id === selectedId ? { ...c, lastMessage: content || '📎 Attachment', lastMessageAt: msg.createdAt } : c))
+        prev.map((c) =>
+          c.id === selectedId
+            ? { ...c, lastMessage: content || `📎 ${attachment?.originalName || 'Attachment'}`, lastMessageAt: msg.createdAt }
+            : c
+        )
       )
     } catch (err: any) {
       setError(err.message || 'Message not sent')
@@ -321,6 +392,8 @@ export default function MessagesPage(): React.JSX.Element {
               ) : (
                 messages.map((msg) => {
                   const isMe = msg.senderId === me?.id
+                  const deleted = !!msg.deletedAt
+                  const isImage = !!msg.attachmentUrl && (msg.attachmentType || '').startsWith('image/') && !(msg.attachmentType || '').includes('svg')
                   const day = formatDate(msg.createdAt, true)
                   const showDay = day !== lastDay
                   lastDay = day
@@ -331,23 +404,70 @@ export default function MessagesPage(): React.JSX.Element {
                       )}
                       <div className={`flex max-w-[85%] items-end gap-2 sm:max-w-[75%] ${isMe ? 'flex-row-reverse self-end' : 'self-start'}`}>
                         {!isMe && <Avatar name={msg.senderName} url={active.otherPartyAvatarUrl} id={msg.senderId} size="h-8 w-8" />}
-                        <div className="min-w-0">
+                        <div className="group min-w-0">
                           <div
                             className={`whitespace-pre-wrap break-words rounded-[16px] p-3 font-manrope text-[13px] leading-relaxed shadow-2xs ${
                               isMe ? 'rounded-br-none bg-[#C06B3E] text-white' : 'rounded-bl-none border border-[#DECFBE] bg-white text-[#08182B]'
-                            }`}
+                            } ${editing?.id === msg.id ? 'ring-2 ring-[#08182B]/30' : ''}`}
                           >
-                            {msg.content}
-                            {msg.attachmentUrl && (
-                              <a
-                                href={fileUrl(msg.attachmentUrl) + '?download=true'}
-                                className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-bold underline ${isMe ? 'text-white' : 'text-[#C06B3E]'}`}
-                              >
-                                <FileText size={13} /> Attachment
-                              </a>
+                            {deleted ? (
+                              <span className="italic opacity-75">This message was deleted</span>
+                            ) : (
+                              <>
+                                {msg.content}
+                                {isImage && (
+                                  <a href={fileUrl(msg.attachmentUrl!)} target="_blank" rel="noreferrer" className="mt-1.5 block">
+                                    <img
+                                      src={fileUrl(msg.attachmentUrl!)}
+                                      alt={msg.attachmentName || 'Image'}
+                                      className="max-h-60 max-w-full rounded-[10px] object-contain"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                )}
+                                {msg.attachmentUrl && (
+                                  <a
+                                    href={fileUrl(msg.attachmentUrl) + '?download=true'}
+                                    className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-bold underline ${isMe ? 'text-white' : 'text-[#C06B3E]'}`}
+                                  >
+                                    {isImage ? <Download size={13} /> : <FileText size={13} />}
+                                    <span className="truncate">{msg.attachmentName || 'Attachment'}</span>
+                                    {msg.attachmentSize ? <span className="shrink-0 font-semibold no-underline opacity-80">· {formatBytes(msg.attachmentSize)}</span> : null}
+                                  </a>
+                                )}
+                              </>
                             )}
                           </div>
-                          <span className={`mt-1 block text-[10px] text-[#9A8E80] ${isMe ? 'text-right' : 'text-left'}`}>{formatTime(msg.createdAt)}</span>
+                          <div className={`mt-1 flex items-center gap-2 text-[10px] text-[#9A8E80] ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            {isMe && !deleted && (
+                              <span className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(msg)}
+                                  disabled={!!busyId}
+                                  aria-label="Edit message"
+                                  title="Edit"
+                                  className="rounded-full p-1 hover:bg-[#FAF4EE] hover:text-[#C06B3E]"
+                                >
+                                  <Pencil size={11} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(msg)}
+                                  disabled={!!busyId}
+                                  aria-label="Delete message"
+                                  title="Delete"
+                                  className="rounded-full p-1 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </span>
+                            )}
+                            <span>
+                              {formatTime(msg.createdAt)}
+                              {msg.editedAt && !deleted ? ' · edited' : ''}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </React.Fragment>
@@ -359,9 +479,18 @@ export default function MessagesPage(): React.JSX.Element {
 
             {active && (
               <div className="relative z-10 border-t border-[#DECFBE] bg-white p-2.5 sm:p-4">
+                {editing && (
+                  <div className="mb-2 flex items-center gap-2 rounded-full bg-[#FAF4EE] px-3 py-1 text-[12px] font-semibold text-[#08182B]">
+                    <Pencil size={13} /> <span className="truncate">Editing message</span>
+                    <button type="button" aria-label="Cancel editing" onClick={cancelEdit} className="ml-auto text-[#8E8376]">
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
                 {attachment && (
                   <div className="mb-2 flex items-center gap-2 rounded-full bg-[#FAF4EE] px-3 py-1 text-[12px] font-semibold text-[#08182B]">
                     <FileText size={13} /> <span className="truncate">{attachment.originalName}</span>
+                    <span className="shrink-0 text-[11px] font-medium text-[#8E8376]">{formatBytes(attachment.sizeBytes)}</span>
                     <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)} className="ml-auto text-[#8E8376]">
                       <X size={13} />
                     </button>
@@ -372,7 +501,7 @@ export default function MessagesPage(): React.JSX.Element {
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
+                    disabled={uploading || !!editing}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#9A8E80] hover:bg-[#FAF4EE] hover:text-[#C06B3E] disabled:opacity-50"
                     title="Attach file"
                     aria-label="Attach file"
@@ -384,14 +513,17 @@ export default function MessagesPage(): React.JSX.Element {
                     value={inputText}
                     maxLength={5000}
                     onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Type a message..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape' && editing) cancelEdit()
+                    }}
+                    placeholder={editing ? 'Edit your message...' : 'Type a message...'}
                     aria-label="Message"
                     className="h-10 min-w-0 flex-1 rounded-full border border-[#DECFBE] bg-[#FDFBF7] px-4 font-manrope text-[13px] text-[#08182B] placeholder:text-[#9A8E80] focus:border-[#C06B3E] focus:bg-white focus:outline-none"
                   />
                   <button
                     type="submit"
-                    disabled={(!inputText.trim() && !attachment) || sending}
-                    aria-label="Send"
+                    disabled={(editing ? !inputText.trim() && !editing.attachmentUrl : !inputText.trim() && !attachment) || sending}
+                    aria-label={editing ? 'Save edit' : 'Send'}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-50"
                   >
                     <Send size={16} />

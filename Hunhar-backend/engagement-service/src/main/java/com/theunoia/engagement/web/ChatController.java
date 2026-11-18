@@ -57,8 +57,32 @@ public class ChatController {
             @PathVariable UUID conversationId,
             @RequestBody SendMessageRequest req
     ) {
-        ChatMessage msg = chatService.sendMessage(conversationId, requireUser(currentUser).id(), req.getContent(), req.getAttachmentUrl());
+        ChatMessage msg = chatService.sendMessage(conversationId, requireUser(currentUser).id(), req.getContent(), req.getAttachmentUrl(),
+                req.getAttachmentName(), req.getAttachmentType(), req.getAttachmentSize());
         return ResponseEntity.ok(ApiResponse.ok("Message sent", msg));
+    }
+
+    /** Edit the text of your own message. */
+    @PutMapping("/conversations/{conversationId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<ChatMessage>> editMessage(
+            @CurrentUser AuthUser currentUser,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId,
+            @RequestBody EditMessageRequest req
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("Message updated",
+                chatService.editMessage(conversationId, messageId, requireUser(currentUser).id(), req.getContent())));
+    }
+
+    /** Delete your own message (both sides then see "This message was deleted"). */
+    @DeleteMapping("/conversations/{conversationId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<ChatMessage>> deleteMessage(
+            @CurrentUser AuthUser currentUser,
+            @PathVariable UUID conversationId,
+            @PathVariable UUID messageId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("Message deleted",
+                chatService.deleteMessage(conversationId, messageId, requireUser(currentUser).id())));
     }
 
     private static AuthUser requireUser(AuthUser user) {
@@ -72,5 +96,16 @@ public class ChatController {
         private String content;
         @Size(max = 300)
         private String attachmentUrl;
+        @Size(max = 255)
+        private String attachmentName;
+        @Size(max = 120)
+        private String attachmentType;
+        private Long attachmentSize;
+    }
+
+    @Data
+    public static class EditMessageRequest {
+        @Size(max = 5000)
+        private String content;
     }
 }

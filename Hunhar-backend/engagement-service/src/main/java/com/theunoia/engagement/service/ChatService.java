@@ -53,8 +53,22 @@ public class ChatService {
 
     @Transactional
     public ChatMessage sendMessage(UUID conversationId, UUID senderId, String content, String attachmentUrl) {
+        return sendMessage(conversationId, senderId, content, attachmentUrl, null, null, null);
+    }
+
+    /** Only files uploaded to Hunhar can be attached (no outside links). */
+    private static final java.util.regex.Pattern FILE_URL =
+            java.util.regex.Pattern.compile("^/api/v1/projects/files/[0-9a-fA-F-]{36}$");
+
+    @Transactional
+    public ChatMessage sendMessage(UUID conversationId, UUID senderId, String content, String attachmentUrl,
+                                   String attachmentName, String attachmentType, Long attachmentSize) {
         String text = content == null ? "" : content.trim();
-        if (text.isEmpty() && (attachmentUrl == null || attachmentUrl.isBlank())) {
+        String url = attachmentUrl == null || attachmentUrl.isBlank() ? null : attachmentUrl.trim();
+        if (url != null && !FILE_URL.matcher(url).matches()) {
+            throw new BadRequestException("Attachments must be uploaded to Hunhar first");
+        }
+        if (text.isEmpty() && url == null) {
             throw new BadRequestException("Message cannot be empty");
         }
         if (text.length() > MAX_MESSAGE_LENGTH) {
@@ -68,11 +82,14 @@ public class ChatService {
                 .senderId(senderId)
                 .senderName(senderName != null ? senderName : "User")
                 .content(text)
-                .attachmentUrl(attachmentUrl)
+                .attachmentUrl(url)
+                .attachmentName(url == null ? null : clip(attachmentName, 255, "Attachment"))
+                .attachmentType(url == null ? null : clip(attachmentType, 120, null))
+                .attachmentSize(url == null || attachmentSize == null || attachmentSize < 0 ? null : attachmentSize)
                 .build());
 
         Instant previous = conv.getLastMessageAt();
-        conv.setLastMessage(text.isEmpty() ? "📎 Attachment" : text);
+        conv.setLastMessage(preview(message));
         conv.setLastMessageAt(Instant.now());
         markRead(conv, senderId);
         conversationRepository.save(conv);
@@ -86,6 +103,73 @@ public class ChatService {
                     null);
         }
         return message;
+    }
+
+    /** The sender changes the text of their own message (attachments stay as they are). */
+    @Transactional
+    public ChatMessage editMessage(UUID conversationId, UUID messageId, UUID userId, String content) {
+        Conversation conv = participantConversation(conversationId, userId);
+        ChatMessage msg = ownMessage(conversationId, messageId, userId);
+        String text = content == null ? "" : content.trim();
+        if (text.length() > MAX_MESSAGE_LENGTH) {
+            throw new BadRequestException("Message is too long (max " + MAX_MESSAGE_LENGTH + " characters)");
+        }
+        if (text.isEmpty() && msg.getAttachmentUrl() == null) {
+            throw new BadRequestException("Message cannot be empty. Delete it instead.");
+        }
+        if (text.equals(msg.getContent())) return msg;
+        msg.setContent(text);
+        msg.setEditedAt(Instant.now());
+        chatMessageRepository.save(msg);
+        refreshLastMessage(conv);
+        return msg;
+    }
+
+    /** The sender deletes their own message: text and attachment are removed, a "deleted" marker stays. */
+    @Transactional
+    public ChatMessage deleteMessage(UUID conversationId, UUID messageId, UUID userId) {
+        Conversation conv = participantConversation(conversationId, userId);
+        ChatMessage msg = ownMessage(conversationId, messageId, userId);
+        msg.setContent("");
+        msg.setAttachmentUrl(null);
+        msg.setAttachmentName(null);
+        msg.setAttachmentType(null);
+        msg.setAttachmentSize(null);
+        msg.setDeletedAt(Instant.now());
+        chatMessageRepository.save(msg);
+        refreshLastMessage(conv);
+        return msg;
+    }
+
+    private ChatMessage ownMessage(UUID conversationId, UUID messageId, UUID userId) {
+        ChatMessage msg = chatMessageRepository.findById(messageId)
+                .filter(m -> m.getConversationId().equals(conversationId))
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        if (!msg.getSenderId().equals(userId)) {
+            throw new ForbiddenException("You can only change your own messages");
+        }
+        if (msg.getDeletedAt() != null) {
+            throw new BadRequestException("This message was already deleted");
+        }
+        return msg;
+    }
+
+    /** Keeps the conversation list preview in step after an edit or delete. */
+    private void refreshLastMessage(Conversation conv) {
+        conv.setLastMessage(chatMessageRepository.findFirstByConversationIdAndDeletedAtIsNullOrderByCreatedAtDesc(conv.getId())
+                .map(ChatService::preview).orElse(null));
+        conversationRepository.save(conv);
+    }
+
+    private static String preview(ChatMessage m) {
+        if (m.getContent() != null && !m.getContent().isBlank()) return m.getContent();
+        return "\uD83D\uDCCE " + (m.getAttachmentName() != null ? m.getAttachmentName() : "Attachment");
+    }
+
+    private static String clip(String s, int max, String fallback) {
+        if (s == null || s.isBlank()) return fallback;
+        String t = s.replaceAll("[\\r\\n\\t]", " ").trim();
+        return t.length() > max ? t.substring(0, max) : t;
     }
 
     /** Returns the messages and marks the conversation as read for this user. */

@@ -118,7 +118,7 @@ public class BidService {
     public List<Bid> getRecentBidsForClient(UUID clientId) {
         List<UUID> projectIds = projectRepository.findByClientId(clientId).stream().map(Project::getId).toList();
         if (projectIds.isEmpty()) return List.of();
-        return enricher.bids(bidRepository.findTop20ByProjectIdInOrderByCreatedAtDesc(projectIds));
+        return enricher.bids(bidRepository.findTop100ByProjectIdInOrderByCreatedAtDesc(projectIds));
     }
 
     @Transactional

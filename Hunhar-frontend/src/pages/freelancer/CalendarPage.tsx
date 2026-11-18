@@ -15,8 +15,10 @@ import {
 import {
   calendarApi,
   projectsApi,
+  workspaceApi,
   type CalendarTask,
   type CalendarTaskInput,
+  type Milestone,
   type Project,
 } from '../../services/api'
 import { useRoleBase } from '../../services/useRoleBase'
@@ -114,6 +116,7 @@ export default function CalendarPage(): React.JSX.Element {
 
   const [tasks, setTasks] = useState<CalendarTask[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [milestones, setMilestones] = useState<(Milestone & { projectTitle: string })[]>([])
   const [summary, setSummary] = useState<{ todo: number; inProgress: number; done: number; overdue: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -161,6 +164,22 @@ export default function CalendarPage(): React.JSX.Element {
 
   const activeProjects = projects.filter((p) => p.status === 'ACTIVE')
 
+  // Milestone due dates of active projects also appear on the calendar
+  useEffect(() => {
+    const active = projects.filter((p) => p.status === 'ACTIVE').slice(0, 10)
+    if (!active.length) {
+      setMilestones([])
+      return
+    }
+    Promise.allSettled(active.map((p) => workspaceApi.get(p.id))).then((results) =>
+      setMilestones(
+        results.flatMap((r, i) =>
+          r.status === 'fulfilled' ? r.value.milestones.map((m) => ({ ...m.milestone, projectTitle: active[i].title })) : []
+        )
+      )
+    )
+  }, [projects])
+
   // Merge saved tasks with active project deadlines
   const items: CalendarItem[] = useMemo(() => {
     const list: CalendarItem[] = tasks
@@ -188,9 +207,22 @@ export default function CalendarPage(): React.JSX.Element {
         projectId: p.id,
       })
     })
+    milestones.forEach((m) => {
+      if (!m.dueDate) return
+      list.push({
+        key: 'm-' + m.id,
+        title: `${m.title} — milestone`,
+        type: 'DEADLINE',
+        at: new Date(m.dueDate),
+        allDay: true,
+        done: m.status === 'APPROVED' || m.status === 'PAID',
+        projectTitle: m.projectTitle,
+        projectId: m.projectId,
+      })
+    })
     return list.sort((a, b) => a.at.getTime() - b.at.getTime())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, projects])
+  }, [tasks, projects, milestones])
 
   const itemsByDay = useMemo(() => {
     const map: Record<string, CalendarItem[]> = {}
