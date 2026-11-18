@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import logo from '../../assets/hunhar-Black.svg'
+import { dashboardPathFor, getSessionRole, logout } from '../../services/api'
 
 interface NavLink {
   name: string
@@ -27,6 +28,11 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [isScrolled, setIsScrolled] = useState<boolean>(false)
   const { pathname } = useLocation()
+  // Signed-in visitors get Dashboard / Log out instead of Login / Sign Up
+  const role = getSessionRole()
+  const dashboardPath = role ? dashboardPathFor(role) : null
+  const ctaClass =
+    'bg-gradient-to-r from-[#E2985B] via-[#CD7238] to-[#BA5C2E] text-white font-manrope text-[15px] font-semibold px-6 py-2.5 rounded-full shadow-sm no-underline transition-all duration-200 hover:brightness-105 hover:shadow-md'
   const isActive = (href: string) =>
     !isSection(href) && (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`))
 
@@ -88,7 +94,21 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
           })}
         </nav>
 
-        {/* Login link + Sign Up button */}
+        {/* Login link + Sign Up button (Log out + Dashboard when signed in) */}
+        {dashboardPath ? (
+          <div className="hidden md:flex items-center gap-6">
+            <button
+              type="button"
+              onClick={logout}
+              className="font-manrope text-[15px] font-semibold text-navy hover:text-terracotta transition-colors duration-150 bg-transparent border-none cursor-pointer p-0"
+            >
+              Log out
+            </button>
+            <Link to={dashboardPath} className={`${ctaClass} inline-flex items-center justify-center active:scale-98`}>
+              Dashboard
+            </Link>
+          </div>
+        ) : (
         <div className="hidden md:flex items-center gap-6">
           <a
             href="/login"
@@ -113,6 +133,7 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
             </a>
           )}
         </div>
+        )}
 
         {/* Mobile menu button */}
         <div className="flex md:hidden items-center">
@@ -151,6 +172,20 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
               )
             })}
           </div>
+          {dashboardPath ? (
+            <div className="pt-4 border-t border-beige/30 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={logout}
+                className="font-manrope text-base font-semibold text-navy py-1.5 text-left bg-transparent border-none cursor-pointer p-0 transition-colors duration-150 hover:text-terracotta"
+              >
+                Log out
+              </button>
+              <Link to={dashboardPath} onClick={() => setMobileMenuOpen(false)} className={`${ctaClass} block w-full text-center`}>
+                Dashboard
+              </Link>
+            </div>
+          ) : (
           <div className="pt-4 border-t border-beige/30 flex flex-col gap-3">
             <a
               href="/login"
@@ -178,6 +213,7 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
               </a>
             )}
           </div>
+          )}
         </div>
       )}
     </header>

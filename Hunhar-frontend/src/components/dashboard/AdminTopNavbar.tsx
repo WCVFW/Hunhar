@@ -120,25 +120,6 @@ export default function AdminTopNavbar(): React.JSX.Element {
           </div>
         )}
 
-        {/* Quick Platform Switcher */}
-        <div className="hidden sm:flex items-center gap-1 bg-white border border-[#E5DACD] p-1 rounded-full text-xs font-semibold text-[#524B42]">
-          <Link
-            to="/freelancer/dashboard"
-            className="px-2.5 py-1 rounded-full hover:bg-[#F8F4EE] hover:text-[#08182B] transition-colors"
-          >
-            Freelancer
-          </Link>
-          <Link
-            to="/client/dashboard"
-            className="px-2.5 py-1 rounded-full hover:bg-[#F8F4EE] hover:text-[#08182B] transition-colors"
-          >
-            Client
-          </Link>
-          <span className="px-2.5 py-1 rounded-full bg-[#08182B] text-white">
-            Admin
-          </span>
-        </div>
-
         {/* Notification Bell */}
         <div className="relative" ref={notifRef}>
           <button
