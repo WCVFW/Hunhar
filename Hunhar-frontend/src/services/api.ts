@@ -934,6 +934,8 @@ export interface Dispute {
   freelancerName?: string
 }
 
+export type KycStepStatus = 'NOT_STARTED' | 'UNDER_REVIEW' | 'VERIFIED' | 'REJECTED'
+
 export interface KycInfo {
   kycStatus: FreelancerProfile['kycStatus']
   aadhaarLast4?: string
@@ -941,6 +943,20 @@ export interface KycInfo {
   submittedAt?: string
   reviewedAt?: string
   rejectionReason?: string
+  // Step-by-step verification (server-calculated)
+  emailVerified?: boolean
+  mobileVerified?: boolean
+  aadhaarStatus?: KycStepStatus
+  aadhaarDocumentUrl?: string | null
+  aadhaarDocumentName?: string | null
+  collegeIdStatus?: KycStepStatus
+  collegeIdDocumentUrl?: string | null
+  collegeIdDocumentName?: string | null
+  skillsStatus?: KycStepStatus
+  selectedSkills?: string[]
+  workSampleUrl?: string | null
+  workSampleName?: string | null
+  percentage?: number
 }
 
 export const disputesApi = {
@@ -954,6 +970,13 @@ export const kycApi = {
 
   submit: (aadhaarNumber: string, documentUrl: string) =>
     apiRequest<KycInfo>('/api/v1/kyc/aadhaar', json('POST', { aadhaarNumber, documentUrl })),
+
+  /** Aadhaar card or college ID card, already uploaded with filesApi.upload */
+  submitDocument: (type: 'AADHAAR' | 'COLLEGE_ID', documentUrl: string, documentName: string) =>
+    apiRequest<KycInfo>('/api/v1/kyc/documents', json('POST', { type, documentUrl, documentName })),
+
+  submitSkills: (skills: string[], workSampleUrl?: string, workSampleName?: string) =>
+    apiRequest<KycInfo>('/api/v1/kyc/skills', json('POST', { skills, workSampleUrl, workSampleName })),
 }
 
 // =============================================================================

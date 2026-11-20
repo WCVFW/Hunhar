@@ -1,14 +1,22 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ChevronRight, ArrowLeft, ShieldCheck } from 'lucide-react'
 import KycVerificationModal, { type KycView } from '../../components/kyc/KycVerificationModal'
-import { getKycState, calculateKycPercentage } from '../../services/kycState'
+import { getKycState, refreshKycState, calculateKycPercentage, type KycVerificationState } from '../../services/kycState'
 
 export default function KycVerificationPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [modalOpen, setModalOpen] = useState(true)
-  const kyc = getKycState()
+  const [kyc, setKyc] = useState<KycVerificationState>(getKycState())
   const percentage = calculateKycPercentage(kyc)
+
+  // Progress comes from the server; re-render when it loads or after each submitted step
+  useEffect(() => {
+    const onUpdate = (e: Event) => setKyc((e as CustomEvent<KycVerificationState>).detail || getKycState())
+    window.addEventListener('hunhar_kyc_updated', onUpdate)
+    refreshKycState().then(setKyc).catch(() => {})
+    return () => window.removeEventListener('hunhar_kyc_updated', onUpdate)
+  }, [])
 
   return (
     <div className="w-full pb-16 font-manrope">

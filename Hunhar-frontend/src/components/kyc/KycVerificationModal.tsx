@@ -18,7 +18,10 @@ import {
 import hunharLogo from '../../assets/hunha Logo.png'
 import {
   getKycState,
-  saveKycState,
+  refreshKycState,
+  submitKycDocument,
+  submitKycSkills,
+  uploadWorkSample,
   calculateKycPercentage,
   type KycVerificationState,
 } from '../../services/kycState'
@@ -70,6 +73,9 @@ export default function KycVerificationModal({
   const [selectedSkills, setSelectedSkills] = useState<string[]>(kycState.selectedSkills || [])
   const [workSampleFile, setWorkSampleFile] = useState<File | null>(null)
   const [workSampleUploading, setWorkSampleUploading] = useState(false)
+  const [workSample, setWorkSample] = useState<{ url: string; name: string } | null>(null)
+  const [submittingSkills, setSubmittingSkills] = useState(false)
+  const [error, setError] = useState('')
   const workSampleInputRef = useRef<HTMLInputElement>(null)
 
   // Sync state whenever modal opens or storage updates
@@ -78,7 +84,16 @@ export default function KycVerificationModal({
       const state = getKycState()
       setKycState(state)
       setSelectedSkills(state.selectedSkills || [])
+      setWorkSample(state.workSampleUrl ? { url: state.workSampleUrl, name: state.workSampleName || 'Work sample' } : null)
       setCurrentView(initialView)
+      setError('')
+      // Always show what the server has (another device may have submitted steps)
+      refreshKycState()
+        .then((fresh) => {
+          setKycState(fresh)
+          setSelectedSkills((prev) => (prev.length ? prev : fresh.selectedSkills || []))
+        })
+        .catch(() => {})
     }
   }, [isOpen, initialView])
 
@@ -117,32 +132,42 @@ export default function KycVerificationModal({
     }
   }
 
-  // Handle Aadhaar file selection
-  const handleAadhaarSelect = (file: File) => {
-    setAadhaarFile(file)
-    setAadhaarUploading(true)
-    setTimeout(() => {
-      const updated = saveKycState({
-        aadhaarStatus: 'UNDER_REVIEW',
-        aadhaarDocumentName: file.name,
-      })
-      setKycState(updated)
-      setAadhaarUploading(false)
-    }, 400)
+  const checkComplete = (state: KycVerificationState) => {
+    if (calculateKycPercentage(state) === 100 && onVerificationComplete) onVerificationComplete()
   }
 
-  // Handle College ID file selection
-  const handleCollegeIdSelect = (file: File) => {
+  // Handle Aadhaar file selection: upload, then submit for review
+  const handleAadhaarSelect = async (file: File) => {
+    setAadhaarFile(file)
+    setAadhaarUploading(true)
+    setError('')
+    try {
+      const updated = await submitKycDocument('AADHAAR', file)
+      setKycState(updated)
+      checkComplete(updated)
+    } catch (err: any) {
+      setAadhaarFile(null)
+      setError(err.message || 'Upload failed. Please try again.')
+    } finally {
+      setAadhaarUploading(false)
+    }
+  }
+
+  // Handle College ID file selection: upload, then submit for review
+  const handleCollegeIdSelect = async (file: File) => {
     setCollegeIdFile(file)
     setCollegeIdUploading(true)
-    setTimeout(() => {
-      const updated = saveKycState({
-        collegeIdStatus: 'UNDER_REVIEW',
-        collegeIdDocumentName: file.name,
-      })
+    setError('')
+    try {
+      const updated = await submitKycDocument('COLLEGE_ID', file)
       setKycState(updated)
+      checkComplete(updated)
+    } catch (err: any) {
+      setCollegeIdFile(null)
+      setError(err.message || 'Upload failed. Please try again.')
+    } finally {
       setCollegeIdUploading(false)
-    }, 400)
+    }
   }
 
   // Toggle skill selection
@@ -152,30 +177,36 @@ export default function KycVerificationModal({
     )
   }
 
-  // Handle Work Sample selection
-  const handleWorkSampleSelect = (file: File) => {
+  // Handle Work Sample selection: uploaded now, attached when the skills are submitted
+  const handleWorkSampleSelect = async (file: File) => {
     setWorkSampleFile(file)
     setWorkSampleUploading(true)
-    setTimeout(() => {
-      saveKycState({
-        workSampleName: file.name,
-      })
+    setError('')
+    try {
+      const stored = await uploadWorkSample(file)
+      setWorkSample({ url: stored.url, name: stored.originalName })
+    } catch (err: any) {
+      setWorkSampleFile(null)
+      setError(err.message || 'Upload failed. Please try again.')
+    } finally {
       setWorkSampleUploading(false)
-    }, 400)
+    }
   }
 
   // Submit Skills for review
-  const handleSubmitSkills = () => {
-    if (selectedSkills.length === 0) return
-    const updated = saveKycState({
-      skillsStatus: 'UNDER_REVIEW',
-      selectedSkills,
-      workSampleName: workSampleFile?.name || kycState.workSampleName,
-    })
-    setKycState(updated)
-    setCurrentView('overview')
-    if (calculateKycPercentage(updated) === 100) {
-      if (onVerificationComplete) onVerificationComplete()
+  const handleSubmitSkills = async () => {
+    if (selectedSkills.length === 0 || submittingSkills || workSampleUploading) return
+    setSubmittingSkills(true)
+    setError('')
+    try {
+      const updated = await submitKycSkills(selectedSkills, workSample)
+      setKycState(updated)
+      setCurrentView('overview')
+      checkComplete(updated)
+    } catch (err: any) {
+      setError(err.message || 'Could not submit your skills. Please try again.')
+    } finally {
+      setSubmittingSkills(false)
     }
   }
 
@@ -345,6 +376,11 @@ export default function KycVerificationModal({
         {/* RIGHT COLUMN: MAIN CONTENT VIEWS                               */}
         {/* ============================================================== */}
         <div className="relative flex flex-1 flex-col bg-white p-6 sm:p-8 min-h-[500px]">
+          {(error || kycState.rejectionReason) && (
+            <div role="alert" className="mb-4 mr-8 rounded-[12px] border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] font-semibold text-red-700">
+              {error || `Your last submission was not approved: ${kycState.rejectionReason}. Please upload your documents again.`}
+            </div>
+          )}
           {/* Close Button on Top-Right */}
           <button
             type="button"
@@ -626,12 +662,10 @@ export default function KycVerificationModal({
                   type="button"
                   onClick={() => {
                     if (kycState.aadhaarStatus === 'NOT_STARTED') {
-                      // Demo upload if not clicked file
-                      saveKycState({
-                        aadhaarStatus: 'UNDER_REVIEW',
-                        aadhaarDocumentName: 'Aadhaar_Card_Verified.pdf',
-                      })
+                      setError('Please upload your Aadhaar card to continue.')
+                      return
                     }
+                    setError('')
                     setCurrentView('collegeId')
                   }}
                   className="flex w-full items-center justify-center gap-1.5 rounded-[16px] bg-[#C06B3E] py-3.5 text-center font-manrope text-[14px] font-extrabold text-white shadow-sm transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
@@ -740,11 +774,10 @@ export default function KycVerificationModal({
                   type="button"
                   onClick={() => {
                     if (kycState.collegeIdStatus === 'NOT_STARTED') {
-                      saveKycState({
-                        collegeIdStatus: 'UNDER_REVIEW',
-                        collegeIdDocumentName: 'College_ID_Document.png',
-                      })
+                      setError('Please upload your college ID card to continue.')
+                      return
                     }
+                    setError('')
                     setCurrentView('skills')
                   }}
                   className="flex w-full items-center justify-center gap-1.5 rounded-[16px] bg-[#C06B3E] py-3.5 text-center font-manrope text-[14px] font-extrabold text-white shadow-sm transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
@@ -820,14 +853,14 @@ export default function KycVerificationModal({
                       <div className="flex items-center gap-2">
                         <FileText size={16} />
                         <span className="font-semibold">
-                          Work sample attached ({workSampleFile?.name || kycState.workSampleName})
+                          Work sample attached ({workSample?.name || workSampleFile?.name || kycState.workSampleName})
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => {
                           setWorkSampleFile(null)
-                          saveKycState({ workSampleName: undefined })
+                          setWorkSample(null)
                         }}
                         className="text-[#DC2626] hover:underline"
                       >
@@ -876,10 +909,13 @@ export default function KycVerificationModal({
                   <button
                     type="button"
                     onClick={handleSubmitSkills}
+                    disabled={submittingSkills || workSampleUploading}
                     className="flex w-full items-center justify-center gap-1.5 rounded-[16px] bg-[#C06B3E] py-3.5 text-center font-manrope text-[14px] font-extrabold text-white shadow-sm transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
                   >
                     <span>
-                      Submit {selectedSkills.length} Skill{selectedSkills.length > 1 ? 's' : ''} for Review
+                      {submittingSkills
+                        ? 'Submitting…'
+                        : `Submit ${selectedSkills.length} Skill${selectedSkills.length > 1 ? 's' : ''} for Review`}
                     </span>
                     <ChevronRight size={17} />
                   </button>

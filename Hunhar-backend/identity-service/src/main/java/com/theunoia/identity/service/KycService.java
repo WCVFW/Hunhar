@@ -5,6 +5,8 @@ import com.theunoia.common.exception.ResourceNotFoundException;
 import com.theunoia.common.internal.NotificationPublisher;
 import com.theunoia.common.security.EncryptionUtils;
 import com.theunoia.identity.domain.KycStatus;
+import com.theunoia.identity.domain.KycVerification;
+import com.theunoia.identity.domain.KycVerification.Step;
 import com.theunoia.identity.domain.User;
 import com.theunoia.identity.domain.UserRole;
 import com.theunoia.identity.dto.KycRequestDto;
@@ -31,6 +33,85 @@ public class KycService {
     private final UserRepository userRepository;
     private final EncryptionUtils encryptionUtils;
     private final NotificationPublisher notifications;
+    private final com.theunoia.identity.repository.KycVerificationRepository verificationRepository;
+
+    /** Only files uploaded to Hunhar can be used as KYC documents. */
+    private static final java.util.regex.Pattern FILE_URL =
+            java.util.regex.Pattern.compile("^/api/v1/projects/files/[0-9a-fA-F-]{36}$");
+
+    public enum DocumentStep { AADHAAR, COLLEGE_ID }
+
+    /** Step 3/4: upload the Aadhaar card or the college ID card (replacing an earlier upload under review). */
+    @Transactional
+    public Map<String, Object> submitDocument(UUID userId, DocumentStep step, String url, String name) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getKycStatus() == KycStatus.VERIFIED) throw new BadRequestException("Your KYC is already verified");
+        String u = url == null ? "" : url.trim();
+        if (!FILE_URL.matcher(u).matches()) throw new BadRequestException("Please upload the document again");
+        KycVerification v = verification(userId);
+        if (step == DocumentStep.AADHAAR) {
+            v.setAadhaarDocUrl(u);
+            v.setAadhaarDocName(clip(name, 255, "Aadhaar card"));
+            v.setAadhaarStatus(Step.UNDER_REVIEW);
+        } else {
+            v.setCollegeDocUrl(u);
+            v.setCollegeDocName(clip(name, 255, "College ID"));
+            v.setCollegeStatus(Step.UNDER_REVIEW);
+        }
+        verificationRepository.save(v);
+        submitForReviewWhenComplete(user, v);
+        return status(user);
+    }
+
+    /** Step 5: skills to verify, with an optional work sample. */
+    @Transactional
+    public Map<String, Object> submitSkills(UUID userId, List<String> skills, String sampleUrl, String sampleName) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (user.getKycStatus() == KycStatus.VERIFIED) throw new BadRequestException("Your KYC is already verified");
+        List<String> clean = skills == null ? List.of() : skills.stream()
+                .filter(s -> s != null && !s.isBlank()).map(s -> clip(s, 50, "")).distinct().limit(15).toList();
+        if (clean.isEmpty()) throw new BadRequestException("Choose at least one skill");
+        String sample = sampleUrl == null || sampleUrl.isBlank() ? null : sampleUrl.trim();
+        if (sample != null && !FILE_URL.matcher(sample).matches()) throw new BadRequestException("Please upload the work sample again");
+        KycVerification v = verification(userId);
+        v.setSkills(String.join(",", clean));
+        if (sample != null) {
+            v.setWorkSampleUrl(sample);
+            v.setWorkSampleName(clip(sampleName, 255, "Work sample"));
+        }
+        v.setSkillsStatus(Step.UNDER_REVIEW);
+        verificationRepository.save(v);
+        submitForReviewWhenComplete(user, v);
+        return status(user);
+    }
+
+    private KycVerification verification(UUID userId) {
+        return verificationRepository.findById(userId).orElseGet(() -> KycVerification.builder()
+                .userId(userId).aadhaarStatus(Step.NOT_STARTED).collegeStatus(Step.NOT_STARTED).skillsStatus(Step.NOT_STARTED).build());
+    }
+
+    private static boolean done(Step s) {
+        return s == Step.UNDER_REVIEW || s == Step.VERIFIED;
+    }
+
+    /** Once all three steps are submitted, the KYC goes to the admin queue. */
+    private void submitForReviewWhenComplete(User user, KycVerification v) {
+        if (!done(v.getAadhaarStatus()) || !done(v.getCollegeStatus()) || !done(v.getSkillsStatus())) return;
+        v.setSubmittedAt(Instant.now());
+        verificationRepository.save(v);
+        if (user.getKycStatus() == KycStatus.PENDING_REVIEW) return;
+        user.setKycStatus(KycStatus.PENDING_REVIEW);
+        user.setKycSubmittedAt(Instant.now());
+        user.setKycDocumentUrl(v.getAadhaarDocUrl());
+        user.setKycRejectionReason(null);
+        userRepository.save(user);
+    }
+
+    private static String clip(String s, int max, String fallback) {
+        if (s == null || s.isBlank()) return fallback;
+        String t = s.replaceAll("[\\r\\n\\t]", " ").trim();
+        return t.length() > max ? t.substring(0, max) : t;
+    }
 
     @Transactional
     public Map<String, Object> submit(UUID userId, KycRequestDto dto) {
@@ -54,6 +135,13 @@ public class KycService {
         user.setKycSubmittedAt(Instant.now());
         user.setKycRejectionReason(null);
         userRepository.save(user);
+        if (dto.getDocumentUrl() != null && FILE_URL.matcher(dto.getDocumentUrl().trim()).matches()) {
+            KycVerification v = verification(userId);
+            v.setAadhaarDocUrl(dto.getDocumentUrl().trim());
+            if (v.getAadhaarDocName() == null) v.setAadhaarDocName("Aadhaar card");
+            v.setAadhaarStatus(Step.UNDER_REVIEW);
+            verificationRepository.save(v);
+        }
         return status(user);
     }
 
@@ -94,6 +182,13 @@ public class KycService {
         user.setKycReviewedAt(Instant.now());
         user.setKycRejectionReason(approved ? null : reason.trim());
         userRepository.save(user);
+        verificationRepository.findById(userId).ifPresent(v -> {
+            Step result = approved ? Step.VERIFIED : Step.REJECTED;
+            if (v.getAadhaarStatus() != Step.NOT_STARTED) v.setAadhaarStatus(result);
+            if (v.getCollegeStatus() != Step.NOT_STARTED) v.setCollegeStatus(result);
+            if (v.getSkillsStatus() != Step.NOT_STARTED) v.setSkillsStatus(result);
+            verificationRepository.save(v);
+        });
 
         String base = user.getRole() == UserRole.CLIENT ? "/client" : "/freelancer";
         notifications.notify(userId, approved ? "KYC_APPROVED" : "KYC_REJECTED",
@@ -111,6 +206,29 @@ public class KycService {
         m.put("submittedAt", u.getKycSubmittedAt());
         m.put("reviewedAt", u.getKycReviewedAt());
         m.put("rejectionReason", u.getKycRejectionReason());
+
+        KycVerification v = verificationRepository.findById(u.getId()).orElse(null);
+        // KYC done before the step-by-step flow: the Aadhaar step follows the overall status
+        Step legacyAadhaar = u.getKycStatus() == KycStatus.VERIFIED ? Step.VERIFIED
+                : u.getKycStatus() == KycStatus.PENDING_REVIEW ? Step.UNDER_REVIEW : Step.NOT_STARTED;
+        Step aadhaar = v != null && v.getAadhaarStatus() != null && v.getAadhaarStatus() != Step.NOT_STARTED ? v.getAadhaarStatus() : legacyAadhaar;
+        Step college = v != null && v.getCollegeStatus() != null ? v.getCollegeStatus() : Step.NOT_STARTED;
+        Step skills = v != null && v.getSkillsStatus() != null ? v.getSkillsStatus() : Step.NOT_STARTED;
+        m.put("emailVerified", u.isEmailVerified());
+        m.put("mobileVerified", u.isMobileVerified());
+        m.put("aadhaarStatus", aadhaar);
+        m.put("aadhaarDocumentUrl", v != null && v.getAadhaarDocUrl() != null ? v.getAadhaarDocUrl() : u.getKycDocumentUrl());
+        m.put("aadhaarDocumentName", v != null ? v.getAadhaarDocName() : null);
+        m.put("collegeIdStatus", college);
+        m.put("collegeIdDocumentUrl", v != null ? v.getCollegeDocUrl() : null);
+        m.put("collegeIdDocumentName", v != null ? v.getCollegeDocName() : null);
+        m.put("skillsStatus", skills);
+        m.put("selectedSkills", v != null && v.getSkills() != null && !v.getSkills().isBlank() ? List.of(v.getSkills().split(",")) : List.of());
+        m.put("workSampleUrl", v != null ? v.getWorkSampleUrl() : null);
+        m.put("workSampleName", v != null ? v.getWorkSampleName() : null);
+        int pct = (u.isEmailVerified() ? 20 : 0) + (u.isMobileVerified() ? 20 : 0)
+                + (done(aadhaar) ? 20 : 0) + (done(college) ? 20 : 0) + (done(skills) ? 20 : 0);
+        m.put("percentage", pct);
         return m;
     }
 
