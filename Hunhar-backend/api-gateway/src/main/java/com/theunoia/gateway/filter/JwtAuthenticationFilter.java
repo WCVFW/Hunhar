@@ -34,6 +34,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/auth/",
             "/api/v1/crypto/",
             "/api/v1/content/",
+            // Blog articles, sitemap.xml, llms.txt and the blog dashboard login
+            "/api/v1/blog/public/",
+            "/api/v1/blog/auth/",
             "/api/v1/webhooks/",
             "/api/v1/projects/public",
             // Uploaded files are served by unguessable UUID so <img src> works without a token

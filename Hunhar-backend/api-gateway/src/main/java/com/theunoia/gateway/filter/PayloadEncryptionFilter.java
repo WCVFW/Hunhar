@@ -219,7 +219,9 @@ public class PayloadEncryptionFilter implements GlobalFilter, Ordered {
     private boolean isExempt(String path, HttpMethod method) {
         if (EXEMPT_PREFIXES.stream().anyMatch(path::startsWith)) return true;
         // <img src> / downloads cannot send headers: uploaded files (by unguessable id) and invoice PDFs
-        return method == HttpMethod.GET && (path.startsWith("/api/v1/projects/files/") || path.matches("^/api/v1/invoices/[^/]+/pdf$"));
+        // Search engines and AI crawlers read sitemap.xml / llms.txt as plain files
+        return method == HttpMethod.GET && (path.startsWith("/api/v1/projects/files/") || path.matches("^/api/v1/invoices/[^/]+/pdf$")
+                || path.equals("/api/v1/blog/public/sitemap.xml") || path.equals("/api/v1/blog/public/llms.txt"));
     }
 
     private Mono<Void> reject(ServerWebExchange exchange, HttpStatus status, String code, String message) {

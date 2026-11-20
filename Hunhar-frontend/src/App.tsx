@@ -5,6 +5,8 @@ import AboutPage from './pages/AboutPage'
 import FeaturesPage from './pages/FeaturesPage'
 import BlogPage from './pages/BlogPage'
 import BlogPostPage from './pages/BlogPostPage'
+import BlogAdminPage from './pages/BlogAdminPage'
+import BlogAdminLoginPage from './pages/BlogAdminLoginPage'
 import ContactPage from './pages/ContactPage'
 import SignUpPage from './pages/SignUpPage'
 import LoginPage from './pages/LoginPage'
@@ -71,6 +73,8 @@ export default function App(): React.JSX.Element {
             <Route path="/features" element={<FeaturesPage />} />
             <Route path="/blog" element={<BlogPage />} />
             <Route path="/blog/:slug" element={<BlogPostPage />} />
+            <Route path="/blog-admin/login" element={<BlogAdminLoginPage />} />
+            <Route path="/blog-admin" element={<BlogAdminPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/terms" element={<LegalPage kind="terms" />} />
             <Route path="/privacy" element={<LegalPage kind="privacy" />} />

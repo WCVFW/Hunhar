@@ -4,13 +4,13 @@ import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
 import BlogList from '../components/blog/BlogList'
-import { getAllPosts } from '../services/blogPosts'
+import { useBlogPosts } from '../services/blogPosts'
 
 const SUBSCRIBE_EMAIL = 'howdy@theunoia.com'
 
 export default function BlogPage(): React.JSX.Element {
   const [isSignupModalOpen, setIsSignupModalOpen] = useState<boolean>(false)
-  const posts = getAllPosts()
+  const { posts, loading } = useBlogPosts()
 
   useEffect(() => {
     document.title = 'Hunhar Blog — Creative Freelance Marketplace & Growth Insights'
@@ -63,7 +63,11 @@ export default function BlogPage(): React.JSX.Element {
 
             {/* Main Content Area */}
             <div className="relative z-10 max-w-7xl 2xl:max-w-[110rem] mx-auto px-6 sm:px-8 2xl:px-12">
-              <BlogList initialPosts={posts} />
+              {loading ? (
+                <p className="py-16 text-center font-manrope text-sm text-slate-500">Loading articles…</p>
+              ) : (
+                <BlogList initialPosts={posts} />
+              )}
             </div>
 
             {/* Newsletter / CTA Section */}

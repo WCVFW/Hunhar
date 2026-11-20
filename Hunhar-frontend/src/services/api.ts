@@ -51,12 +51,14 @@ export const tokenStorage = {
   isAuthenticated: (): boolean => !!tokenStorage.getToken(),
 }
 
-export type UserRole = 'FREELANCER' | 'CLIENT' | 'ADMIN'
+/** EDITOR = blog dashboard account (SEO team), not a marketplace user */
+export type UserRole = 'FREELANCER' | 'CLIENT' | 'ADMIN' | 'EDITOR'
 
 const DASHBOARD_BY_ROLE: Record<UserRole, string> = {
   FREELANCER: '/freelancer/dashboard',
   CLIENT: '/client/dashboard',
   ADMIN: '/admin/dashboard',
+  EDITOR: '/blog-admin',
 }
 
 export const dashboardPathFor = (role: UserRole): string => DASHBOARD_BY_ROLE[role]
@@ -119,10 +121,12 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   }
 
   // Expired / invalid session: clear it and send the user to login (but not for a failed login attempt)
-  if (res.status === 401 && token && !endpoint.startsWith('/api/v1/auth/')) {
+  if (res.status === 401 && token && !endpoint.startsWith('/api/v1/auth/') && !endpoint.startsWith('/api/v1/blog/auth/')) {
     tokenStorage.removeToken()
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = `/login?expired=1`
+    // Blog editors have their own login page
+    const loginPath = window.location.pathname.startsWith('/blog-admin') ? '/blog-admin/login' : '/login'
+    if (!window.location.pathname.startsWith(loginPath)) {
+      window.location.href = `${loginPath}?expired=1`
     }
   }
 
@@ -149,6 +153,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 }
 
 import { getCharacterAvatar } from './characterAvatars'
+import type { BlogPost, BlogPostInput } from '../types/blog'
 
 /** Turns a server file path (/api/v1/projects/files/...) into a full URL for <img>/<a>. */
 export const fileUrl = (path?: string | null): string => {
@@ -963,6 +968,20 @@ export const disputesApi = {
   raise: (projectId: string, reason: string) => apiRequest<Dispute>(`/api/v1/disputes/project/${projectId}`, json('POST', { reason })),
 
   forProject: (projectId: string) => apiRequest<Dispute[]>(`/api/v1/disputes/project/${projectId}`),
+}
+
+// =============================================================================
+// Blog (public articles + the separate blog dashboard for the SEO team)
+// =============================================================================
+export const blogApi = {
+  posts: () => apiRequest<BlogPost[]>('/api/v1/blog/public/posts'),
+  post: (slug: string) => apiRequest<BlogPost>(`/api/v1/blog/public/posts/${encodeURIComponent(slug)}`),
+  login: (email: string, password: string) =>
+    apiRequest<AuthResult>('/api/v1/blog/auth/login', json('POST', { email, password })),
+  adminPosts: () => apiRequest<BlogPost[]>('/api/v1/blog/admin/posts'),
+  /** Creates the article, or updates it when post.id is set */
+  save: (post: BlogPostInput) => apiRequest<BlogPost>('/api/v1/blog/admin/posts', json('POST', post)),
+  remove: (id: string) => apiRequest<void>(`/api/v1/blog/admin/posts/${id}`, json('DELETE')),
 }
 
 export const kycApi = {

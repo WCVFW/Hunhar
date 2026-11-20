@@ -5,142 +5,8 @@ import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
 import BlogCard from '../components/blog/BlogCard'
-import { getAllPosts, getPostBySlug } from '../services/blogPosts'
-
-// Convert markdown to clean rendered HTML elements
-function renderArticleContent(content: string) {
-  const lines = content.split('\n');
-  const elements: React.ReactNode[] = [];
-  let inList: 'ul' | 'ol' | null = null;
-  let listItems: string[] = [];
-
-  const flushList = () => {
-    if (inList && listItems.length > 0) {
-      if (inList === 'ul') {
-        elements.push(
-          <ul key={`ul-${elements.length}`} className="my-5 pl-6 list-disc space-y-2 text-slate-700 font-manrope">
-            {listItems.map((item, idx) => (
-              <li key={idx} dangerouslySetInnerHTML={{ __html: parseInline(item) }} />
-            ))}
-          </ul>
-        );
-      } else {
-        elements.push(
-          <ol key={`ol-${elements.length}`} className="my-5 pl-6 list-decimal space-y-2 text-slate-700 font-manrope">
-            {listItems.map((item, idx) => (
-              <li key={idx} dangerouslySetInnerHTML={{ __html: parseInline(item) }} />
-            ))}
-          </ol>
-        );
-      }
-      inList = null;
-      listItems = [];
-    }
-  };
-
-  const parseInline = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-terracotta underline hover:text-[#AA572D]">$1</a>');
-  };
-
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const line = rawLine.trim();
-
-    if (!line) {
-      flushList();
-      continue;
-    }
-
-    // Headings in Makira font
-    if (line.startsWith('### ')) {
-      flushList();
-      elements.push(
-        <h3 key={i} className="text-xl sm:text-2xl font-medium text-navy mt-8 mb-3 font-makira uppercase tracking-wide">
-          {line.replace('### ', '')}
-        </h3>
-      );
-      continue;
-    }
-
-    if (line.startsWith('## ')) {
-      flushList();
-      elements.push(
-        <h2 key={i} className="text-2xl sm:text-3xl font-medium text-navy mt-10 mb-4 font-makira uppercase tracking-wide">
-          {line.replace('## ', '')}
-        </h2>
-      );
-      continue;
-    }
-
-    // Blockquote
-    if (line.startsWith('> ')) {
-      flushList();
-      const quoteText = line.replace(/^>\s*/, '');
-      elements.push(
-        <blockquote
-          key={i}
-          className="border-l-4 border-terracotta bg-[#FFF8F3] p-5 my-6 rounded-r-xl italic text-slate-800 font-manrope"
-          dangerouslySetInnerHTML={{ __html: parseInline(quoteText) }}
-        />
-      );
-      continue;
-    }
-
-    // Unordered list
-    if (line.startsWith('- ') || line.startsWith('* ')) {
-      if (inList !== 'ul') {
-        flushList();
-        inList = 'ul';
-      }
-      listItems.push(line.replace(/^[-*]\s+/, ''));
-      continue;
-    }
-
-    // Ordered list
-    const orderedMatch = line.match(/^\d+\.\s+(.*)$/);
-    if (orderedMatch) {
-      if (inList !== 'ol') {
-        flushList();
-        inList = 'ol';
-      }
-      listItems.push(orderedMatch[1]);
-      continue;
-    }
-
-    // Image markdown: ![alt](url)
-    const imgMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
-    if (imgMatch) {
-      flushList();
-      elements.push(
-        <div key={i} className="my-8 rounded-2xl overflow-hidden shadow-lg border border-black/5">
-          <img src={imgMatch[2]} alt={imgMatch[1]} className="w-full h-auto object-cover max-h-[500px]" />
-          {imgMatch[1] && (
-            <p className="text-center text-xs text-slate-500 py-2 bg-slate-50 border-t border-black/5 font-manrope">
-              {imgMatch[1]}
-            </p>
-          )}
-        </div>
-      );
-      continue;
-    }
-
-    // Normal paragraph in Manrope
-    flushList();
-    elements.push(
-      <p
-        key={i}
-        className="text-base sm:text-lg text-slate-700 leading-relaxed my-4 font-manrope"
-        dangerouslySetInnerHTML={{ __html: parseInline(line) }}
-      />
-    );
-  }
-
-  flushList();
-  return elements;
-}
+import { useBlogPost } from '../services/blogPosts'
+import { renderArticleContent } from '../components/blog/articleContent'
 
 /** Sets a <meta> tag (name= or property=) for this article and returns a function that removes it again. */
 function setMeta(attr: 'name' | 'property', key: string, value: string) {
@@ -154,7 +20,7 @@ function setMeta(attr: 'name' | 'property', key: string, value: string) {
 export default function BlogPostPage(): React.JSX.Element {
   const { slug = '' } = useParams()
   const [isSignupModalOpen, setIsSignupModalOpen] = useState<boolean>(false)
-  const post = getPostBySlug(slug)
+  const { post, related, loading } = useBlogPost(slug)
 
   // SEO: title, description, Open Graph / Twitter cards and Article JSON-LD (same as the blog app)
   useEffect(() => {
@@ -208,11 +74,21 @@ export default function BlogPostPage(): React.JSX.Element {
     }
   }, [post])
 
+  if (!post && loading) {
+    return (
+      <div className="min-h-screen flex flex-col w-full bg-[#0A1B37]">
+        <Navbar onOpenSignup={() => setIsSignupModalOpen(true)} />
+        <main className="flex-1 w-full p-2 sm:p-4 lg:p-5 2xl:p-6">
+          <div className="w-full rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white pt-40 pb-40 text-center font-manrope text-sm text-slate-500">
+            Loading article…
+          </div>
+        </main>
+      </div>
+    )
+  }
   if (!post) return <Navigate to="/blog" replace />
 
-  const relatedPosts = getAllPosts()
-    .filter((p) => p.id !== post.id)
-    .slice(0, 3)
+  const relatedPosts = related
 
   const formattedDate = new Date(post.publishedAt).toLocaleDateString('en-US', {
     month: 'long',
