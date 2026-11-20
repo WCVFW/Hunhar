@@ -96,6 +96,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 return unauthorized(exchange, "Account is suspended. Please contact platform administration.");
             }
             String role = claims.get("role", String.class);
+            // Blog editor accounts may only use the blog API and upload images, nothing else on the platform
+            if ("EDITOR".equalsIgnoreCase(role) && !(path.startsWith("/api/v1/blog/") || path.startsWith("/api/v1/projects/files"))) {
+                return forbidden(exchange, "Blog editor accounts can only manage the blog");
+            }
             String status = claims.get("status", String.class);
             String email = claims.get("email", String.class);
 
@@ -119,6 +123,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {
         var response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        byte[] body = ("{\"success\":false,\"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
+        return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
+    }
+
+    private Mono<Void> forbidden(ServerWebExchange exchange, String message) {
+        var response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.FORBIDDEN);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
         byte[] body = ("{\"success\":false,\"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
