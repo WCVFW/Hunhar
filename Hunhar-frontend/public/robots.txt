@@ -1,0 +1,12 @@
+# https://www.hunhar.in/robots.txt
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /freelancer/
+Disallow: /client/
+Disallow: /admin/
+Disallow: /blog-admin
+Disallow: /login
+Disallow: /forgot-password
+
+Sitemap: https://www.hunhar.in/sitemap.xml

@@ -32,7 +32,7 @@ spring:
         - id: engagement-service
           uri: ${ENGAGEMENT_SERVICE_URL:http://localhost:8084}
           predicates:
-            - Path=/api/v1/messages/**, /api/v1/notifications/**, /api/v1/calendar/**, /api/v1/community/**, /api/v1/content/**, /api/v1/analytics/**, /ws/**
+            - Path=/api/v1/messages/**, /api/v1/notifications/**, /api/v1/calendar/**, /api/v1/community/**, /api/v1/content/**, /api/v1/analytics/**, /api/v1/blog/**, /ws/**
 
 theunoia:
   cors:
