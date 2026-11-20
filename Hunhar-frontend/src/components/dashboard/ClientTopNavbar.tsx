@@ -74,11 +74,11 @@ export default function ClientTopNavbar(): React.JSX.Element {
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8 font-manrope">
+    <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] 2xl:h-[82px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8 2xl:px-10 font-manrope">
       {/* Search Input Box */}
       <form
         role="search"
-        className="relative min-w-0 flex-1 max-w-[420px]"
+        className="relative min-w-0 flex-1 max-w-[420px] 2xl:max-w-[560px]"
         onSubmit={(e) => {
           e.preventDefault()
           navigate(`/client/projects${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''}`)

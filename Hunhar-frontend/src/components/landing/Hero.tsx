@@ -94,7 +94,7 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
         className="pointer-events-none absolute inset-3 sm:inset-4 lg:inset-5 rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] z-0"
       />
 
-      <div className="relative z-[1] max-w-[90rem] mx-auto pt-24 pb-12 px-4 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20">
+      <div className="relative z-[1] max-w-[90rem] 2xl:max-w-[110rem] mx-auto pt-24 pb-12 px-4 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20 2xl:px-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
 
           {/* Left Column: Headline, Subheadline, CTA */}

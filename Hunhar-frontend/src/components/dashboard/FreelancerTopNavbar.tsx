@@ -16,6 +16,7 @@ import {
   Briefcase,
   MessageSquare,
   ArrowRight,
+  ShieldCheck,
 } from 'lucide-react'
 import {
   creditsApi,
@@ -148,9 +149,9 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-[64px] sm:h-[72px] lg:h-[76px] 2xl:h-[82px] w-full items-center justify-between gap-2 bg-[#EEEEEE] px-3 sm:px-6 lg:px-8 2xl:px-10">
       {/* Search Input Box */}
-      <form onSubmit={handleSearch} role="search" className="relative min-w-0 flex-1 max-w-[420px]">
+      <form onSubmit={handleSearch} role="search" className="relative min-w-0 flex-1 max-w-[420px] 2xl:max-w-[560px]">
         <Search
           size={16}
           className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8E8376]"
@@ -360,6 +361,18 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
 
               {/* Navigation Items */}
               <div className="mt-2.5 flex flex-col space-y-0.5 border-t border-[#F0ECE6] pt-2">
+                <Link
+                  to="/freelancer/kyc"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="flex items-center justify-between rounded-[12px] px-3 py-2.5 font-manrope text-[13.5px] font-semibold text-[#08182B] transition-colors hover:bg-[#FAF8F5] hover:text-[#C06B3E]"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck size={16} className="text-[#C06B3E]" />
+                    <span>KYC Verification</span>
+                  </div>
+                  <ChevronRight size={14} className="text-[#CBD5E1]" />
+                </Link>
+
                 <Link
                   to="/freelancer/bids"
                   onClick={() => setIsDropdownOpen(false)}

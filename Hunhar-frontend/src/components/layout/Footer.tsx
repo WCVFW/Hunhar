@@ -64,7 +64,7 @@ export default function Footer({ onOpenSignup }: FooterProps): React.JSX.Element
       }}
       aria-label="Site Footer"
     >
-      <div className="relative z-[5] max-w-[1320px] mx-auto px-6 sm:px-10">
+      <div className="relative z-[5] max-w-[1320px] 2xl:max-w-[1720px] 3xl:max-w-[1840px] mx-auto px-6 sm:px-10 2xl:px-16">
         {/* Top 5-Column Navigation Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2.2fr_1fr_1fr_1fr_1fr] gap-12 sm:gap-10 lg:gap-8 w-full">
           {/* Column 1: Brand Info */}
@@ -160,7 +160,7 @@ export default function Footer({ onOpenSignup }: FooterProps): React.JSX.Element
         <div className="absolute top-0 bottom-0 right-0 w-[12%] max-w-[160px] bg-gradient-to-l from-[#07152B]/85 to-transparent pointer-events-none z-[2]" />
 
         <motion.div
-          className="w-full max-w-[1440px] flex justify-center items-end px-2 sm:px-6"
+          className="w-full max-w-[1440px] 2xl:max-w-[1840px] flex justify-center items-end px-2 sm:px-6"
           initial={{ y: 90, opacity: 0 }}
           whileInView={{ y: 0, opacity: 1 }}
           viewport={{ once: false, amount: 0.1 }}

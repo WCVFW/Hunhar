@@ -339,10 +339,10 @@ export default function MessagesPage(): React.JSX.Element {
 
   return (
     <div className="w-full font-manrope">
-      <div className="flex h-[calc(100vh-140px)] sm:h-[calc(100vh-140px)] lg:h-[calc(100vh-145px)] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-140px)] lg:max-h-[calc(100dvh-145px)] w-full flex-col rounded-[24px] border border-[#E9EBEF]/60 bg-[#FFFFFF] p-2 shadow-xs sm:p-3 lg:p-4">
+      <div className="flex h-[calc(100vh-140px)] sm:h-[calc(100vh-140px)] lg:h-[calc(100vh-145px)] 2xl:h-[calc(100vh-160px)] max-h-[calc(100dvh-140px)] sm:max-h-[calc(100dvh-140px)] lg:max-h-[calc(100dvh-145px)] 2xl:max-h-[calc(100vh-160px)] w-full flex-col rounded-[24px] border border-[#E9EBEF]/60 bg-[#FFFFFF] p-2 shadow-xs sm:p-3 lg:p-4 2xl:p-5">
         <div className="flex flex-1 min-h-0 overflow-hidden rounded-[20px] border border-[#DECFBE]">
           {/* LEFT: conversations */}
-          <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px] min-h-0 h-full`}>
+          <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px] 2xl:w-[380px] min-h-0 h-full`}>
             <div className="shrink-0 p-4 pb-2">
               <h1 className="font-manrope text-[20px] font-bold text-[#08182B]">Messages</h1>
               <p className="mt-0.5 text-[12px] text-[#786D61]">Conversations with clients & collaborators</p>

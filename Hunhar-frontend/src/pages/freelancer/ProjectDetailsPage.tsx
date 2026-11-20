@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ArrowLeft,
   Coins,
+  Lock,
 } from 'lucide-react'
 import cardDeskMascot from '../../assets/Job_details_image.png'
 import { fileUrl, projectsApi, type Project } from '../../services/api'
@@ -24,6 +25,12 @@ import {
 import { usePlatformSettings } from '../../services/usePlatformSettings'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
 import { getCharacterAvatar } from '../../services/characterAvatars'
+import KycVerificationModal from '../../components/kyc/KycVerificationModal'
+import {
+  getKycState,
+  calculateKycPercentage,
+  isKycFullyVerified,
+} from '../../services/kycState'
 
 export default function ProjectDetailsPage(): React.JSX.Element {
   const { creditsPerBid: CREDITS_PER_BID } = usePlatformSettings()
@@ -32,6 +39,17 @@ export default function ProjectDetailsPage(): React.JSX.Element {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string>('')
+  const [kycModalOpen, setKycModalOpen] = useState<boolean>(false)
+  const [kycPercentage, setKycPercentage] = useState<number>(calculateKycPercentage(getKycState()))
+
+  useEffect(() => {
+    const handleKycUpdate = (e: any) => {
+      const state = e.detail || getKycState()
+      setKycPercentage(calculateKycPercentage(state))
+    }
+    window.addEventListener('hunhar_kyc_updated', handleKycUpdate)
+    return () => window.removeEventListener('hunhar_kyc_updated', handleKycUpdate)
+  }, [])
 
   useEffect(() => {
     async function fetchProject() {
@@ -220,17 +238,39 @@ export default function ProjectDetailsPage(): React.JSX.Element {
               </Link>
             </div>
           ) : canBid ? (
-            <div className="flex flex-col gap-1.5">
-              <Link
-                to={`/freelancer/browse/${toRouteId(project.id)}/bid`}
-                className="flex h-[52px] w-full items-center justify-center rounded-[16px] bg-[#C06B3E] font-manrope text-[15px] font-bold text-white no-underline shadow-[0_4px_14px_rgba(192,107,62,0.35)] transition-all hover:bg-[#AA572D] hover:shadow-[0_6px_18px_rgba(192,107,62,0.45)] active:scale-98"
-              >
-                Submit Proposal
-              </Link>
-              <span className="flex items-center justify-center gap-1 text-[12px] text-[#8E8376]">
-                <Coins size={13} className="text-[#C06B3E]" /> Uses {CREDITS_PER_BID} credits
-              </span>
-            </div>
+            kycPercentage < 100 ? (
+              <div className="flex flex-col gap-2 rounded-[18px] border border-[#F6DEC9] bg-[#FDF8F3] p-4 text-center">
+                <div className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-[#A85123]">
+                  <Lock size={14} className="text-[#C06B3E]" />
+                  <span>100% KYC Required to Bid</span>
+                </div>
+                <p className="text-[11.5px] text-[#7A7065] leading-snug">
+                  Complete identity, education, and skills verification ({kycPercentage}%) to unlock bidding.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setKycModalOpen(true)}
+                  className="mt-1 flex h-[48px] w-full items-center justify-center gap-1.5 rounded-[14px] bg-[#C06B3E] font-manrope text-[13.5px] font-bold text-white shadow-sm transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
+                >
+                  <span>Complete KYC to Bid ({kycPercentage}%)</span>
+                </button>
+                <span className="flex items-center justify-center gap-1 text-[11px] text-[#8E8376]">
+                  <Coins size={12} className="text-[#C06B3E]" /> Uses {CREDITS_PER_BID} credits once unlocked
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Link
+                  to={`/freelancer/browse/${toRouteId(project.id)}/bid`}
+                  className="flex h-[52px] w-full items-center justify-center rounded-[16px] bg-[#C06B3E] font-manrope text-[15px] font-bold text-white no-underline shadow-[0_4px_14px_rgba(192,107,62,0.35)] transition-all hover:bg-[#AA572D] hover:shadow-[0_6px_18px_rgba(192,107,62,0.45)] active:scale-98"
+                >
+                  Submit Proposal
+                </Link>
+                <span className="flex items-center justify-center gap-1 text-[12px] text-[#8E8376]">
+                  <Coins size={13} className="text-[#C06B3E]" /> Uses {CREDITS_PER_BID} credits
+                </span>
+              </div>
+            )
           ) : (
             <div className="w-full rounded-[16px] border border-[#E5E5E5] bg-[#F8F8F8] p-4 text-center font-manrope text-[13px] font-semibold text-[#7A7065]">
               This project is no longer accepting proposals.
@@ -312,6 +352,15 @@ export default function ProjectDetailsPage(): React.JSX.Element {
           </div>
         </div>
       </div>
+
+      {/* KYC Verification Modal */}
+      <KycVerificationModal
+        isOpen={kycModalOpen}
+        onClose={() => setKycModalOpen(false)}
+        onVerificationComplete={() => {
+          setKycPercentage(100)
+        }}
+      />
     </div>
   )
 }

@@ -15,7 +15,7 @@ export default function CTASection({ onOpenSignup }: CTASectionProps): React.JSX
         oa
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-5 sm:px-8 lg:px-12 pt-10 sm:pt-14 lg:pt-0 relative flex flex-col lg:flex-row lg:items-center justify-between lg:min-h-[325px]">
+      <div className="max-w-[1400px] 2xl:max-w-[1720px] 3xl:max-w-[1840px] mx-auto px-5 sm:px-8 lg:px-12 2xl:px-16 pt-10 sm:pt-14 lg:pt-0 relative flex flex-col lg:flex-row lg:items-center justify-between lg:min-h-[325px] 2xl:min-h-[360px]">
         {/* Left Column: Heading, Subtitle & Buttons */}
         <motion.div
           className="relative z-10 pb-6 lg:pb-0"

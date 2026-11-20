@@ -63,7 +63,7 @@ export default function Navbar({ onOpenSignup }: NavbarProps): React.JSX.Element
           : 'top-3 sm:top-4 lg:top-5 left-3 sm:left-4 lg:left-5 right-3 sm:right-4 lg:right-5 bg-transparent border-b border-transparent shadow-none rounded-t-3xl sm:rounded-t-[2rem] lg:rounded-t-[2.5rem]'
         }`}
     >
-      <div className="max-w-7xl mx-auto px-6 sm:px-8 h-20 flex items-center justify-between">
+      <div className="max-w-7xl 2xl:max-w-[110rem] mx-auto px-6 sm:px-8 2xl:px-12 h-20 2xl:h-24 flex items-center justify-between">
         {/* Brand Logo */}
         <div className="flex items-center">
           <a href="/" className="flex items-center py-2 no-underline" aria-label="Hunhar Home">

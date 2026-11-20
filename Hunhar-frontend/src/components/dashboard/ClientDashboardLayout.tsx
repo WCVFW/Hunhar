@@ -25,8 +25,8 @@ export default function ClientDashboardLayout(): React.JSX.Element {
         <ClientTopNavbar />
 
         {/* Scrollable Main Content Area */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-6">
-          <div className="mx-auto max-w-[1440px]">
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 2xl:p-8">
+          <div className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1720px] 3xl:max-w-[1840px]">
             <Outlet />
           </div>
         </main>

@@ -27,6 +27,7 @@ import CreditsPage from './pages/freelancer/CreditsPage'
 import WalletPage from './pages/freelancer/WalletPage'
 import LeadershipBoardPage from './pages/freelancer/LeadershipBoardPage'
 import FreelancerProfilePage from './pages/freelancer/FreelancerProfilePage'
+import KycVerificationPage from './pages/freelancer/KycVerificationPage'
 import ActiveProjectsPage from './pages/freelancer/ActiveProjectsPage'
 import WorkspaceOverviewPage from './pages/freelancer/WorkspaceOverviewPage'
 import MessagesPage from './pages/freelancer/MessagesPage'
@@ -88,6 +89,7 @@ export default function App(): React.JSX.Element {
                 <Route path="wallet" element={<WalletPage />} />
                 <Route path="leaderboard" element={<LeadershipBoardPage />} />
                 <Route path="profile" element={<FreelancerProfilePage />} />
+                <Route path="kyc" element={<KycVerificationPage />} />
                 <Route path="projects" element={<ActiveProjectsPage />} />
                 <Route path="projects/:projectId" element={<WorkspaceOverviewPage />} />
                 <Route path="projects/:projectId/tracking" element={<FreelancerProjectTrackingPage />} />

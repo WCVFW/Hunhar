@@ -8,11 +8,16 @@ import {
   FileText,
   X,
   CheckCircle,
+  Shield,
+  Lock,
+  ChevronRight,
 } from 'lucide-react'
 import { projectsApi, bidsApi, creditsApi, filesApi, type Project, type StoredFile } from '../../services/api'
 import { formatBytes, formatINR } from '../../services/format'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
+import KycVerificationModal from '../../components/kyc/KycVerificationModal'
+import { getKycState, calculateKycPercentage } from '../../services/kycState'
 
 const MAX_ATTACHMENTS = 5
 const MIN_LETTER = 30
@@ -38,7 +43,19 @@ export default function SubmitProposalPage(): React.JSX.Element {
   const [uploading, setUploading] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [submittedSuccess, setSubmittedSuccess] = useState<boolean>(false)
+  const [kycModalOpen, setKycModalOpen] = useState<boolean>(false)
+  const [kycPercentage, setKycPercentage] = useState<number>(calculateKycPercentage(getKycState()))
+  const isKycComplete = kycPercentage === 100
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handleKycUpdate = (e: any) => {
+      const state = e.detail || getKycState()
+      setKycPercentage(calculateKycPercentage(state))
+    }
+    window.addEventListener('hunhar_kyc_updated', handleKycUpdate)
+    return () => window.removeEventListener('hunhar_kyc_updated', handleKycUpdate)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -103,6 +120,10 @@ export default function SubmitProposalPage(): React.JSX.Element {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
+    if (!isKycComplete) {
+      setKycModalOpen(true)
+      return setErrorMsg('100% KYC verification is required before placing a proposal.')
+    }
     const days = Number(deliveryTime)
     if (numericBid < 50) return setErrorMsg('Your bid must be at least ₹50.')
     if (!Number.isInteger(days) || days < 1 || days > 365) return setErrorMsg('Delivery time must be between 1 and 365 days.')
@@ -179,6 +200,35 @@ export default function SubmitProposalPage(): React.JSX.Element {
           </span>
         </div>
       </div>
+
+      {/* 100% KYC Verification Required Banner */}
+      {!isKycComplete && (
+        <div className="rounded-[20px] border border-[#F6DEC9] bg-[#FDF8F3] p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#08182B] text-white">
+                <Shield size={20} />
+              </div>
+              <div>
+                <h3 className="text-[15px] font-extrabold text-[#08182B]">
+                  100% Profile Verification Required to Submit Proposal
+                </h3>
+                <p className="mt-0.5 text-[12.5px] text-[#7A7065] leading-relaxed">
+                  Hunhar requires freelancers to complete full KYC verification (Identity, Education, and Skills) before submitting proposals. Current progress: <strong className="text-[#C06B3E]">{kycPercentage}%</strong>.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setKycModalOpen(true)}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-[#C06B3E] px-4 py-2.5 text-[13px] font-bold text-white shadow-sm hover:bg-[#AA572D] transition-all cursor-pointer"
+            >
+              <span>Complete KYC ({kycPercentage}%)</span>
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SUCCESS MODAL POPUP */}
       {submittedSuccess && (
@@ -429,14 +479,25 @@ export default function SubmitProposalPage(): React.JSX.Element {
             >
               Cancel
             </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting || uploading || alreadyBid || closed || notEnoughCredits}
-              className="inline-flex items-center gap-2 rounded-full bg-[#C06B3E] px-8 py-2.5 font-manrope text-[14px] font-bold text-white shadow-md transition-all hover:bg-[#AA572D] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Send size={15} />
-              <span>{isSubmitting ? 'Submitting…' : `Submit Proposal (${CREDITS_PER_BID} credits)`}</span>
-            </button>
+            {!isKycComplete ? (
+              <button
+                type="button"
+                onClick={() => setKycModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full bg-[#C06B3E] px-8 py-2.5 font-manrope text-[14px] font-bold text-white shadow-md transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
+              >
+                <Lock size={15} />
+                <span>Complete KYC to Submit ({kycPercentage}%)</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting || uploading || alreadyBid || closed || notEnoughCredits}
+                className="inline-flex items-center gap-2 rounded-full bg-[#C06B3E] px-8 py-2.5 font-manrope text-[14px] font-bold text-white shadow-md transition-all hover:bg-[#AA572D] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Send size={15} />
+                <span>{isSubmitting ? 'Submitting…' : `Submit Proposal (${CREDITS_PER_BID} credits)`}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -468,6 +529,15 @@ export default function SubmitProposalPage(): React.JSX.Element {
           </div>
         </div>
       </form>
+
+      {/* KYC Verification Modal */}
+      <KycVerificationModal
+        isOpen={kycModalOpen}
+        onClose={() => setKycModalOpen(false)}
+        onVerificationComplete={() => {
+          setKycPercentage(100)
+        }}
+      />
     </div>
   )
 }

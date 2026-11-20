@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -32,6 +32,135 @@ const categories = [
   'Copywriting',
 ]
 
+interface CategoryRule {
+  name: string
+  keywords: string[]
+  suggestedSkills: string[]
+}
+
+const CATEGORY_RULES: CategoryRule[] = [
+  {
+    name: 'UI/UX',
+    keywords: [
+      'ui/ux', 'uiux', 'ui designer', 'ux designer', 'ui/ux designer', 'ui', 'ux',
+      'product designer', 'product design', 'designer', 'design', 'figma', 'figma designer',
+      'wireframe', 'wireframing', 'prototype', 'prototyping', 'user interface', 'user experience',
+      'mobile app design', 'app design', 'app designer', 'dashboard design', 'dashboard',
+      'landing page design', 'redesign', 'usability', 'design system', 'xd', 'sketch', 'mobile ui'
+    ],
+    suggestedSkills: ['Figma', 'UI/UX Design', 'Wireframing', 'Prototyping', 'Mobile App Design', 'Design Systems']
+  },
+  {
+    name: 'Web Design',
+    keywords: [
+      'web designer', 'website designer', 'web design', 'website design', 'web', 'website',
+      'landing page', 'homepage', 'responsive design', 'wordpress', 'webflow', 'wix',
+      'shopify', 'elementor', 'squarespace', 'frontend design', 'html', 'css', 'tailwind'
+    ],
+    suggestedSkills: ['Web Design', 'WordPress', 'HTML/CSS', 'Responsive Design', 'Webflow', 'Tailwind CSS']
+  },
+  {
+    name: 'Branding',
+    keywords: [
+      'graphic designer', 'graphic design', 'graphics', 'brand designer', 'brand design',
+      'branding', 'brand', 'logo', 'logo design', 'logo designer', 'identity', 'stationery',
+      'packaging', 'packaging design', 'business card', 'letterhead', 'rebrand', 'rebranding',
+      'visual identity', 'brand guideline', 'label', 'typography', 'brochure', 'catalog', 'flyer', 'poster', 'banner'
+    ],
+    suggestedSkills: ['Logo Design', 'Adobe Illustrator', 'Brand Identity', 'Photoshop', 'Packaging Design']
+  },
+  {
+    name: 'Development',
+    keywords: [
+      'developer', 'development', 'develop', 'programmer', 'programming', 'software',
+      'software engineer', 'coder', 'coding', 'code', 'backend', 'frontend', 'fullstack',
+      'full stack', 'full-stack', 'api', 'database', 'react', 'next.js', 'nextjs', 'node',
+      'nodejs', 'express', 'python', 'django', 'flask', 'java', 'spring', 'springboot',
+      'spring boot', 'php', 'laravel', 'flutter', 'react native', 'swift', 'kotlin',
+      'sql', 'postgres', 'mongodb', 'aws', 'docker', 'bug fix', 'devops', 'ai', 'ml',
+      'machine learning', 'chatgpt', 'automation', 'bot', 'script', 'scraping', 'saas'
+    ],
+    suggestedSkills: ['React.js', 'Node.js', 'Full Stack Development', 'Python', 'API Integration', 'Database Design']
+  },
+  {
+    name: 'Motion Design',
+    keywords: [
+      'motion designer', 'motion design', 'motion graphics', 'animator', 'animation',
+      '2d animation', '3d animation', 'after effects', 'video editor', 'video editing',
+      'video edit', 'video', 'reel', 'reels', 'shorts', 'tiktok', 'youtube video',
+      'premiere', 'premiere pro', 'davinci', 'vfx', 'cgi', 'explainer video', 'blender'
+    ],
+    suggestedSkills: ['After Effects', 'Video Editing', 'Premiere Pro', '2D Animation', 'Motion Graphics', 'Blender']
+  },
+  {
+    name: 'Illustration',
+    keywords: [
+      'illustrator', 'illustration', 'illustrate', 'digital artist', 'drawing', 'sketch',
+      'digital art', 'character designer', 'character design', 'mascot', 'vector art',
+      'cartoon', 'comic', 'doodle', 'children book', 'concept art', 'anime', 'portrait art'
+    ],
+    suggestedSkills: ['Digital Illustration', 'Adobe Illustrator', 'Character Design', 'Procreate', 'Vector Art']
+  },
+  {
+    name: 'Marketing',
+    keywords: [
+      'marketer', 'marketing', 'market', 'digital marketing', 'social media marketing',
+      'social media manager', 'smm', 'growth marketer', 'growth', 'seo', 'sem', 'google ads',
+      'facebook ads', 'meta ads', 'ad campaign', 'ppc', 'email marketing', 'newsletter',
+      'lead generation', 'leads', 'influencer', 'sales funnel'
+    ],
+    suggestedSkills: ['Digital Marketing', 'Social Media Marketing', 'SEO', 'Meta Ads', 'Google Ads', 'Content Strategy']
+  },
+  {
+    name: 'Copywriting',
+    keywords: [
+      'copywriter', 'copywriting', 'copy', 'content writer', 'content writing', 'content',
+      'writer', 'writing', 'blog writer', 'blog', 'article writer', 'article', 'ghostwriter',
+      'technical writing', 'documentation', 'scriptwriter', 'scriptwriting', 'ad copy',
+      'website copy', 'proofreading', 'proofread', 'resume', 'cv', 'translator', 'translation'
+    ],
+    suggestedSkills: ['Copywriting', 'Content Writing', 'Blog Writing', 'SEO Copywriting', 'Proofreading', 'Creative Writing']
+  },
+  {
+    name: 'Photography',
+    keywords: [
+      'photographer', 'photography', 'photo', 'photoshoot', 'camera', 'product photography',
+      'product photo', 'portrait photography', 'model shoot', 'fashion photography',
+      'food photography', 'photo retouching', 'photo editing', 'lightroom', 'headshot'
+    ],
+    suggestedSkills: ['Product Photography', 'Adobe Lightroom', 'Photo Editing', 'Studio Lighting', 'Commercial Photography']
+  },
+]
+
+function scoreKeywordMatch(text: string, kw: string): number {
+  if (!text || !kw) return 0
+  const t = text.toLowerCase().trim()
+  const k = kw.toLowerCase().trim()
+
+  // 1. Exact full text match (e.g. title is exactly "designer" or "developer")
+  if (t === k) return 40
+
+  // 2. Multi-word phrase match (e.g. keyword "ui designer" or "web design" in title)
+  if (k.includes(' ')) {
+    if (t.includes(k)) return 25
+    return 0
+  }
+
+  // 3. Whole-word match using regex boundary
+  const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const wordRegex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i')
+  if (wordRegex.test(t)) {
+    return 15
+  }
+
+  // 4. Substring / root word match for keywords >= 4 characters
+  if (k.length >= 4 && t.includes(k)) {
+    return 6
+  }
+
+  return 0
+}
+
 export default function CreateProjectPage(): React.JSX.Element {
   const navigate = useNavigate()
 
@@ -41,6 +170,7 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [budget, setBudget] = useState('')
   const [timeline, setTimeline] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [userManuallySelectedCategory, setUserManuallySelectedCategory] = useState(false)
   const [customDays, setCustomDays] = useState('')
   const [skillsRequired, setSkillsRequired] = useState('')
   const [isSubmitting, setIsSubmitting] = useState<false | 'draft' | 'publish'>(false)
@@ -52,6 +182,68 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [saved, setSaved] = useState<Project | null>(null)
   const [searchParams] = useSearchParams()
   const editId = fromRouteId(searchParams.get('edit')) || null
+
+  // Dynamic category matching based on project title and description
+  const { matchedCategory, rankedCategories, suggestedSkills } = useMemo(() => {
+    const titleLower = projectTitle.trim().toLowerCase()
+    const descLower = projectDescription.trim().toLowerCase()
+
+    if (!titleLower && !descLower) {
+      return {
+        matchedCategory: null,
+        rankedCategories: categories.map((cat) => ({ name: cat, score: 0, isMatch: false })),
+        suggestedSkills: [] as string[]
+      }
+    }
+
+    const scored = CATEGORY_RULES.map((rule) => {
+      let score = 0
+      for (const kw of rule.keywords) {
+        // Keyword match in title is prioritized (3x)
+        const titleScore = scoreKeywordMatch(titleLower, kw)
+        if (titleScore > 0) {
+          score += titleScore * 3
+        } else if (descLower) {
+          const descScore = scoreKeywordMatch(descLower, kw)
+          score += descScore
+        }
+      }
+      return {
+        name: rule.name,
+        score,
+        isMatch: score > 0,
+        suggestedSkills: rule.suggestedSkills
+      }
+    })
+
+    // Sort categories: matched categories first by score descending, then default order
+    const sorted = [...scored].sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      return categories.indexOf(a.name) - categories.indexOf(b.name)
+    })
+
+    const top = sorted[0].score > 0 ? sorted[0].name : null
+    const activeCategory = selectedCategories[0] || top
+    const activeRule = CATEGORY_RULES.find((r) => r.name === activeCategory)
+
+    return {
+      matchedCategory: top,
+      rankedCategories: sorted,
+      suggestedSkills: activeRule ? activeRule.suggestedSkills : []
+    }
+  }, [projectTitle, projectDescription, selectedCategories])
+
+  // Automatically select the best matching category if user hasn't chosen one manually
+  useEffect(() => {
+    if (editId) return
+    if (!userManuallySelectedCategory) {
+      if (matchedCategory) {
+        setSelectedCategories([matchedCategory])
+      } else if (!projectTitle.trim() && !projectDescription.trim()) {
+        setSelectedCategories([])
+      }
+    }
+  }, [matchedCategory, userManuallySelectedCategory, editId, projectTitle, projectDescription])
 
   // Edit mode: load the draft / unbid project
   useEffect(() => {
@@ -65,6 +257,7 @@ export default function CreateProjectPage(): React.JSX.Element {
         setTimeline(TIMELINE_OPTIONS.find((o) => o.days === p.timelineDays)?.label || '')
         setCustomDays(TIMELINE_OPTIONS.some((o) => o.days === p.timelineDays) ? '' : String(p.timelineDays))
         setSelectedCategories(p.category ? [p.category] : [])
+        setUserManuallySelectedCategory(true)
         setSkillsRequired(splitList(p.skills).join(', '))
         setExistingAttachments(splitList(p.attachmentUrls))
       })
@@ -72,6 +265,8 @@ export default function CreateProjectPage(): React.JSX.Element {
   }, [editId])
 
   const toggleCategory = (cat: string) => {
+    // User explicitly chose a category
+    setUserManuallySelectedCategory(true)
     // A project has one category; clicking another one switches to it
     setSelectedCategories((prev) => (prev.includes(cat) ? [] : [cat]))
   }
@@ -232,7 +427,10 @@ export default function CreateProjectPage(): React.JSX.Element {
                 type="text"
                 required
                 value={projectTitle}
-                onChange={(e) => setProjectTitle(e.target.value)}
+                onChange={(e) => {
+                  setProjectTitle(e.target.value)
+                  setUserManuallySelectedCategory(false)
+                }}
                 placeholder="e.g. Brand Identity for a Tech Startup"
                 className="mt-2 h-12 w-full rounded-[12px] border border-[#E2E8F0] bg-white px-4 font-manrope text-[13.5px] text-[#08182B] placeholder-[#94A3B8] outline-none transition-all focus:border-[#C06B3E] focus:ring-2 focus:ring-[#C06B3E]/15"
               />
@@ -319,24 +517,44 @@ export default function CreateProjectPage(): React.JSX.Element {
 
             {/* Field 4: Category Pills */}
             <div>
-              <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
-                Category <span className="text-[#E11D48]">*</span>
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
+                  Category <span className="text-[#E11D48]">*</span>
+                </label>
+                {matchedCategory && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF4EE] px-2.5 py-0.5 font-manrope text-[11.5px] font-semibold text-[#C06B3E] transition-all">
+                    <Sparkles size={12} className="animate-pulse text-[#C06B3E]" />
+                    <span>Auto-matched: <strong className="font-bold">{matchedCategory}</strong></span>
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 font-manrope text-[11.5px] text-[#64748B]">
+                Categories dynamically rank and update based on your project title.
+              </p>
               <div className="mt-2.5 flex flex-wrap gap-2.5">
-                {categories.map((cat) => {
+                {rankedCategories.map(({ name: cat, isMatch }) => {
                   const isSelected = selectedCategories.includes(cat)
+                  const isTopMatched = matchedCategory === cat
                   return (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => toggleCategory(cat)}
-                      className={`rounded-full px-4 py-1.5 font-manrope text-[12.5px] font-medium transition-all ${
+                      className={`relative inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-manrope text-[12.5px] font-medium transition-all ${
                         isSelected
                           ? 'border border-[#C06B3E] bg-[#C06B3E] text-white shadow-xs'
+                          : isMatch
+                          ? 'border border-[#DECFBE] bg-[#FAF8F5] text-[#C06B3E] hover:border-[#C06B3E]'
                           : 'border border-[#E2E8F0] bg-white text-[#64748B] hover:border-[#CBD5E1] hover:text-[#08182B]'
                       }`}
                     >
-                      {cat}
+                      {isTopMatched && !isSelected && <Sparkles size={11} className="text-[#C06B3E]" />}
+                      <span>{cat}</span>
+                      {isMatch && !isSelected && (
+                        <span className="rounded-full bg-[#EFE5DB] px-1.5 py-0.5 text-[9.5px] font-bold text-[#C06B3E]">
+                          Suggested
+                        </span>
+                      )}
                     </button>
                   )
                 })}
@@ -345,9 +563,16 @@ export default function CreateProjectPage(): React.JSX.Element {
 
             {/* Field 5: Skills Required */}
             <div>
-              <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
-                Skills Required
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
+                  Skills Required
+                </label>
+                {suggestedSkills.length > 0 && (
+                  <span className="font-manrope text-[11px] text-[#94A3B8]">
+                    Click suggested skills to add
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={skillsRequired}
@@ -355,6 +580,42 @@ export default function CreateProjectPage(): React.JSX.Element {
                 placeholder="e.g. Figma, Brand Identity, Illustration (comma-separated)"
                 className="mt-2 h-12 w-full rounded-[12px] border border-[#E2E8F0] bg-white px-4 font-manrope text-[13.5px] text-[#08182B] placeholder-[#94A3B8] outline-none transition-all focus:border-[#C06B3E] focus:ring-2 focus:ring-[#C06B3E]/15"
               />
+              {suggestedSkills.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="font-manrope text-[11px] font-semibold text-[#64748B]">
+                    Suggested:
+                  </span>
+                  {suggestedSkills.map((skill) => {
+                    const currentSkills = skillsRequired
+                      .split(',')
+                      .map((s) => s.trim().toLowerCase())
+                      .filter(Boolean)
+                    const isAdded = currentSkills.includes(skill.toLowerCase())
+                    return (
+                      <button
+                        key={skill}
+                        type="button"
+                        onClick={() => {
+                          if (isAdded) return
+                          setSkillsRequired((prev) => {
+                            const trimmed = prev.trim()
+                            if (!trimmed) return skill
+                            return `${trimmed}, ${skill}`
+                          })
+                        }}
+                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-manrope text-[11px] transition-all ${
+                          isAdded
+                            ? 'bg-[#E2E8F0] text-[#94A3B8] cursor-default'
+                            : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0] hover:text-[#08182B] cursor-pointer'
+                        }`}
+                      >
+                        <span>{skill}</span>
+                        {isAdded ? <Check size={10} /> : <span className="text-[#C06B3E] font-bold">+</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Field 6: Attachments Upload Area */}

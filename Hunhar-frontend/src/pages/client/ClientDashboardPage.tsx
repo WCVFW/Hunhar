@@ -120,15 +120,15 @@ export default function ClientDashboardPage(): React.JSX.Element {
   return (
     <div className="w-full font-manrope">
       {/* Outer White Card Container matching Hunhar Design System */}
-      <div className="w-full rounded-[24px] bg-[#FFFFFF] p-5 sm:p-8 lg:p-9 shadow-sm">
+      <div className="w-full rounded-[24px] bg-[#FFFFFF] p-5 sm:p-8 lg:p-9 2xl:p-10 shadow-sm">
         {error && <div className="mb-4 rounded-[12px] border border-red-200 bg-red-50 p-3 text-[13px] font-semibold text-red-700">{error}</div>}
         {/* 1. Header Welcome Bar & Create Project CTA */}
         <div className="flex flex-col justify-between gap-4 border-b border-[#F5F2ED] pb-6 sm:flex-row sm:items-center">
           <div>
-            <h1 className="font-manrope text-[24px] sm:text-[28px] font-extrabold text-[#C06B3E]">
+            <h1 className="font-manrope text-[24px] sm:text-[28px] 2xl:text-[32px] font-extrabold text-[#C06B3E]">
               {greeting()}{clientName ? `, ${clientName.split(' ')[0]}` : ''}
             </h1>
-            <p className="mt-1 font-manrope text-[13px] text-[#7A7065]">
+            <p className="mt-1 font-manrope text-[13px] 2xl:text-[14px] text-[#7A7065]">
               Here's what's happening with your projects on hunhar.in today.
             </p>
           </div>
@@ -150,7 +150,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
         </div>
 
         {/* 2. Top Row: Project Overview (Left) + Project Tracking (Right) */}
-        <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="mt-7 grid grid-cols-1 gap-6 lg:grid-cols-12 2xl:gap-8">
           {/* Left: Project Overview Card (lg:col-span-6) */}
           <div className="flex flex-col justify-between rounded-[22px] border border-[#F2ECE6] bg-white p-6 lg:col-span-6 shadow-xs">
             <div>

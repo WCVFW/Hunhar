@@ -525,7 +525,7 @@ export default function CalendarPage(): React.JSX.Element {
                       className="group flex items-center justify-center py-0.5"
                     >
                       <span
-                        className={`flex aspect-square w-full max-w-[44px] flex-col items-center justify-center rounded-[10px] transition-all ${
+                        className={`flex aspect-square w-full max-w-[44px] sm:max-w-[50px] 2xl:max-w-[62px] flex-col items-center justify-center rounded-[10px] transition-all ${
                           isToday
                             ? 'bg-[#EEF2FF] font-bold text-[#4F46E5] ring-2 ring-[#4F46E5]/25'
                             : isSelected

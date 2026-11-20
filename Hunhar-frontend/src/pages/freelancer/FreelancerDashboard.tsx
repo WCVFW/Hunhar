@@ -293,7 +293,7 @@ export default function FreelancerDashboard(): React.JSX.Element {
         </section>
 
         {/* 3. ROW: QUOTE BANNER + TO DO LIST + 4 STAT CARDS */}
-        <section className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <section className="grid grid-cols-1 gap-5 lg:grid-cols-12 2xl:gap-6">
           {/* Quote Card (lg:col-span-4) - Matched to UI Design */}
           <div className="relative flex min-h-[225px] flex-col justify-between overflow-hidden rounded-[20px] border border-[#DECFBE] bg-[#EFE5DB] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.02)] lg:col-span-4">
             {/* Subtle warm circle backdrop behind Luna (as seen in UI design 1) */}
@@ -489,7 +489,7 @@ export default function FreelancerDashboard(): React.JSX.Element {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 2xl:gap-6">
               {projects.map((project) => (
                 <div
                   key={project.id}

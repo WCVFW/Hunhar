@@ -27,6 +27,8 @@ import {
 } from '../../services/api'
 import { formatDate, formatINR, initials } from '../../services/format'
 import { getCharacterAvatar } from '../../services/characterAvatars'
+import KycVerificationModal from '../../components/kyc/KycVerificationModal'
+import { getKycState, calculateKycPercentage } from '../../services/kycState'
 
 const PORTFOLIO_COLORS = ['bg-[#EEF2FF]', 'bg-[#ECFDF5]', 'bg-[#FFFBEB]', 'bg-[#FFF1F2]', 'bg-[#F0F9FF]', 'bg-[#FDF4FF]']
 
@@ -95,6 +97,17 @@ export default function FreelancerProfilePage(): React.JSX.Element {
   const [savingItem, setSavingItem] = useState(false)
   const [itemError, setItemError] = useState('')
   const itemImageRef = useRef<HTMLInputElement>(null)
+  const [kycModalOpen, setKycModalOpen] = useState(false)
+  const [kycPercentage, setKycPercentage] = useState(calculateKycPercentage(getKycState()))
+
+  useEffect(() => {
+    const handleKycUpdate = (e: any) => {
+      const state = e.detail || getKycState()
+      setKycPercentage(calculateKycPercentage(state))
+    }
+    window.addEventListener('hunhar_kyc_updated', handleKycUpdate)
+    return () => window.removeEventListener('hunhar_kyc_updated', handleKycUpdate)
+  }, [])
 
   useEffect(() => {
     profileApi
@@ -410,17 +423,22 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                   <>
                     <div className="flex flex-wrap items-center gap-2.5">
                       <h1 className="font-manrope text-[24px] sm:text-[26px] font-bold text-[#08182B]">{profile.fullName}</h1>
-                      {verified ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-[#86EFAC] bg-[#F0FDF4] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#16A34A]">
-                          <CheckCircle2 size={13} /> KYC Verified
-                        </span>
-                      ) : (
-                        <Link
-                          to="/freelancer/settings"
-                          className="inline-flex items-center gap-1 rounded-full border border-[#FCD34D] bg-[#FFFBEB] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#B45309] no-underline"
+                      {verified || kycPercentage === 100 ? (
+                        <button
+                          type="button"
+                          onClick={() => setKycModalOpen(true)}
+                          className="inline-flex items-center gap-1 rounded-full border border-[#86EFAC] bg-[#F0FDF4] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#16A34A] hover:bg-[#DCFCE7] transition-colors cursor-pointer"
                         >
-                          <AlertCircle size={13} /> {profile.kycStatus === 'PENDING_REVIEW' ? 'KYC under review' : 'Not verified'}
-                        </Link>
+                          <CheckCircle2 size={13} /> KYC Verified
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setKycModalOpen(true)}
+                          className="inline-flex items-center gap-1 rounded-full border border-[#FCD34D] bg-[#FFFBEB] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#B45309] hover:bg-[#FEF3C7] transition-colors cursor-pointer"
+                        >
+                          <AlertCircle size={13} /> {profile.kycStatus === 'PENDING_REVIEW' ? 'KYC under review' : `KYC ${kycPercentage}% (Verify)`}
+                        </button>
                       )}
                     </div>
 
@@ -654,12 +672,13 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                       </li>
                     ))}
                   </ul>
-                  <Link
-                    to="/freelancer/settings"
-                    className="mt-4 flex h-10 w-full items-center justify-center rounded-full bg-[#C06B3E] font-manrope text-[13px] font-bold text-white no-underline shadow-xs transition-all hover:bg-[#A95A30]"
+                  <button
+                    type="button"
+                    onClick={() => setKycModalOpen(true)}
+                    className="mt-4 flex h-10 w-full items-center justify-center rounded-full bg-[#C06B3E] font-manrope text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#A95A30] cursor-pointer"
                   >
-                    Complete Profile
-                  </Link>
+                    Complete Profile & KYC ({kycPercentage}%)
+                  </button>
                 </>
               ) : (
                 <p className="mt-3 font-manrope text-[12px] font-semibold text-[#16A34A]">Your profile is complete. Great job!</p>
@@ -831,6 +850,15 @@ export default function FreelancerProfilePage(): React.JSX.Element {
           }}
         />
       )}
+
+      {/* KYC Verification Modal */}
+      <KycVerificationModal
+        isOpen={kycModalOpen}
+        onClose={() => setKycModalOpen(false)}
+        onVerificationComplete={() => {
+          setKycPercentage(100)
+        }}
+      />
     </div>
   )
 }

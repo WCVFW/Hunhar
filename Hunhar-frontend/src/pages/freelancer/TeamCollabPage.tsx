@@ -231,7 +231,7 @@ export default function TeamCollabPage(): React.JSX.Element {
                 {debounced ? 'No freelancers match your search.' : 'No other freelancers yet.'}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3 2xl:gap-6">
                 {freelancers.map((f) => {
                   const rating = ratingLabel(f)
                   return (
