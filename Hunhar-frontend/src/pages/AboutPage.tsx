@@ -281,9 +281,9 @@ export default function AboutPage(): React.JSX.Element {
 
       <main className="flex-1 w-full select-text">
         {/* HERO SECTION C */}
-        <div className="p-3 sm:p-4 lg:p-5 bg-[#0A1B37]">
-          <section className="relative rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-[#ffffff] text-navy overflow-hidden pt-24 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-20 px-6 sm:px-10 lg:px-14 bg-[radial-gradient(rgba(10,27,55,0.12)_1.1px,transparent_1.2px)] [background-size:40px_40px] select-text">
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="p-3 sm:p-4 lg:p-5 2xl:p-6 bg-[#0A1B37] 2xl:min-h-screen 2xl:h-screen flex flex-col justify-center">
+          <section className="relative flex-1 flex flex-col justify-center rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-[#ffffff] text-navy overflow-hidden pt-24 pb-12 sm:pt-28 sm:pb-16 lg:pt-32 lg:pb-20 2xl:pt-28 2xl:pb-20 px-6 sm:px-10 lg:px-14 2xl:px-20 bg-[radial-gradient(rgba(10,27,55,0.12)_1.1px,transparent_1.2px)] [background-size:40px_40px] select-text">
+            <div className="max-w-7xl 2xl:max-w-[110rem] mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 2xl:gap-16 items-center">
               {/* Left Column: Heading, Subhead, CTA */}
               <div className="flex flex-col items-start lg:col-span-6 z-10 select-text">
                 <span className="inline-block px-4 py-1.5 rounded-full bg-white text-terracotta border border-terracotta/40 font-bold text-xs sm:text-sm tracking-wide shadow-sm select-text">
@@ -320,7 +320,7 @@ export default function AboutPage(): React.JSX.Element {
                 {/* 3 Student Arch Cards */}
                 <div className="grid grid-cols-3 gap-3 sm:gap-4 items-end pt-8 select-text">
                   {/* Meera */}
-                  <figure className="relative rounded-t-[4rem] sm:rounded-t-[5rem] overflow-hidden bg-[#E2D6C5] shadow-md h-[240px] sm:h-[310px] flex flex-col justify-end group select-text">
+                  <figure className="relative rounded-t-[4rem] sm:rounded-t-[5rem] overflow-hidden bg-[#E2D6C5] shadow-md h-[240px] sm:h-[310px] 2xl:h-[390px] flex flex-col justify-end group select-text">
                     <img
                       src={meeraImg}
                       alt="Meera S., Illustrator"
@@ -333,7 +333,7 @@ export default function AboutPage(): React.JSX.Element {
                   </figure>
 
                   {/* Vikash Kumar (Center taller arch) */}
-                  <figure className="relative rounded-t-[5rem] sm:rounded-t-[6rem] overflow-hidden bg-[#D8C7B0] shadow-lg h-[290px] sm:h-[370px] flex flex-col justify-end group select-text">
+                  <figure className="relative rounded-t-[5rem] sm:rounded-t-[6rem] overflow-hidden bg-[#D8C7B0] shadow-lg h-[290px] sm:h-[370px] 2xl:h-[450px] flex flex-col justify-end group select-text">
                     <img
                       src={vikashImg}
                       alt="Vikash Kumar, App developer"
@@ -346,7 +346,7 @@ export default function AboutPage(): React.JSX.Element {
                   </figure>
 
                   {/* Rihana */}
-                  <figure className="relative rounded-t-[4rem] sm:rounded-t-[5rem] overflow-hidden bg-[#CFBBA1] shadow-md h-[260px] sm:h-[330px] flex flex-col justify-end group select-text">
+                  <figure className="relative rounded-t-[4rem] sm:rounded-t-[5rem] overflow-hidden bg-[#CFBBA1] shadow-md h-[260px] sm:h-[330px] 2xl:h-[410px] flex flex-col justify-end group select-text">
                     <img
                       src={rihanaImg}
                       alt="Rihana, Copywriter"

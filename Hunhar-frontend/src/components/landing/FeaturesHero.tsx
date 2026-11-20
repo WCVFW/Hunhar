@@ -25,16 +25,16 @@ export default function FeaturesHero({ onOpenSignup }: FeaturesHeroProps): React
   }
 
   return (
-    <div className="p-2 sm:p-4 lg:p-5 bg-[#0A1B37]">
+    <div className="p-2 sm:p-4 lg:p-5 2xl:p-6 bg-[#0A1B37] 2xl:min-h-screen 2xl:h-screen flex flex-col justify-center">
       <section
         id="features"
-        className="relative w-full overflow-hidden rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white pt-24 sm:pt-28 lg:pt-32 pb-16 sm:pb-20 lg:pb-24"
+        className="relative w-full overflow-hidden rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white pt-24 sm:pt-28 lg:pt-32 pb-16 sm:pb-20 lg:pb-24 2xl:pt-28 2xl:pb-20 flex-1 flex flex-col justify-center"
         aria-label="Features Section"
       >
         {/* Interactive Dot Mesh Grid with Mouse Repulsion & Ripple Effect */}
         <InteractiveDotGrid />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-8">
+        <div className="relative z-10 max-w-7xl 2xl:max-w-[110rem] mx-auto px-6 sm:px-8 2xl:px-12 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* =========================================================
               LEFT COLUMN: Header, Description, CTAs, Stats

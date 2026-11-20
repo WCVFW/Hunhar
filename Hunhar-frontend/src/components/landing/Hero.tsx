@@ -87,14 +87,14 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
   }
 
   return (
-    <section className="relative overflow-hidden bg-[#0A1B37] p-2 sm:p-4 lg:p-5">
+    <section className="relative overflow-hidden bg-[#0A1B37] p-2 sm:p-4 lg:p-5 2xl:p-6 2xl:min-h-screen 2xl:h-screen flex flex-col justify-center">
       {/* Cream rounded card with faint dots (replaces ::before) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-3 sm:inset-4 lg:inset-5 rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] z-0"
+        className="pointer-events-none absolute inset-3 sm:inset-4 lg:inset-5 2xl:inset-6 rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] z-0"
       />
 
-      <div className="relative z-[1] max-w-[90rem] 2xl:max-w-[110rem] mx-auto pt-24 pb-12 px-4 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20 2xl:px-12">
+      <div className="relative z-[1] w-full max-w-[90rem] 2xl:max-w-[110rem] mx-auto pt-24 pb-12 px-4 sm:pt-24 sm:pb-16 sm:px-6 lg:pt-[6.5rem] lg:pb-20 2xl:pt-28 2xl:pb-20 2xl:px-12 flex-1 flex flex-col justify-center">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
 
           {/* Left Column: Headline, Subheadline, CTA */}
@@ -160,7 +160,7 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 sm:w-16 bg-gradient-to-l from-white/95 via-white/50 to-transparent z-40" />
 
             {/* Carousel Stage (compact height) */}
-            <div className="relative w-full h-[470px] sm:h-[490px] lg:h-[500px] flex items-center justify-center">
+            <div className="relative w-full h-[470px] sm:h-[490px] lg:h-[500px] 2xl:h-[580px] flex items-center justify-center">
               {visibleOffsets.map((d) => {
                 const virtualIndex = activeIndex + d
                 const cardIndex = ((virtualIndex % cards.length) + cards.length) % cards.length
@@ -173,11 +173,11 @@ export default function Hero({ onOpenSignup }: HeroProps): React.JSX.Element {
                       if (d === -1) setActiveIndex((prev) => prev - 1)
                       if (d === 1) setActiveIndex((prev) => prev + 1)
                     }}
-                    className={`absolute top-1/2 left-1/2 w-[260px] sm:w-[280px] lg:w-[300px] transition-all duration-800 [transition-timing-function:cubic-bezier(0.25,1,0.5,1)] ${getCardClasses(d)}`}
+                    className={`absolute top-1/2 left-1/2 w-[260px] sm:w-[280px] lg:w-[300px] 2xl:w-[340px] transition-all duration-800 [transition-timing-function:cubic-bezier(0.25,1,0.5,1)] ${getCardClasses(d)}`}
                   >
                     <div className="bg-white border border-[#E5E5E5]/60 rounded-[20px] p-3 shadow-[0_20px_25px_-5px_rgba(23,23,23,0.08),0_8px_10px_-6px_rgba(23,23,23,0.08)]">
                       {/* Photo with rounded border */}
-                      <div className="w-full h-52 sm:h-[14.5rem] lg:h-64 rounded-[14px] overflow-hidden border border-[#737373]/45 bg-white mb-3.5">
+                      <div className="w-full h-52 sm:h-[14.5rem] lg:h-64 2xl:h-72 rounded-[14px] overflow-hidden border border-[#737373]/45 bg-white mb-3.5">
                         <img
                           src={card.photo}
                           alt={card.name}
