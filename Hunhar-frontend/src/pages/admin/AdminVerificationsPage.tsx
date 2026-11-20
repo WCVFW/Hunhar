@@ -220,6 +220,48 @@ export default function AdminVerificationsPage(): React.JSX.Element {
                       <p className="text-xs text-[#8E8376]">No document file was attached.</p>
                     </div>
                   )}
+
+                  {/* College ID */}
+                  {selected.collegeIdDocumentUrl && (
+                    <div className="rounded-2xl border border-[#E5DACD] p-3.5 bg-[#FAFAF8] flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-[11px] text-[#8E8376] font-medium">College ID</span>
+                        <p className="text-sm font-bold text-[#08182B] truncate">{selected.collegeIdDocumentName || 'College ID card'}</p>
+                      </div>
+                      <a
+                        href={fileUrl(selected.collegeIdDocumentUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 flex items-center gap-1 text-xs font-bold text-[#C06B3E] hover:underline"
+                      >
+                        Open <ExternalLink size={13} />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Skills + work sample */}
+                  {(selected.selectedSkills?.length || selected.workSampleUrl) && (
+                    <div className="rounded-2xl border border-[#E5DACD] p-3.5 bg-[#FAFAF8]">
+                      <span className="text-[11px] text-[#8E8376] font-medium">Skills to verify</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {(selected.selectedSkills || []).map((s) => (
+                          <span key={s} className="rounded-full bg-white border border-[#E5DACD] px-2.5 py-0.5 text-[11.5px] font-semibold text-[#08182B]">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                      {selected.workSampleUrl && (
+                        <a
+                          href={fileUrl(selected.workSampleUrl)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2.5 flex items-center gap-1 text-xs font-bold text-[#C06B3E] hover:underline"
+                        >
+                          Work sample: {selected.workSampleName || 'Open'} <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

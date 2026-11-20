@@ -30,6 +30,30 @@ public class KycController {
         return ResponseEntity.ok(ApiResponse.ok("KYC submitted for review", kycService.submit(requireUser(currentUser).id(), dto)));
     }
 
+    /** Upload step: Aadhaar card (type=AADHAAR) or college ID card (type=COLLEGE_ID). */
+    @PostMapping("/documents")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> submitDocument(@CurrentUser AuthUser currentUser, @RequestBody DocumentRequest req) {
+        KycService.DocumentStep step;
+        try {
+            step = KycService.DocumentStep.valueOf(String.valueOf(req.type()).toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new com.theunoia.common.exception.BadRequestException("Unknown document type");
+        }
+        return ResponseEntity.ok(ApiResponse.ok("Document submitted for review",
+                kycService.submitDocument(requireUser(currentUser).id(), step, req.documentUrl(), req.documentName())));
+    }
+
+    /** Skills step: skills to verify plus an optional work sample. */
+    @PostMapping("/skills")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> submitSkills(@CurrentUser AuthUser currentUser, @RequestBody SkillsRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Skills submitted for review",
+                kycService.submitSkills(requireUser(currentUser).id(), req.skills(), req.workSampleUrl(), req.workSampleName())));
+    }
+
+    public record DocumentRequest(String type, String documentUrl, String documentName) {}
+
+    public record SkillsRequest(List<String> skills, String workSampleUrl, String workSampleName) {}
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Map<String, Object>>> myStatus(@CurrentUser AuthUser currentUser) {
         return ResponseEntity.ok(ApiResponse.ok(kycService.getStatus(requireUser(currentUser).id())));
