@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   ArrowLeft,
   AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
@@ -75,9 +76,22 @@ export default function BlogAdminPage(): React.JSX.Element {
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editorTab, setEditorTab] = useState<'write' | 'preview' | 'split'>('split');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentImageInputRef = useRef<HTMLInputElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close status dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Fetch posts on mount
   const fetchPosts = async () => {
@@ -596,16 +610,67 @@ export default function BlogAdminPage(): React.JSX.Element {
                       </a>
                     )}
 
-                    <select
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData({ ...formData, status: e.target.value as 'published' | 'draft' })
-                      }
-                      className="text-xs font-bold px-3 py-2 rounded-xl border border-black/15 bg-white text-navy focus:outline-none"
-                    >
-                      <option value="published">🟢 Published</option>
-                      <option value="draft">🟡 Draft</option>
-                    </select>
+                    {/* Custom Status Dropdown */}
+                    <div className="relative" ref={statusDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setStatusDropdownOpen((prev) => !prev)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-black/15 bg-white text-navy text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer shadow-sm select-none"
+                      >
+                        {formData.status === 'published' ? (
+                          <>
+                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 animate-pulse" />
+                            </span>
+                            <span className="text-emerald-700">Published</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                            <span className="text-amber-700">Draft</span>
+                          </>
+                        )}
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {statusDropdownOpen && (
+                        <div className="absolute right-0 mt-1.5 w-36 rounded-xl bg-white border border-black/10 shadow-lg py-1 z-30 font-manrope">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, status: 'published' }));
+                              setStatusDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-left hover:bg-slate-50 transition-colors cursor-pointer ${
+                              formData.status === 'published' ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700'
+                            }`}
+                          >
+                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 animate-pulse" />
+                            </span>
+                            <span>Published</span>
+                            {formData.status === 'published' && <Check className="w-3.5 h-3.5 ml-auto text-emerald-600" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData((prev) => ({ ...prev, status: 'draft' }));
+                              setStatusDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-left hover:bg-slate-50 transition-colors cursor-pointer ${
+                              formData.status === 'draft' ? 'bg-amber-50 text-amber-800' : 'text-slate-700'
+                            }`}
+                          >
+                            <span className="inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                            <span>Draft</span>
+                            {formData.status === 'draft' && <Check className="w-3.5 h-3.5 ml-auto text-amber-600" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       type="submit"
