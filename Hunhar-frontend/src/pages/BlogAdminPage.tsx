@@ -68,6 +68,7 @@ export default function BlogAdminPage(): React.JSX.Element {
   const [tagsInput, setTagsInput] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Freelancing Tips');
   const [customCategory, setCustomCategory] = useState<string>('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
@@ -127,6 +128,7 @@ export default function BlogAdminPage(): React.JSX.Element {
     });
     setSelectedCategory('Freelancing Tips');
     setCustomCategory('');
+    setSlugManuallyEdited(false);
     setTagsInput('Freelance, Hunhar');
     setUploadedImageUrl('');
     setViewMode('edit');
@@ -159,6 +161,7 @@ export default function BlogAdminPage(): React.JSX.Element {
       setSelectedCategory('Others');
       setCustomCategory(post.category || '');
     }
+    setSlugManuallyEdited(true);
     setTagsInput(post.tags.join(', '));
     setUploadedImageUrl('');
     setViewMode('edit');
@@ -225,9 +228,11 @@ export default function BlogAdminPage(): React.JSX.Element {
       const baseTitle = (formData.title || '').replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
       const rawMetaTitle = (formData.metaTitle || '').replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
       const finalMetaTitle = rawMetaTitle ? `${rawMetaTitle} | Hunhar Blog` : `${baseTitle} | Hunhar Blog`;
+      const cleanSlug = (formData.slug || formData.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-')).trim();
 
       const payload = {
         ...formData,
+        slug: cleanSlug,
         category: finalCategory,
         tags: processedTags,
         metaTitle: finalMetaTitle,
@@ -621,40 +626,90 @@ export default function BlogAdminPage(): React.JSX.Element {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                   {/* Left Column */}
                   <div className="lg:col-span-8 space-y-6">
-                    {/* Title */}
-                    <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm">
-                      <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-2 font-manrope">
-                        Article Title *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. How to Hire Skilled Student Freelancers in India"
-                        value={formData.title}
-                        onChange={(e) => {
-                          const newTitle = e.target.value;
-                          setFormData((prev) => ({
-                            ...prev,
-                            title: newTitle,
-                            slug: prev.slug || newTitle.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-'),
-                          }));
-                        }}
-                        className="w-full px-4 py-3 text-lg font-bold text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta font-manrope"
-                      />
+                    {/* Title & SEO Meta Title & Editable Slug */}
+                    <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm space-y-5">
+                      <div>
+                        <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-2 font-manrope">
+                          Article Title *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. How to Hire Skilled Student Freelancers in India"
+                          value={formData.title}
+                          onChange={(e) => {
+                            const newTitle = e.target.value;
+                            setFormData((prev) => ({
+                              ...prev,
+                              title: newTitle,
+                              slug: slugManuallyEdited
+                                ? prev.slug
+                                : newTitle.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-'),
+                            }));
+                          }}
+                          className="w-full px-4 py-3 text-lg font-bold text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta font-manrope"
+                        />
+                      </div>
 
-                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 font-manrope">
-                        <span className="font-semibold text-slate-400">URL:</span>
-                        <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">
-                          https://www.hunhar.in/blog/{formData.slug || 'article-slug'}
-                        </span>
+                      {/* Meta Title for SEO */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5 font-manrope">
+                          <label className="text-xs font-bold text-navy uppercase tracking-wider">
+                            Meta Title (SEO)
+                          </label>
+                          <span
+                            className={`text-[11px] font-semibold ${
+                              (formData.metaTitle?.length || 0) > 60
+                                ? 'text-amber-600'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {formData.metaTitle?.length || 0} / 60 chars (Recommended for Google)
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="e.g. How to Hire Skilled Student Freelancers in India | Hunhar Blog"
+                          value={formData.metaTitle}
+                          onChange={(e) =>
+                            setFormData({ ...formData, metaTitle: e.target.value })
+                          }
+                          className="w-full px-4 py-2.5 text-sm text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta font-manrope"
+                        />
+                      </div>
+
+                      {/* Editable URL Slug */}
+                      <div>
+                        <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-1.5 font-manrope">
+                          Article URL
+                        </label>
+                        <div className="flex items-center rounded-xl border border-black/10 bg-slate-50 overflow-hidden focus-within:border-terracotta focus-within:ring-1 focus-within:ring-terracotta font-manrope">
+                          <span className="px-3.5 py-2.5 text-xs text-slate-500 font-mono select-none bg-slate-100 border-r border-black/10 shrink-0">
+                            https://www.hunhar.in/blog/
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="article-slug"
+                            value={formData.slug}
+                            onChange={(e) => {
+                              setSlugManuallyEdited(true);
+                              const cleanSlug = e.target.value
+                                .toLowerCase()
+                                .replace(/[^\w\s-]/g, '')
+                                .replace(/[\s_]+/g, '-');
+                              setFormData((prev) => ({ ...prev, slug: cleanSlug }));
+                            }}
+                            className="flex-1 px-3.5 py-2.5 text-xs font-mono text-navy bg-transparent focus:outline-none"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Excerpt */}
+                    {/* Meta Description */}
                     <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm">
                       <div className="flex items-center justify-between mb-2 font-manrope">
                         <label className="text-xs font-bold text-navy uppercase tracking-wider">
-                          Excerpt &amp; Meta Description
+                          Meta Description
                         </label>
                         <span
                           className={`text-[11px] font-semibold ${
