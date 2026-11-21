@@ -59,9 +59,9 @@ export default function BlogCard({ post }: BlogCardProps): React.JSX.Element {
         <div className="mt-auto pt-4 border-t border-black/5 flex items-center justify-between font-manrope">
           <div className="flex items-center gap-2.5">
             <img
-              src="/favicon.png"
+              src="/Hunhar_Blog_profile.png"
               alt="Hunhar"
-              className="w-8 h-8 rounded-full object-contain border border-black/10 bg-white p-1"
+              className="w-8 h-8 rounded-full object-cover border border-black/10 bg-white"
             />
             <div className="flex flex-col">
               <span className="text-xs font-bold text-navy">By Hunhar</span>

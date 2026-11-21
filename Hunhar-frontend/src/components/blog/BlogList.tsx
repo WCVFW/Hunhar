@@ -113,9 +113,9 @@ export default function BlogList({ initialPosts }: BlogListProps): React.JSX.Ele
               <div className="flex flex-wrap items-center gap-6 pt-4 border-t border-white/10 w-full font-manrope">
                 <div className="flex items-center gap-3">
                   <img
-                    src="/favicon.png"
+                    src="/Hunhar_Blog_profile.png"
                     alt="Hunhar"
-                    className="w-10 h-10 rounded-full object-contain border-2 border-white/20 bg-white p-1"
+                    className="w-10 h-10 rounded-full object-cover border-2 border-white/20 bg-white"
                   />
                   <div className="flex flex-col">
                     <span className="text-xs sm:text-sm font-bold text-white">

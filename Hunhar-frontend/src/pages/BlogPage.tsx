@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
@@ -32,34 +31,12 @@ export default function BlogPage(): React.JSX.Element {
       <div className="w-full bg-[#0A1B37] text-navy font-manrope selection:bg-terracotta selection:text-white select-text">
         {/* Outer Navy Frame matching Home, About, Features & Contact Hero Sections */}
         <div className="p-2 sm:p-4 lg:p-5 2xl:p-6 bg-[#0A1B37]">
-          <section className="relative w-full overflow-hidden rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] pt-24 sm:pt-28 lg:pt-32 pb-16 sm:pb-20 lg:pb-24">
+          <section className="relative w-full overflow-hidden rounded-3xl sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white bg-[radial-gradient(circle,#E8DFC9_1.1px,transparent_1.1px)] [background-size:32px_32px] pt-20 sm:pt-24 lg:pt-28 pb-16 sm:pb-20 lg:pb-24">
             {/* Subtle Ambient Decorative Circles */}
             <div
               className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] sm:w-[700px] h-[550px] sm:h-[700px] rounded-full bg-gradient-to-tr from-[#E2B48D]/15 via-[#FBE7D4]/30 to-transparent blur-3xl pointer-events-none -z-0"
               aria-hidden="true"
             />
-
-            {/* Hero Header */}
-            <div className="relative z-10 pt-2 pb-8 sm:pb-12 text-center max-w-3xl mx-auto px-6">
-              {/* Top Pill Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FAF0E8] border border-[#F1D1BD] text-[#C06B3E] font-manrope text-xs sm:text-sm font-bold mb-5 shadow-[0_1px_2px_0_rgb(0_0_0/0.05)]">
-                <Sparkles className="w-4 h-4 text-[#C06B3E]" />
-                <span>✦ HUNHAR INSIGHTS &amp; GUIDES</span>
-              </div>
-
-              {/* Short & Bold Makira Headline */}
-              <h1 className="font-makira font-medium text-[2.15rem] min-[380px]:text-[2.4rem] sm:text-[3.25rem] md:text-[3.75rem] lg:text-[4.25rem] xl:text-[4.75rem] text-[#0A1B37] leading-[0.98] sm:leading-[0.96] tracking-[-0.025em] uppercase m-0 max-w-3xl mx-auto select-text">
-                Stories &amp; Insights{' '}
-                <span className="block mt-2 bg-gradient-to-r from-[#C06B3E] via-[#D8783B] to-[#E39D52] bg-clip-text text-transparent">
-                  For Creatives.
-                </span>
-              </h1>
-
-              {/* Short Manrope Subheading */}
-              <p className="font-manrope text-[0.9375rem] sm:text-base xl:text-[1.05rem] leading-[1.6] font-medium text-[#0A1B37]/85 max-w-xl mx-auto mt-5 mb-6 select-text">
-                Practical guides, founder blueprints, and playbooks for modern freelancers and growing teams.
-              </p>
-            </div>
 
             {/* Main Content Area */}
             <div className="relative z-10 max-w-7xl 2xl:max-w-[110rem] mx-auto px-6 sm:px-8 2xl:px-12">

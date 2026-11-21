@@ -19,7 +19,7 @@ function withUrls(p: BlogPost): BlogPost {
     author: {
       name: 'Hunhar',
       role: 'SEO Team',
-      avatar: '/favicon.png',
+      avatar: '/Hunhar_Blog_profile.png',
     },
   }
 }

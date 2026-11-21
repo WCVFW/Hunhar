@@ -32,7 +32,7 @@ const DEFAULT_AUTHORS = [
   {
     name: 'Hunhar',
     role: 'SEO Team',
-    avatar: '/favicon.png',
+    avatar: '/Hunhar_Blog_profile.png',
   },
 ];
 
@@ -1016,9 +1016,9 @@ export default function BlogAdminPage(): React.JSX.Element {
                       </label>
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-black/5 font-manrope">
                         <img
-                          src="/favicon.png"
+                          src="/Hunhar_Blog_profile.png"
                           alt="Hunhar"
-                          className="w-10 h-10 rounded-full object-contain border border-black/10 bg-white p-1"
+                          className="w-10 h-10 rounded-full object-cover border border-black/10 bg-white"
                         />
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-navy">By Hunhar</span>

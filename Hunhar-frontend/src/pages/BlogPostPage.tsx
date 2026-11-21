@@ -146,9 +146,9 @@ export default function BlogPostPage(): React.JSX.Element {
               <div className="flex flex-wrap items-center justify-between gap-4 py-4 border-y border-black/[0.08] font-manrope">
                 <div className="flex items-center gap-3">
                   <img
-                    src="/favicon.png"
+                    src="/Hunhar_Blog_profile.png"
                     alt="Hunhar"
-                    className="w-12 h-12 rounded-full object-contain border border-black/10 bg-white p-1.5"
+                    className="w-12 h-12 rounded-full object-cover border border-black/10 bg-white"
                   />
                   <div>
                     <div className="font-bold text-sm text-navy">By Hunhar</div>
@@ -208,9 +208,9 @@ export default function BlogPostPage(): React.JSX.Element {
               {/* Author Bio Box */}
               <div className="mt-12 p-6 sm:p-8 rounded-2xl bg-[#F8FAFC] border border-slate-200/60 flex flex-col sm:flex-row items-center sm:items-start gap-5 font-manrope">
                 <img
-                  src="/favicon.png"
+                  src="/Hunhar_Blog_profile.png"
                   alt="Hunhar"
-                  className="w-16 h-16 rounded-full object-contain border-2 border-white shadow-sm bg-white p-2"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm bg-white"
                 />
                 <div className="flex-1 text-center sm:text-left">
                   <h4 className="font-makira uppercase font-medium text-navy text-base mb-1">Written by Hunhar</h4>
