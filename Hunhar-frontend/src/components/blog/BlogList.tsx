@@ -44,13 +44,8 @@ export default function BlogList({ initialPosts }: BlogListProps): React.JSX.Ele
     return initialPosts.find((p) => p.featured) || initialPosts[0] || null;
   }, [initialPosts, selectedCategory, searchQuery]);
 
-  // Regular grid posts (exclude the featured post from the grid when featured is showing)
-  const gridPosts = useMemo(() => {
-    if (featuredPost && selectedCategory === 'All' && !searchQuery) {
-      return filteredPosts.filter((p) => p.id !== featuredPost.id);
-    }
-    return filteredPosts;
-  }, [filteredPosts, featuredPost, selectedCategory, searchQuery]);
+  // Regular grid posts (keep all filtered posts in the grid so featured post is also visible below)
+  const gridPosts = filteredPosts;
 
   return (
     <div className="w-full">

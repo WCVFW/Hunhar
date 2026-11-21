@@ -53,7 +53,7 @@ export function renderArticleContent(content: string) {
         const url = safeUrl(href);
         if (!url) return label;
         const external = /^https?:/i.test(url);
-        return `<a href="${url}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="text-terracotta underline hover:text-[#AA572D]">${label}</a>`;
+        return `<span class="relative inline-block group"><a href="${url}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} title="${url}" class="text-terracotta underline font-medium hover:text-[#AA572D] transition-colors cursor-pointer">${label}</a><span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono font-normal text-white bg-[#0A1B37] rounded-lg shadow-xl z-50 whitespace-nowrap"><span class="text-terracotta">🔗</span> ${url}</span></span>`;
       });
   };
 

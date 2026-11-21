@@ -15,11 +15,99 @@ import {
   ArrowLeft,
   AlertCircle,
   ChevronDown,
+  X,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { blogApi, fileUrl, filesApi, getSessionRole, tokenStorage } from '../services/api';
+import { renderArticleContent } from '../components/blog/articleContent';
+
+/** Converts rich HTML copied from Google Docs, Word, or web pages into clean Markdown */
+function htmlToMarkdown(html: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+    const isBoldStyle = el.style.fontWeight === 'bold' || parseInt(el.style.fontWeight, 10) >= 600;
+
+    let childrenText = '';
+    el.childNodes.forEach((child) => {
+      childrenText += walk(child);
+    });
+
+    switch (tag) {
+      case 'h1':
+      case 'h2': {
+        const clean = childrenText.trim();
+        return clean ? `\n\n## ${clean}\n\n` : '';
+      }
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6': {
+        const clean = childrenText.trim();
+        return clean ? `\n\n### ${clean}\n\n` : '';
+      }
+      case 'p': {
+        const clean = childrenText.trim();
+        return clean ? `\n\n${clean}\n\n` : '';
+      }
+      case 'br':
+        return '\n';
+      case 'strong':
+      case 'b': {
+        const clean = childrenText.trim();
+        return clean ? `**${clean}**` : '';
+      }
+      case 'a': {
+        const href = el.getAttribute('href') || '';
+        const clean = childrenText.trim();
+        if (!href || !clean) return clean;
+        return `[${clean}](${href})`;
+      }
+      case 'li': {
+        const clean = childrenText.trim();
+        if (!clean) return '';
+        const parentTag = el.parentElement?.tagName.toLowerCase();
+        if (parentTag === 'ol') {
+          return `\n1. ${clean}`;
+        }
+        return `\n- ${clean}`;
+      }
+      case 'ul':
+      case 'ol':
+        return `\n${childrenText}\n`;
+      case 'blockquote': {
+        const clean = childrenText.trim();
+        return clean ? `\n\n> ${clean}\n\n` : '';
+      }
+      case 'img': {
+        const src = el.getAttribute('src') || '';
+        const alt = el.getAttribute('alt') || 'Image';
+        return src ? `\n\n![${alt}](${src})\n\n` : '';
+      }
+      default: {
+        if (isBoldStyle && childrenText.trim()) {
+          return `**${childrenText.trim()}**`;
+        }
+        return childrenText;
+      }
+    }
+  }
+
+  const rawMd = walk(doc.body);
+  return rawMd.replace(/\n{3,}/g, '\n\n').trim();
+}
 
 const CATEGORIES = [
   'Freelancing Tips',
@@ -77,10 +165,14 @@ export default function BlogAdminPage(): React.JSX.Element {
   const [editorTab, setEditorTab] = useState<'write' | 'preview' | 'split'>('split');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
+  const [linkModalOpen, setLinkModalOpen] = useState<boolean>(false);
+  const [linkText, setLinkText] = useState<string>('');
+  const [linkUrl, setLinkUrl] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentImageInputRef = useRef<HTMLInputElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Close status dropdown on click outside
   useEffect(() => {
@@ -284,6 +376,87 @@ export default function BlogAdminPage(): React.JSX.Element {
       ...prev,
       content: (prev.content || '') + `\n${prefix}Text${suffix}\n`,
     }));
+  };
+
+  // Handle rich text paste from Google Docs, Word, or web
+  const handleContentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    if (!html) return;
+
+    if (/<(h[1-6]|p|a|ul|ol|li|blockquote|strong|b)[\s>]/i.test(html)) {
+      e.preventDefault();
+      const markdown = htmlToMarkdown(html);
+      const textarea = e.currentTarget;
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const current = formData.content || '';
+      const updated = current.substring(0, start) + markdown + current.substring(end);
+
+      setFormData((prev) => ({ ...prev, content: updated }));
+
+      setTimeout(() => {
+        if (contentTextareaRef.current) {
+          const nextCursor = start + markdown.length;
+          contentTextareaRef.current.selectionStart = nextCursor;
+          contentTextareaRef.current.selectionEnd = nextCursor;
+          contentTextareaRef.current.focus();
+        }
+      }, 0);
+
+      showNotification('success', 'Rich text formatted from Google Docs into clean Markdown!');
+    }
+  };
+
+  // Open Link Modal with selected text
+  const handleOpenLinkModal = () => {
+    const textarea = contentTextareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const selected = textarea.value.substring(start, end).trim();
+      setLinkText(selected);
+    } else {
+      setLinkText('');
+    }
+    setLinkUrl('');
+    setLinkModalOpen(true);
+  };
+
+  // Insert Link from Modal
+  const handleInsertLink = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!linkText.trim() || !linkUrl.trim()) {
+      showNotification('error', 'Please enter both the Keyword/Text and the URL.');
+      return;
+    }
+
+    const cleanUrl = linkUrl.trim().startsWith('http') || linkUrl.trim().startsWith('/')
+      ? linkUrl.trim()
+      : `https://${linkUrl.trim()}`;
+
+    const mdLink = `[${linkText.trim()}](${cleanUrl})`;
+
+    const textarea = contentTextareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const current = formData.content || '';
+      const updated = current.substring(0, start) + mdLink + current.substring(end);
+      setFormData((prev) => ({ ...prev, content: updated }));
+      setTimeout(() => {
+        textarea.focus();
+        const pos = start + mdLink.length;
+        textarea.selectionStart = pos;
+        textarea.selectionEnd = pos;
+      }, 0);
+    } else {
+      setFormData((prev) => ({ ...prev, content: (prev.content || '') + ' ' + mdLink }));
+    }
+
+    setLinkModalOpen(false);
+    setLinkText('');
+    setLinkUrl('');
+    showNotification('success', 'Link inserted!');
   };
 
   // Filtered posts for list
@@ -888,7 +1061,7 @@ export default function BlogAdminPage(): React.JSX.Element {
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('[Link Text](', ')')}
+                          onClick={handleOpenLinkModal}
                           className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer flex items-center gap-1"
                         >
                           <LinkIcon className="w-3 h-3" />
@@ -943,6 +1116,8 @@ export default function BlogAdminPage(): React.JSX.Element {
                         {(editorTab === 'write' || editorTab === 'split') && (
                           <div>
                             <textarea
+                              ref={contentTextareaRef}
+                              onPaste={handleContentPaste}
                               rows={18}
                               required
                               placeholder="Write your article in markdown. Use ## for headings, - for bullet points, > for quotes..."
@@ -965,8 +1140,8 @@ export default function BlogAdminPage(): React.JSX.Element {
                             {/* Preview Excerpt in Manrope */}
                             <p className="font-manrope text-slate-600 text-sm font-normal not-italic">{formData.excerpt}</p>
                             <hr className="my-3 border-black/5" />
-                            <div className="text-sm space-y-2 text-slate-800 whitespace-pre-wrap font-manrope">
-                              {formData.content}
+                            <div className="text-sm space-y-2 text-slate-800 font-manrope [&_blockquote]:not-italic [&_blockquote]:font-normal [&_em]:not-italic [&_em]:font-normal [&_i]:not-italic">
+                              {renderArticleContent(formData.content || '')}
                             </div>
                           </div>
                         )}
@@ -1203,6 +1378,81 @@ export default function BlogAdminPage(): React.JSX.Element {
           </div>
         </div>
       </div>
+      {/* Insert Link / Keyword Modal */}
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-black/10 font-manrope">
+            <div className="flex items-center justify-between pb-3 border-b border-black/5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-terracotta/10 text-terracotta flex items-center justify-center">
+                  <LinkIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-navy text-sm font-manrope">Add Link / Keyword</h3>
+                  <p className="text-[11px] text-slate-500">Insert link with hover preview in article</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleInsertLink} className="space-y-4 pt-4">
+              <div>
+                <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-1.5 font-manrope">
+                  Text / Focus Keyword *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Hunhar Freelancer Portal"
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-black/10 rounded-xl focus:outline-none focus:border-terracotta text-navy font-manrope"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-500 mt-1">This is the visible text or keyword readers will see and click on.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-1.5 font-manrope">
+                  Target URL *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. https://www.hunhar.in or /features"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-black/10 rounded-xl focus:outline-none focus:border-terracotta text-navy font-mono"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">When readers hover over this keyword, this URL will appear in a tooltip.</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-black/5">
+                <button
+                  type="button"
+                  onClick={() => setLinkModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-terracotta hover:bg-[#AA572D] text-white shadow-sm cursor-pointer transition-colors flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Insert Link</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       </main>
       <Footer />
     </div>
