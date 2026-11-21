@@ -146,13 +146,13 @@ export default function BlogPostPage(): React.JSX.Element {
               <div className="flex flex-wrap items-center justify-between gap-4 py-4 border-y border-black/[0.08] font-manrope">
                 <div className="flex items-center gap-3">
                   <img
-                    src={post.author.avatar}
-                    alt={post.author.name}
-                    className="w-12 h-12 rounded-full object-cover border border-black/10"
+                    src="/favicon.png"
+                    alt="Hunhar"
+                    className="w-12 h-12 rounded-full object-contain border border-black/10 bg-white p-1.5"
                   />
                   <div>
-                    <div className="font-bold text-sm text-navy">{post.author.name}</div>
-                    <div className="text-xs text-slate-500">{post.author.role}</div>
+                    <div className="font-bold text-sm text-navy">By Hunhar</div>
+                    <div className="text-xs text-slate-500">SEO Team</div>
                   </div>
                 </div>
 
@@ -206,13 +206,13 @@ export default function BlogPostPage(): React.JSX.Element {
               {/* Author Bio Box */}
               <div className="mt-12 p-6 sm:p-8 rounded-2xl bg-[#F8FAFC] border border-slate-200/60 flex flex-col sm:flex-row items-center sm:items-start gap-5 font-manrope">
                 <img
-                  src={post.author.avatar}
-                  alt={post.author.name}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm"
+                  src="/favicon.png"
+                  alt="Hunhar"
+                  className="w-16 h-16 rounded-full object-contain border-2 border-white shadow-sm bg-white p-2"
                 />
                 <div className="flex-1 text-center sm:text-left">
-                  <h4 className="font-makira uppercase font-medium text-navy text-base mb-1">Written by {post.author.name}</h4>
-                  <p className="text-xs font-medium text-terracotta mb-2">{post.author.role}</p>
+                  <h4 className="font-makira uppercase font-medium text-navy text-base mb-1">Written by Hunhar</h4>
+                  <p className="text-xs font-medium text-terracotta mb-2">SEO Team</p>
                   <p className="text-sm text-slate-600 leading-relaxed font-manrope">
                     Contributing actionable strategies, guides, and hiring tips for the next generation of creative builders on Hunhar.
                   </p>

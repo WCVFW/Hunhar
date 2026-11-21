@@ -7,15 +7,22 @@ import { blogApi, fileUrl } from './api'
 
 const bundled = (rawPosts as BlogPost[])
   .filter((p) => p.status === 'published')
+  .map(withUrls)
   .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
 
 /** Uploaded images are stored as /api/v1/projects/files/... paths: make them full URLs. */
-const withUrls = (p: BlogPost): BlogPost => ({
-  ...p,
-  tags: p.tags || [],
-  coverImage: fileUrl(p.coverImage) || p.coverImage,
-  author: { ...p.author, avatar: fileUrl(p.author?.avatar) || p.author?.avatar || '' },
-})
+function withUrls(p: BlogPost): BlogPost {
+  return {
+    ...p,
+    tags: p.tags || [],
+    coverImage: fileUrl(p.coverImage) || p.coverImage,
+    author: {
+      name: 'Hunhar',
+      role: 'SEO Team',
+      avatar: '/favicon.png',
+    },
+  }
+}
 
 let cache: BlogPost[] | null = null
 

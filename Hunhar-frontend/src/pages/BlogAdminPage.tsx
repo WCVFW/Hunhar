@@ -30,24 +30,9 @@ const CATEGORIES = [
 
 const DEFAULT_AUTHORS = [
   {
-    name: 'Hunhar Editorial Team',
-    role: 'Platform Growth',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-  },
-  {
-    name: 'Arun Kumar',
-    role: 'Community Lead',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-  },
-  {
-    name: 'Meera S.',
-    role: 'Lead UI Designer',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-  },
-  {
-    name: 'Hunhar Safety Team',
-    role: 'Trust & Security',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+    name: 'Hunhar',
+    role: 'SEO Team',
+    avatar: '/favicon.png',
   },
 ];
 
@@ -81,6 +66,8 @@ export default function BlogAdminPage(): React.JSX.Element {
   });
 
   const [tagsInput, setTagsInput] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Freelancing Tips');
+  const [customCategory, setCustomCategory] = useState<string>('');
   const [saving, setSaving] = useState<boolean>(false);
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
@@ -138,6 +125,8 @@ export default function BlogAdminPage(): React.JSX.Element {
       focusKeyword: '',
       featured: false,
     });
+    setSelectedCategory('Freelancing Tips');
+    setCustomCategory('');
     setTagsInput('Freelance, Hunhar');
     setUploadedImageUrl('');
     setViewMode('edit');
@@ -162,6 +151,14 @@ export default function BlogAdminPage(): React.JSX.Element {
       featured: post.featured || false,
       publishedAt: post.publishedAt,
     });
+    const isStandard = CATEGORIES.includes(post.category);
+    if (isStandard) {
+      setSelectedCategory(post.category);
+      setCustomCategory('');
+    } else {
+      setSelectedCategory('Others');
+      setCustomCategory(post.category || '');
+    }
     setTagsInput(post.tags.join(', '));
     setUploadedImageUrl('');
     setViewMode('edit');
@@ -220,10 +217,20 @@ export default function BlogAdminPage(): React.JSX.Element {
         .map((t) => t.trim())
         .filter(Boolean);
 
+      const finalCategory =
+        selectedCategory === 'Others'
+          ? (customCategory.trim() || 'Others')
+          : (formData.category || selectedCategory || 'Freelancing Tips');
+
+      const baseTitle = (formData.title || '').replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
+      const rawMetaTitle = (formData.metaTitle || '').replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
+      const finalMetaTitle = rawMetaTitle ? `${rawMetaTitle} | Hunhar Blog` : `${baseTitle} | Hunhar Blog`;
+
       const payload = {
         ...formData,
+        category: finalCategory,
         tags: processedTags,
-        metaTitle: formData.metaTitle || `${formData.title} | Hunhar Blog`,
+        metaTitle: finalMetaTitle,
         metaDescription: formData.metaDescription || formData.excerpt,
       };
 
@@ -463,7 +470,7 @@ export default function BlogAdminPage(): React.JSX.Element {
                             </p>
 
                             <div className="flex items-center gap-4 text-[11px] text-slate-400 font-manrope">
-                              <span>By {post.author.name}</span>
+                              <span>By Hunhar</span>
                               <span>•</span>
                               <span>{post.readTime}</span>
                               <span>•</span>
@@ -547,7 +554,7 @@ export default function BlogAdminPage(): React.JSX.Element {
               </div>
             ) : (
               /* POST EDITOR VIEW */
-              <form onSubmit={handleSavePost} className="space-y-8 font-manrope">
+              <form onSubmit={handleSavePost} noValidate className="space-y-8 font-manrope">
                 {/* Header with Save CTA */}
                 <div className="flex items-center justify-between pb-6 border-b border-black/10">
                   <div className="flex items-center gap-3">
@@ -571,6 +578,19 @@ export default function BlogAdminPage(): React.JSX.Element {
                   </div>
 
                   <div className="flex items-center gap-3 font-manrope">
+                    {formData.slug && (
+                      <a
+                        href={`/blog/${formData.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-black/10 hover:bg-slate-50 text-slate-700 text-xs font-semibold no-underline transition-colors"
+                        title="View published article in new tab"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Article</span>
+                      </a>
+                    )}
+
                     <select
                       value={formData.status}
                       onChange={(e) =>
@@ -858,28 +878,40 @@ export default function BlogAdminPage(): React.JSX.Element {
                           className="hidden"
                           onChange={(e) => handleImageUpload(e, true)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploadingImage}
-                          className="w-full py-2.5 rounded-xl border border-terracotta text-terracotta text-xs font-bold hover:bg-terracotta/5 flex items-center justify-center gap-2 cursor-pointer transition-colors font-manrope"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>{uploadingImage ? 'Uploading Image...' : 'Upload Cover Image'}</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingImage}
+                            className="flex-1 py-2.5 rounded-xl border border-terracotta text-terracotta text-xs font-bold hover:bg-terracotta/5 flex items-center justify-center gap-2 cursor-pointer transition-colors font-manrope"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{uploadingImage ? 'Uploading Image...' : (formData.coverImage ? 'Change Image' : 'Upload Cover Image')}</span>
+                          </button>
+                          {formData.coverImage && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, coverImage: '' }))}
+                              className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 text-xs font-semibold cursor-pointer transition-colors"
+                              title="Clear cover image"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
 
                         <div className="pt-2">
                           <label className="text-[11px] font-semibold text-slate-500 block mb-1 font-manrope">
-                            Or paste image URL:
+                            Or paste image URL / file path:
                           </label>
                           <input
-                            type="url"
-                            placeholder="https://..."
+                            type="text"
+                            placeholder="https://... or /projects/files/..."
                             value={formData.coverImage}
                             onChange={(e) =>
                               setFormData({ ...formData, coverImage: e.target.value })
                             }
-                            className="w-full px-3 py-2 text-xs border border-black/10 rounded-lg text-navy font-manrope"
+                            className="w-full px-3 py-2 text-xs border border-black/10 rounded-lg text-navy font-manrope focus:outline-none focus:border-terracotta"
                           />
                         </div>
                       </div>
@@ -892,10 +924,16 @@ export default function BlogAdminPage(): React.JSX.Element {
                           Category
                         </label>
                         <select
-                          value={formData.category}
-                          onChange={(e) =>
-                            setFormData({ ...formData, category: e.target.value })
-                          }
+                          value={selectedCategory}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedCategory(val);
+                            if (val === 'Others') {
+                              setFormData((prev) => ({ ...prev, category: customCategory.trim() || 'Others' }));
+                            } else {
+                              setFormData((prev) => ({ ...prev, category: val }));
+                            }
+                          }}
                           className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-xs font-semibold text-navy bg-white focus:outline-none focus:border-terracotta font-manrope"
                         >
                           {CATEGORIES.map((cat) => (
@@ -903,7 +941,28 @@ export default function BlogAdminPage(): React.JSX.Element {
                               {cat}
                             </option>
                           ))}
+                          <option value="Others">Others</option>
                         </select>
+
+                        {selectedCategory === 'Others' && (
+                          <div className="mt-2.5">
+                            <label className="text-[11px] font-semibold text-slate-500 block mb-1 font-manrope">
+                              Type Custom Category:
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. AI & Automation, Marketing..."
+                              value={customCategory}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomCategory(val);
+                                setFormData((prev) => ({ ...prev, category: val.trim() || 'Others' }));
+                              }}
+                              className="w-full px-3 py-2 text-xs border border-terracotta/40 rounded-xl text-navy bg-orange-50/20 focus:outline-none focus:border-terracotta font-manrope"
+                              autoFocus
+                            />
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -950,42 +1009,68 @@ export default function BlogAdminPage(): React.JSX.Element {
                       </div>
                     </div>
 
-                    {/* Author selector */}
+                    {/* Author Profile */}
                     <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm">
-                      <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-2 font-manrope">
+                      <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-3 font-manrope">
                         Author Profile
                       </label>
-                      <select
-                        value={formData.author.name}
-                        onChange={(e) => {
-                          const selected = DEFAULT_AUTHORS.find((a) => a.name === e.target.value);
-                          if (selected) {
-                            setFormData({ ...formData, author: selected });
-                          }
-                        }}
-                        className="w-full px-3 py-2.5 rounded-xl border border-black/10 text-xs font-semibold text-navy bg-white focus:outline-none font-manrope"
-                      >
-                        {DEFAULT_AUTHORS.map((auth) => (
-                          <option key={auth.name} value={auth.name}>
-                            {auth.name} ({auth.role})
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-black/5 font-manrope">
+                        <img
+                          src="/favicon.png"
+                          alt="Hunhar"
+                          className="w-10 h-10 rounded-full object-contain border border-black/10 bg-white p-1"
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-navy">By Hunhar</span>
+                          <span className="text-[11px] text-slate-500">SEO Team</span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Live Google SERP Snippet Preview */}
                     <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm">
-                      <div className="flex items-center gap-1.5 text-xs font-medium font-makira uppercase tracking-wider text-navy mb-3">
-                        <Sparkles className="w-3.5 h-3.5 text-terracotta" />
-                        <span>Google SERP Preview</span>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1.5 text-xs font-medium font-makira uppercase tracking-wider text-navy">
+                          <Sparkles className="w-3.5 h-3.5 text-terracotta" />
+                          <span>Google SERP Preview</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-manrope">(Click link to preview)</span>
                       </div>
                       <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
-                        <div className="text-[11px] text-slate-500 font-mono truncate">
+                        <a
+                          href={formData.slug ? `/blog/${formData.slug}` : '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            if (!formData.slug) {
+                              e.preventDefault();
+                              showNotification('error', 'Please enter an article title first.');
+                            }
+                          }}
+                          className="text-[11px] text-slate-500 font-mono truncate block hover:underline hover:text-navy cursor-pointer transition-colors"
+                          title={formData.slug ? `Open /blog/${formData.slug} in new tab` : 'Enter title first'}
+                        >
                           https://www.hunhar.in &gt; blog &gt; {formData.slug || 'article-slug'}
-                        </div>
-                        <div className="text-sm font-semibold text-[#1a0dab] hover:underline cursor-pointer line-clamp-1 mt-0.5 font-manrope">
-                          {formData.metaTitle || formData.title || 'Hunhar Article Title'} | Hunhar Blog
-                        </div>
+                        </a>
+                        <a
+                          href={formData.slug ? `/blog/${formData.slug}` : '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            if (!formData.slug) {
+                              e.preventDefault();
+                              showNotification('error', 'Please enter an article title first.');
+                            }
+                          }}
+                          className="text-sm font-semibold text-[#1a0dab] hover:underline cursor-pointer line-clamp-1 mt-0.5 font-manrope block"
+                          title={formData.slug ? `Open /blog/${formData.slug} in new tab` : 'Enter title first'}
+                        >
+                          {(() => {
+                            const raw = formData.metaTitle || formData.title || 'Hunhar Article Title';
+                            const clean = raw.replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
+                            return `${clean} | Hunhar Blog`;
+                          })()}
+                        </a>
                         <div className="text-xs text-[#4d5156] line-clamp-2 mt-1 font-manrope">
                           {formData.metaDescription || formData.excerpt || 'Article summary description snippet that will appear in search results on Google.'}
                         </div>
