@@ -174,7 +174,7 @@ export default function BlogPostPage(): React.JSX.Element {
             </div>
 
             {/* Hero Cover Image */}
-            <div className="max-w-5xl mx-auto px-6 mb-12">
+            <div className="max-w-4xl mx-auto px-6 mb-12">
               <div className="rounded-3xl overflow-hidden shadow-xl aspect-[16/9] max-h-[540px] w-full bg-slate-100">
                 <img
                   src={post.coverImage}
@@ -185,8 +185,10 @@ export default function BlogPostPage(): React.JSX.Element {
             </div>
 
             {/* Main Article Content */}
-            <div className="max-w-3xl mx-auto px-6">
-              <div className="prose-hunhar">{renderArticleContent(post.content)}</div>
+            <div className="max-w-4xl mx-auto px-6">
+              <div className="prose-hunhar [&_blockquote]:not-italic [&_blockquote]:font-normal [&_em]:not-italic [&_em]:font-normal [&_i]:not-italic">
+                {renderArticleContent(post.content)}
+              </div>
 
               {/* Tags */}
               {post.tags && post.tags.length > 0 && (

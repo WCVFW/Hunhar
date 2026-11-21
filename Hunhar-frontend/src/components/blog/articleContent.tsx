@@ -44,11 +44,11 @@ export function renderArticleContent(content: string) {
     }
   };
 
-  // Articles come from the blog dashboard: escape all HTML first, then allow only bold, italic and safe links
+  // Articles come from the blog dashboard: escape all HTML first, then allow bold and safe links (no italics)
   const parseInline = (text: string) => {
     return escapeHtml(text)
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\*(.*?)\*/g, '$1')
       .replace(/\[(.*?)\]\((.*?)\)/g, (_m, label: string, href: string) => {
         const url = safeUrl(href);
         if (!url) return label;
@@ -94,7 +94,7 @@ export function renderArticleContent(content: string) {
       elements.push(
         <blockquote
           key={i}
-          className="border-l-4 border-terracotta bg-[#FFF8F3] p-5 my-6 rounded-r-xl italic text-slate-800 font-manrope"
+          className="border-l-4 border-terracotta bg-[#FFF8F3] p-5 my-6 rounded-r-xl not-italic font-normal text-slate-800 font-manrope"
           dangerouslySetInnerHTML={{ __html: parseInline(quoteText) }}
         />
       );

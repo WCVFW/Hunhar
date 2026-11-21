@@ -843,7 +843,7 @@ export default function BlogAdminPage(): React.JSX.Element {
                             {/* Preview Title in Makira */}
                             <h2 className="text-xl font-medium text-navy font-makira uppercase">{formData.title}</h2>
                             {/* Preview Excerpt in Manrope */}
-                            <p className="font-manrope text-slate-600 text-sm italic">{formData.excerpt}</p>
+                            <p className="font-manrope text-slate-600 text-sm font-normal not-italic">{formData.excerpt}</p>
                             <hr className="my-3 border-black/5" />
                             <div className="text-sm space-y-2 text-slate-800 whitespace-pre-wrap font-manrope">
                               {formData.content}
