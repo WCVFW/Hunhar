@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { BlogPost, BlogPostInput } from '../types/blog';
+import type { BlogPost, BlogPostInput, BlogFaqItem } from '../types/blog';
 import {
   PenSquare,
   Upload,
@@ -22,6 +22,8 @@ import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import { blogApi, fileUrl, filesApi, getSessionRole, tokenStorage } from '../services/api';
 import { renderArticleContent } from '../components/blog/articleContent';
+import BlogFaqSection from '../components/blog/BlogFaqSection';
+import { extractFaqs, embedFaqs } from '../services/blogFaq';
 
 /** Converts rich HTML copied from Google Docs, Word, or web pages into clean Markdown */
 function htmlToMarkdown(html: string): string {
@@ -168,6 +170,7 @@ export default function BlogAdminPage(): React.JSX.Element {
   const [linkModalOpen, setLinkModalOpen] = useState<boolean>(false);
   const [linkText, setLinkText] = useState<string>('');
   const [linkUrl, setLinkUrl] = useState<string>('');
+  const [faqs, setFaqs] = useState<BlogFaqItem[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentImageInputRef = useRef<HTMLInputElement>(null);
@@ -237,17 +240,19 @@ export default function BlogAdminPage(): React.JSX.Element {
     setSlugManuallyEdited(false);
     setTagsInput('Freelance, Hunhar');
     setUploadedImageUrl('');
+    setFaqs([]);
     setViewMode('edit');
   };
 
   // Start editing existing post
   const handleEditPost = (post: BlogPost) => {
+    const { cleanContent, faqs: extractedFaqs } = extractFaqs(post.content, post.faqs);
     setFormData({
       id: post.id,
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt,
-      content: post.content,
+      content: cleanContent,
       coverImage: post.coverImage,
       category: post.category,
       tags: post.tags,
@@ -259,6 +264,7 @@ export default function BlogAdminPage(): React.JSX.Element {
       featured: post.featured || false,
       publishedAt: post.publishedAt,
     });
+    setFaqs(extractedFaqs);
     const isStandard = CATEGORIES.includes(post.category);
     if (isStandard) {
       setSelectedCategory(post.category);
@@ -335,9 +341,12 @@ export default function BlogAdminPage(): React.JSX.Element {
       const rawMetaTitle = (formData.metaTitle || '').replace(/\s*\|\s*Hunhar Blog/gi, '').trim();
       const finalMetaTitle = rawMetaTitle ? `${rawMetaTitle} | Hunhar Blog` : `${baseTitle} | Hunhar Blog`;
       const cleanSlug = (formData.slug || formData.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-')).trim();
+      const finalContent = embedFaqs(formData.content, faqs);
 
       const payload = {
         ...formData,
+        content: finalContent,
+        faqs,
         slug: cleanSlug,
         category: finalCategory,
         tags: processedTags,
@@ -368,6 +377,21 @@ export default function BlogAdminPage(): React.JSX.Element {
       console.error('Delete error:', err);
       showNotification('error', err?.message || 'Error deleting post.');
     }
+  };
+
+  // FAQ management helpers
+  const handleAddFaq = () => {
+    setFaqs((prev) => [...prev, { question: '', answer: '' }]);
+  };
+
+  const handleRemoveFaq = (index: number) => {
+    setFaqs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFaqChange = (index: number, field: 'question' | 'answer', value: string) => {
+    setFaqs((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
   };
 
   // Quick insertion helpers for editor
@@ -1143,9 +1167,108 @@ export default function BlogAdminPage(): React.JSX.Element {
                             <div className="text-sm space-y-2 text-slate-800 font-manrope [&_blockquote]:not-italic [&_blockquote]:font-normal [&_em]:not-italic [&_em]:font-normal [&_i]:not-italic">
                               {renderArticleContent(formData.content || '')}
                             </div>
+                            {faqs.length > 0 && (
+                              <BlogFaqSection faqs={faqs} className="my-6 pt-6 border-t border-black/10" />
+                            )}
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    {/* FAQ Section (SEO Rich Snippets) */}
+                    <div className="bg-white p-6 rounded-2xl border border-black/[0.08] shadow-sm space-y-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-black/[0.06]">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-terracotta" />
+                            <h3 className="text-sm font-bold text-navy uppercase tracking-wider font-manrope">
+                              Frequently Asked Questions (FAQ Section)
+                            </h3>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1 font-manrope">
+                            Add Q&A pairs for this blog. Automatically generates Google <code className="font-mono text-terracotta bg-orange-50 px-1 py-0.5 rounded">FAQPage</code> schema for rich search results.
+                          </p>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-full bg-[#FFF2E8] border border-[#F6D0B8] text-terracotta text-xs font-bold font-manrope">
+                          {faqs.length} {faqs.length === 1 ? 'Question' : 'Questions'}
+                        </span>
+                      </div>
+
+                      {faqs.length === 0 ? (
+                        <div className="text-center py-8 px-4 border border-dashed border-black/10 rounded-xl bg-slate-50/50">
+                          <p className="text-xs text-slate-500 mb-3 font-manrope">
+                            No FAQ items added yet. Click below to add questions (Q1, Q2...) for SEO.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleAddFaq}
+                            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#E2985B] via-[#CD7238] to-[#BA5C2E] text-white text-xs font-bold hover:brightness-105 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-md font-manrope"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add First Question (Q1)</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {faqs.map((faq, index) => (
+                            <div
+                              key={index}
+                              className="p-4 rounded-xl border border-black/10 bg-[#FFFDFB] space-y-3 font-manrope"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-gradient-to-r from-[#E2985B] via-[#CD7238] to-[#BA5C2E] text-white font-bold text-xs tracking-wide shadow-xs">
+                                  Q{index + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFaq(index)}
+                                  className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50 cursor-pointer"
+                                  title={`Delete Question ${index + 1}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-navy uppercase tracking-wider mb-1">
+                                  Question (Q{index + 1}) *
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Who can repair peeling plaster in my old house in Chennai?"
+                                  value={faq.question}
+                                  onChange={(e) => handleFaqChange(index, 'question', e.target.value)}
+                                  className="w-full px-3.5 py-2 text-sm text-navy bg-white border border-black/10 rounded-lg focus:outline-none focus:border-terracotta"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-navy uppercase tracking-wider mb-1">
+                                  Answer (Q{index + 1}) *
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  placeholder={`Provide a clear, detailed answer to question ${index + 1}...`}
+                                  value={faq.answer}
+                                  onChange={(e) => handleFaqChange(index, 'answer', e.target.value)}
+                                  className="w-full px-3.5 py-2 text-sm text-navy bg-white border border-black/10 rounded-lg focus:outline-none focus:border-terracotta leading-relaxed"
+                                />
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={handleAddFaq}
+                              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#E2985B] via-[#CD7238] to-[#BA5C2E] text-white text-xs font-bold hover:brightness-105 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-md font-manrope"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Another Question (Q{faqs.length + 1})</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

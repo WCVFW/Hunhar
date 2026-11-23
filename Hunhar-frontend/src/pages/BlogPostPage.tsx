@@ -7,6 +7,8 @@ import SignupModal from '../components/landing/SignupModal'
 import BlogCard from '../components/blog/BlogCard'
 import { useBlogPost } from '../services/blogPosts'
 import { renderArticleContent } from '../components/blog/articleContent'
+import BlogFaqSection from '../components/blog/BlogFaqSection'
+import { extractFaqs, buildFaqSchema } from '../services/blogFaq'
 
 /** Sets a <meta> tag (name= or property=) for this article and returns a function that removes it again. */
 function setMeta(attr: 'name' | 'property', key: string, value: string) {
@@ -68,6 +70,18 @@ export default function BlogPostPage(): React.JSX.Element {
       mainEntityOfPage: { '@type': 'WebPage', '@id': url },
     })
     document.head.appendChild(ld)
+
+    // SEO: FAQPage Structured Data (Google Rich Snippets)
+    const { faqs } = extractFaqs(post.content, post.faqs)
+    const faqSchema = buildFaqSchema(faqs)
+    if (faqSchema) {
+      const faqLd = document.createElement('script')
+      faqLd.type = 'application/ld+json'
+      faqLd.dataset.blog = 'true'
+      faqLd.text = JSON.stringify(faqSchema)
+      document.head.appendChild(faqLd)
+    }
+
     return () => {
       document.title = previousTitle
       document.head.querySelectorAll('[data-blog="true"]').forEach((el) => el.remove())
@@ -89,6 +103,8 @@ export default function BlogPostPage(): React.JSX.Element {
   if (!post) return <Navigate to="/blog" replace />
 
   const relatedPosts = related
+
+  const { cleanContent, faqs } = extractFaqs(post.content, post.faqs)
 
   const formattedDate = new Date(post.publishedAt).toLocaleDateString('en-US', {
     month: 'long',
@@ -187,8 +203,11 @@ export default function BlogPostPage(): React.JSX.Element {
             {/* Main Article Content */}
             <div className="max-w-4xl mx-auto px-6">
               <div className="prose-hunhar [&_blockquote]:not-italic [&_blockquote]:font-normal [&_em]:not-italic [&_em]:font-normal [&_i]:not-italic">
-                {renderArticleContent(post.content)}
+                {renderArticleContent(cleanContent)}
               </div>
+
+              {/* FAQ Section */}
+              <BlogFaqSection faqs={faqs} />
 
               {/* Tags */}
               {post.tags && post.tags.length > 0 && (

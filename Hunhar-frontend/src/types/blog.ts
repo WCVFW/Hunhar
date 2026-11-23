@@ -4,6 +4,11 @@ export interface BlogAuthor {
   avatar: string;
 }
 
+export interface BlogFaqItem {
+  question: string;
+  answer: string;
+}
+
 export interface BlogPost {
   id: string;
   slug: string;
@@ -22,6 +27,7 @@ export interface BlogPost {
   metaDescription?: string;
   focusKeyword?: string;
   featured?: boolean;
+  faqs?: BlogFaqItem[];
 }
 
 export type BlogPostInput = Omit<BlogPost, 'id' | 'readTime' | 'publishedAt'> & {
