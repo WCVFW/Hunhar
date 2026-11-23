@@ -15,6 +15,7 @@ import {
   ExternalLink,
   ImagePlus,
   AlertCircle,
+  Eye,
 } from 'lucide-react'
 import ImageCropModal from '../../components/common/ImageCropModal'
 import {
@@ -86,6 +87,7 @@ export default function FreelancerProfilePage(): React.JSX.Element {
 
   const [tempCropImage, setTempCropImage] = useState<string | null>(null)
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false)
   const [uploadingImage, setUploadingImage] = useState<'avatar' | 'cover' | null>(null)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
@@ -108,6 +110,15 @@ export default function FreelancerProfilePage(): React.JSX.Element {
     window.addEventListener('hunhar_kyc_updated', handleKycUpdate)
     return () => window.removeEventListener('hunhar_kyc_updated', handleKycUpdate)
   }, [])
+
+  useEffect(() => {
+    if (!isAvatarPreviewOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsAvatarPreviewOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isAvatarPreviewOpen])
 
   useEffect(() => {
     profileApi
@@ -344,21 +355,32 @@ export default function FreelancerProfilePage(): React.JSX.Element {
               </div>
 
               <div className="absolute -bottom-10 left-6 sm:left-8">
-                <div className="relative flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center overflow-hidden rounded-full bg-[#C06B3E] shadow-lg ring-4 ring-white">
+                <button
+                  type="button"
+                  onClick={() => setIsAvatarPreviewOpen(true)}
+                  className="group relative flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center overflow-hidden rounded-full bg-[#C06B3E] shadow-lg ring-4 ring-white cursor-pointer transition-transform hover:scale-[1.02] active:scale-95 focus:outline-none"
+                  title="Click to preview profile photo"
+                  aria-label="View profile photo"
+                >
                   {profile.avatarUrl ? (
-                    <img src={fileUrl(profile.avatarUrl)} alt={profile.fullName} className="h-full w-full object-cover" />
+                    <img src={fileUrl(profile.avatarUrl)} alt={profile.fullName} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   ) : (
-                    <img src={getCharacterAvatar(profile.id || profile.fullName)} alt={profile.fullName} className="h-full w-full object-cover" />
+                    <img src={getCharacterAvatar(profile.id || profile.fullName)} alt={profile.fullName} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                   )}
+                  {/* Hover overlay with Eye icon */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <Eye size={22} className="text-white drop-shadow-md" />
+                  </div>
                   {uploadingImage === 'avatar' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[11px] font-bold text-white">Uploading…</div>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] font-bold text-white">Uploading…</div>
                   )}
-                </div>
+                </button>
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={uploadingImage !== null}
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-md ring-2 ring-white transition-all hover:bg-[#A95A30] hover:scale-110 disabled:opacity-60"
+                  className="absolute bottom-0 right-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-md ring-2 ring-white transition-all hover:bg-[#A95A30] hover:scale-110 disabled:opacity-60 cursor-pointer"
+                  title="Change profile picture"
                   aria-label="Change profile picture"
                 >
                   <Camera size={14} />
@@ -849,6 +871,85 @@ export default function FreelancerProfilePage(): React.JSX.Element {
             saveAvatar(croppedUrl)
           }}
         />
+      )}
+
+      {/* Profile Photo Preview Modal */}
+      {isAvatarPreviewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile Photo Preview"
+          onClick={() => setIsAvatarPreviewOpen(false)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-[24px] bg-white p-6 shadow-2xl border border-black/10 font-manrope animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-black/5">
+              <div>
+                <h3 className="font-manrope text-[17px] font-bold text-[#08182B]">Profile Photo</h3>
+                <p className="text-[12px] text-[#64748B] font-medium">{profile.fullName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAvatarPreviewOpen(false)}
+                aria-label="Close preview"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#64748B] hover:bg-slate-100 hover:text-[#08182B] transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Photo Preview Container */}
+            <div className="my-6 flex flex-col items-center justify-center">
+              <div className="relative h-56 w-56 sm:h-64 sm:w-64 overflow-hidden rounded-full bg-[#C06B3E] shadow-2xl ring-4 ring-[#C06B3E]/20">
+                {profile.avatarUrl ? (
+                  <img
+                    src={fileUrl(profile.avatarUrl)}
+                    alt={profile.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={getCharacterAvatar(profile.id || profile.fullName)}
+                    alt={profile.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                {uploadingImage === 'avatar' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[13px] font-bold text-white">
+                    Uploading photo…
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-black/5">
+              <button
+                type="button"
+                onClick={() => setIsAvatarPreviewOpen(false)}
+                className="flex-1 rounded-full border border-[#CBD5E1] py-2.5 px-4 text-[13px] font-bold text-[#08182B] hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAvatarPreviewOpen(false)
+                  avatarInputRef.current?.click()
+                }}
+                disabled={uploadingImage !== null}
+                className="flex-1 flex items-center justify-center gap-2 rounded-full bg-[#C06B3E] py-2.5 px-4 text-[13px] font-bold text-white hover:bg-[#A95A30] transition-colors shadow-sm cursor-pointer disabled:opacity-60"
+              >
+                <Camera size={15} />
+                <span>Change Photo</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* KYC Verification Modal */}
