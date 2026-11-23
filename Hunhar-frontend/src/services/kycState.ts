@@ -44,16 +44,17 @@ const emptyState = (): KycVerificationState => ({
 const step = (s?: string | null): StepStatus => (s === 'UNDER_REVIEW' || s === 'VERIFIED' ? s : 'NOT_STARTED')
 
 function fromServer(k: KycInfo): KycVerificationState {
+  const isAllVerified = k.kycStatus === 'VERIFIED'
   return {
     emailVerified: true,
     mobileVerified: true,
-    aadhaarStatus: step(k.aadhaarStatus),
+    aadhaarStatus: isAllVerified ? 'VERIFIED' : step(k.aadhaarStatus),
     aadhaarDocumentName: k.aadhaarDocumentName || undefined,
     aadhaarDocumentUrl: k.aadhaarDocumentUrl || undefined,
-    collegeIdStatus: step(k.collegeIdStatus),
+    collegeIdStatus: isAllVerified ? 'VERIFIED' : step(k.collegeIdStatus),
     collegeIdDocumentName: k.collegeIdDocumentName || undefined,
     collegeIdDocumentUrl: k.collegeIdDocumentUrl || undefined,
-    skillsStatus: step(k.skillsStatus),
+    skillsStatus: isAllVerified ? 'VERIFIED' : step(k.skillsStatus),
     selectedSkills: k.selectedSkills || [],
     workSampleName: k.workSampleName || undefined,
     workSampleUrl: k.workSampleUrl || undefined,
@@ -129,6 +130,13 @@ export async function submitKycSkills(skills: string[], sample?: { url: string; 
 }
 
 export function calculateKycPercentage(state: KycVerificationState): number {
+  if (state.kycStatus === 'VERIFIED') return 100
+  try {
+    const user = tokenStorage.getUser()
+    if (user?.kycStatus === 'VERIFIED') return 100
+  } catch {
+    // ignore
+  }
   let score = 0
   // Email and mobile are pre-verified automatically (20% each = 40%)
   if (state.emailVerified !== false) score += 20
@@ -136,10 +144,17 @@ export function calculateKycPercentage(state: KycVerificationState): number {
   if (state.aadhaarStatus === 'UNDER_REVIEW' || state.aadhaarStatus === 'VERIFIED') score += 20
   if (state.collegeIdStatus === 'UNDER_REVIEW' || state.collegeIdStatus === 'VERIFIED') score += 20
   if (state.skillsStatus === 'UNDER_REVIEW' || state.skillsStatus === 'VERIFIED') score += 20
-  return score
+  return Math.min(100, score)
 }
 
 export function isKycFullyVerified(state?: KycVerificationState): boolean {
   const s = state || getKycState()
+  if (s.kycStatus === 'VERIFIED') return true
+  try {
+    const user = tokenStorage.getUser()
+    if (user?.kycStatus === 'VERIFIED') return true
+  } catch {
+    // ignore
+  }
   return calculateKycPercentage(s) === 100
 }

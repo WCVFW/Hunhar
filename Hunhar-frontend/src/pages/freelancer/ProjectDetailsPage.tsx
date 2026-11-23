@@ -238,7 +238,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
               </Link>
             </div>
           ) : canBid ? (
-            kycPercentage < 100 ? (
+            !isKycFullyVerified() && kycPercentage < 100 ? (
               <div className="flex flex-col gap-2 rounded-[18px] border border-[#F6DEC9] bg-[#FDF8F3] p-4 text-center">
                 <div className="flex items-center justify-center gap-1.5 text-[12.5px] font-bold text-[#A85123]">
                   <Lock size={14} className="text-[#C06B3E]" />

@@ -16,6 +16,9 @@ import {
   ImagePlus,
   AlertCircle,
   Eye,
+  Phone,
+  CreditCard,
+  ArrowRight,
 } from 'lucide-react'
 import ImageCropModal from '../../components/common/ImageCropModal'
 import {
@@ -41,6 +44,7 @@ interface EditDraft {
   fullName: string
   professionalTitle: string
   location: string
+  mobile: string
   bio: string
   portfolioUrl: string
   githubUrl: string
@@ -53,6 +57,7 @@ const draftFrom = (p: FreelancerProfile): EditDraft => ({
   fullName: p.fullName || '',
   professionalTitle: p.professionalTitle || '',
   location: p.location || '',
+  mobile: p.mobile || '',
   bio: p.bio || '',
   portfolioUrl: p.portfolioUrl || '',
   githubUrl: p.githubUrl || '',
@@ -105,6 +110,17 @@ export default function FreelancerProfilePage(): React.JSX.Element {
   const itemImageRef = useRef<HTMLInputElement>(null)
   const [kycModalOpen, setKycModalOpen] = useState(false)
   const [kycPercentage, setKycPercentage] = useState(calculateKycPercentage(getKycState()))
+
+  // Payout modal state
+  const [payoutModalOpen, setPayoutModalOpen] = useState(false)
+  const [payoutMethod, setPayoutMethod] = useState<'UPI' | 'BANK'>('UPI')
+  const [payoutUpiId, setPayoutUpiId] = useState('')
+  const [payoutAccountHolder, setPayoutAccountHolder] = useState('')
+  const [payoutBankName, setPayoutBankName] = useState('')
+  const [payoutAccountNumber, setPayoutAccountNumber] = useState('')
+  const [payoutIfscCode, setPayoutIfscCode] = useState('')
+  const [savingPayout, setSavingPayout] = useState(false)
+  const [payoutError, setPayoutError] = useState('')
 
   useEffect(() => {
     const handleKycUpdate = (e: any) => {
@@ -247,6 +263,7 @@ export default function FreelancerProfilePage(): React.JSX.Element {
         fullName: draft.fullName.trim(),
         professionalTitle: draft.professionalTitle,
         location: draft.location,
+        mobile: draft.mobile.trim() || undefined,
         bio: draft.bio,
         portfolioUrl: draft.portfolioUrl,
         githubUrl: draft.githubUrl,
@@ -261,6 +278,40 @@ export default function FreelancerProfilePage(): React.JSX.Element {
       flash('error', err.message || 'Could not save your profile')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const savePayoutDetails = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPayoutError('')
+    if (payoutMethod === 'UPI' && !payoutUpiId.trim()) {
+      setPayoutError('Please enter your UPI ID (e.g. name@upi)')
+      return
+    }
+    if (payoutMethod === 'BANK') {
+      if (!payoutAccountHolder.trim() || !payoutBankName.trim() || !payoutAccountNumber.trim() || !payoutIfscCode.trim()) {
+        setPayoutError('Please fill all bank account details.')
+        return
+      }
+    }
+    setSavingPayout(true)
+    try {
+      const updated = await profileApi.updatePayout({
+        method: payoutMethod,
+        upiId: payoutMethod === 'UPI' ? payoutUpiId.trim() : undefined,
+        accountHolder: payoutAccountHolder.trim() || undefined,
+        bankName: payoutBankName.trim() || undefined,
+        accountNumber: payoutAccountNumber.trim() || undefined,
+        ifscCode: payoutIfscCode.trim() || undefined,
+        autoWithdrawal: false,
+      })
+      applyProfile(updated)
+      setPayoutModalOpen(false)
+      flash('success', 'Payout details saved successfully.')
+    } catch (err: any) {
+      setPayoutError(err.message || 'Could not save payout details')
+    } finally {
+      setSavingPayout(false)
     }
   }
 
@@ -339,8 +390,71 @@ export default function FreelancerProfilePage(): React.JSX.Element {
   }
 
   const verified = profile.kycStatus === 'VERIFIED'
+  const kycDone = verified || kycPercentage === 100
   const hasReviews = profile.completedProjects > 0 && profile.rating > 0
-  const completion = profile.profileCompletion ?? 0
+
+  // Build actionable missing list with direct interaction
+  const effectiveMissing: { title: string; action: () => void; buttonText: string }[] = []
+  const rawMissing = profile.profileMissing || []
+
+  rawMissing.forEach((m) => {
+    if (m === 'KYC verification') {
+      if (!kycDone) {
+        effectiveMissing.push({
+          title: 'KYC verification',
+          action: () => setKycModalOpen(true),
+          buttonText: 'Verify KYC',
+        })
+      }
+    } else if (m === 'Mobile number') {
+      if (!profile.mobile) {
+        effectiveMissing.push({
+          title: 'Mobile number',
+          action: () => {
+            startEditing()
+            window.scrollTo({ top: 320, behavior: 'smooth' })
+          },
+          buttonText: 'Add Mobile',
+        })
+      }
+    } else if (m === 'Payout details') {
+      if (!profile.payout?.method) {
+        effectiveMissing.push({
+          title: 'Payout details',
+          action: () => {
+            setPayoutMethod(profile.payout?.method === 'BANK' ? 'BANK' : 'UPI')
+            setPayoutUpiId(profile.payout?.upiId || '')
+            setPayoutAccountHolder(profile.payout?.accountHolder || profile.fullName || '')
+            setPayoutBankName(profile.payout?.bankName || '')
+            setPayoutIfscCode(profile.payout?.ifscCode || '')
+            setPayoutError('')
+            setPayoutModalOpen(true)
+          },
+          buttonText: 'Add Payout',
+        })
+      }
+    } else if (m === 'Portfolio project') {
+      if (!profile.portfolio || profile.portfolio.length === 0) {
+        effectiveMissing.push({
+          title: 'Portfolio project',
+          action: () => openPortfolioModal(),
+          buttonText: 'Add Project',
+        })
+      }
+    } else {
+      effectiveMissing.push({
+        title: m,
+        action: () => {
+          startEditing()
+          window.scrollTo({ top: 320, behavior: 'smooth' })
+        },
+        buttonText: 'Add ' + m.split(' ')[0],
+      })
+    }
+  })
+
+  // Dynamic profile completion percentage (each of 10 requirements gives 10%)
+  const completion = Math.min(100, Math.max(0, Math.round((10 - effectiveMissing.length) * 10)))
 
   return (
     <div className="w-full font-manrope">
@@ -454,6 +568,17 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                         className={inputClass}
                       />
                       <input
+                        type="tel"
+                        value={draft.mobile}
+                        maxLength={15}
+                        onChange={(e) => setDraft({ ...draft, mobile: e.target.value })}
+                        placeholder="Mobile (e.g. 9876543210)"
+                        aria-label="Mobile number"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
                         type="number"
                         min={0}
                         value={draft.hourlyRate}
@@ -462,16 +587,16 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                         aria-label="Hourly rate"
                         className={inputClass}
                       />
+                      <input
+                        type="text"
+                        value={draft.availability}
+                        maxLength={120}
+                        onChange={(e) => setDraft({ ...draft, availability: e.target.value })}
+                        placeholder="Availability (e.g. 20 hrs/week)"
+                        aria-label="Availability"
+                        className={inputClass}
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={draft.availability}
-                      maxLength={120}
-                      onChange={(e) => setDraft({ ...draft, availability: e.target.value })}
-                      placeholder="Availability (e.g. 20 hrs/week)"
-                      aria-label="Availability"
-                      className={inputClass}
-                    />
                   </div>
                 ) : (
                   <>
@@ -505,6 +630,12 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                         <div className="flex items-center gap-1.5">
                           <MapPin size={14} className="text-[#94A3B8]" />
                           <span>{profile.location}</span>
+                        </div>
+                      )}
+                      {profile.mobile && (
+                        <div className="flex items-center gap-1.5">
+                          <Phone size={14} className="text-[#94A3B8]" />
+                          <span>{profile.mobile}</span>
                         </div>
                       )}
                       {profile.portfolioUrl && (
@@ -707,35 +838,71 @@ export default function FreelancerProfilePage(): React.JSX.Element {
           {/* RIGHT 4 COLUMNS */}
           <div className="flex flex-col gap-6 lg:col-span-4">
             {/* Profile Completion */}
-            <div className="flex flex-col rounded-[22px] border border-[#F2ECE6] bg-white p-5 sm:p-6">
+            <div className="flex flex-col rounded-[22px] border border-[#F2ECE6] bg-white p-5 sm:p-6 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="font-manrope text-[15px] font-bold text-[#08182B]">Profile Completion</span>
-                <span className="font-manrope text-[15px] font-bold text-[#08182B]">{completion}%</span>
+                <span className={`font-manrope text-[15px] font-bold ${completion === 100 ? 'text-[#16A34A]' : 'text-[#C06B3E]'}`}>
+                  {completion}%
+                </span>
               </div>
-              <div className="mt-3.5 h-2 w-full overflow-hidden rounded-full bg-[#E5E9EE]">
-                <div className="h-full rounded-full bg-[#C06B3E] transition-all" style={{ width: `${completion}%` }} />
+              <div className="mt-3.5 h-2.5 w-full overflow-hidden rounded-full bg-[#E5E9EE]">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    completion === 100 ? 'bg-[#16A34A]' : 'bg-[#C06B3E]'
+                  }`}
+                  style={{ width: `${completion}%` }}
+                />
               </div>
 
-              {profile.profileMissing && profile.profileMissing.length > 0 ? (
+              {effectiveMissing.length > 0 ? (
                 <>
-                  <p className="mt-3 font-manrope text-[12px] text-[#8C9BA8]">Still missing:</p>
-                  <ul className="mt-1.5 flex flex-col gap-1 text-[12px] text-[#475569]">
-                    {profile.profileMissing.slice(0, 5).map((m) => (
-                      <li key={m} className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#C06B3E]" /> {m}
+                  <p className="mt-3 font-manrope text-[12px] font-semibold text-[#8C9BA8]">Still missing:</p>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {effectiveMissing.map((item) => (
+                      <li
+                        key={item.title}
+                        className="flex items-center justify-between rounded-[12px] border border-[#F2ECE6] bg-[#FAF8F5] px-3 py-2 transition-all hover:border-[#E5DACD] hover:bg-[#F7F3EE]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-[#C06B3E]" />
+                          <span className="font-manrope text-[12.5px] font-medium text-[#08182B]">{item.title}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={item.action}
+                          className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 font-manrope text-[11.5px] font-bold text-[#C06B3E] shadow-2xs border border-[#F2ECE6] hover:bg-[#C06B3E] hover:text-white transition-all cursor-pointer"
+                        >
+                          <span>{item.buttonText}</span>
+                          <ArrowRight size={11} />
+                        </button>
                       </li>
                     ))}
                   </ul>
+
                   <button
                     type="button"
-                    onClick={() => setKycModalOpen(true)}
-                    className="mt-4 flex h-10 w-full items-center justify-center rounded-full bg-[#C06B3E] font-manrope text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#A95A30] cursor-pointer"
+                    onClick={effectiveMissing[0].action}
+                    className="mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#C06B3E] font-manrope text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#A95A30] cursor-pointer"
                   >
-                    Complete Profile & KYC ({kycPercentage}%)
+                    <span>{effectiveMissing[0].buttonText} ({completion}%)</span>
+                    <ArrowRight size={14} />
                   </button>
                 </>
               ) : (
-                <p className="mt-3 font-manrope text-[12px] font-semibold text-[#16A34A]">Your profile is complete. Great job!</p>
+                <div className="mt-4 flex flex-col items-center rounded-[14px] bg-[#F0FDF4] p-4 text-center border border-[#DCFCE7]">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#DCFCE7] text-[#16A34A] mb-1.5">
+                    <CheckCircle2 size={18} />
+                  </div>
+                  <span className="font-manrope text-[13px] font-bold text-[#16A34A]">Profile 100% Complete!</span>
+                  <p className="mt-0.5 text-[11.5px] text-[#15803D]">You're eligible to bid on any open project.</p>
+                  <Link
+                    to="/freelancer/browse"
+                    className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-[#16A34A] font-manrope text-[12.5px] font-bold text-white shadow-xs transition-all hover:bg-[#15803D]"
+                  >
+                    <span>Browse Projects & Bid</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                </div>
               )}
             </div>
 
@@ -1037,6 +1204,143 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                 <span>Change Photo</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payout Details Modal */}
+      {payoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-2xl border border-[#F2ECE6]">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F2ECE6]">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FDF8F3] text-[#C06B3E]">
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">Payout Details</h3>
+                  <p className="text-[12px] text-[#8C9BA8]">Required to receive client milestone payments</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPayoutModalOpen(false)}
+                className="rounded-full p-1.5 text-[#94A3B8] hover:bg-[#F1F5F9] hover:text-[#08182B] transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {payoutError && (
+              <div className="mt-3.5 flex items-center gap-2 rounded-[12px] bg-rose-50 px-3.5 py-2 text-[12.5px] font-medium text-rose-700">
+                <AlertCircle size={15} />
+                <span>{payoutError}</span>
+              </div>
+            )}
+
+            <form onSubmit={savePayoutDetails} className="mt-4 flex flex-col gap-3.5">
+              <div className="flex rounded-[12px] bg-[#FAF8F5] p-1 border border-[#F2ECE6]">
+                <button
+                  type="button"
+                  onClick={() => setPayoutMethod('UPI')}
+                  className={`flex-1 rounded-[9px] py-1.5 text-[12.5px] font-bold transition-all cursor-pointer ${
+                    payoutMethod === 'UPI' ? 'bg-[#C06B3E] text-white shadow-xs' : 'text-[#64748B] hover:text-[#08182B]'
+                  }`}
+                >
+                  UPI (Instant)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayoutMethod('BANK')}
+                  className={`flex-1 rounded-[9px] py-1.5 text-[12.5px] font-bold transition-all cursor-pointer ${
+                    payoutMethod === 'BANK' ? 'bg-[#C06B3E] text-white shadow-xs' : 'text-[#64748B] hover:text-[#08182B]'
+                  }`}
+                >
+                  Bank Account
+                </button>
+              </div>
+
+              {payoutMethod === 'UPI' ? (
+                <div>
+                  <label className="block text-[12px] font-bold text-[#475569] mb-1">UPI ID *</label>
+                  <input
+                    type="text"
+                    value={payoutUpiId}
+                    onChange={(e) => setPayoutUpiId(e.target.value)}
+                    placeholder="e.g. name@okhdfcbank or 9876543210@upi"
+                    required
+                    className="w-full rounded-[12px] border border-[#CBD5E1] px-3.5 py-2 text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-[#8C9BA8]">Funds will be deposited directly to your linked UPI address.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  <div>
+                    <label className="block text-[12px] font-bold text-[#475569] mb-1">Account Holder Name *</label>
+                    <input
+                      type="text"
+                      value={payoutAccountHolder}
+                      onChange={(e) => setPayoutAccountHolder(e.target.value)}
+                      placeholder="Name as per bank account"
+                      required
+                      className="w-full rounded-[12px] border border-[#CBD5E1] px-3.5 py-2 text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-bold text-[#475569] mb-1">Bank Name *</label>
+                    <input
+                      type="text"
+                      value={payoutBankName}
+                      onChange={(e) => setPayoutBankName(e.target.value)}
+                      placeholder="e.g. HDFC Bank, SBI"
+                      required
+                      className="w-full rounded-[12px] border border-[#CBD5E1] px-3.5 py-2 text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[12px] font-bold text-[#475569] mb-1">Account Number *</label>
+                      <input
+                        type="password"
+                        value={payoutAccountNumber}
+                        onChange={(e) => setPayoutAccountNumber(e.target.value)}
+                        placeholder="Account number"
+                        required
+                        className="w-full rounded-[12px] border border-[#CBD5E1] px-3.5 py-2 text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-bold text-[#475569] mb-1">IFSC Code *</label>
+                      <input
+                        type="text"
+                        value={payoutIfscCode}
+                        onChange={(e) => setPayoutIfscCode(e.target.value.toUpperCase())}
+                        placeholder="e.g. HDFC0001234"
+                        required
+                        className="w-full rounded-[12px] border border-[#CBD5E1] px-3.5 py-2 text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:outline-none uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-end gap-2.5 pt-3 border-t border-[#F2ECE6]">
+                <button
+                  type="button"
+                  onClick={() => setPayoutModalOpen(false)}
+                  className="rounded-[12px] border border-[#CBD5E1] px-4 py-2 font-manrope text-[12.5px] font-bold text-[#64748B] hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPayout}
+                  className="rounded-[12px] bg-[#C06B3E] px-5 py-2 font-manrope text-[12.5px] font-bold text-white hover:bg-[#A95A30] transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
+                >
+                  {savingPayout ? 'Saving…' : 'Save Payout Details'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

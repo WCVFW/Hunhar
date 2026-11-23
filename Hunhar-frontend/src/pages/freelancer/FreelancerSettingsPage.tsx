@@ -23,7 +23,7 @@ import {
   Layers,
   AlertCircle,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import ImageCropModal from '../../components/common/ImageCropModal'
 import { fileUrl, filesApi, profileApi, tokenStorage, walletApi, type FreelancerProfile } from '../../services/api'
 import { formatINR, initials } from '../../services/format'
@@ -41,7 +41,17 @@ const dataUrlToFile = async (dataUrl: string, name: string): Promise<File> => {
 }
 
 export default function FreelancerSettingsPage(): React.JSX.Element {
-  const [activeTab, setActiveTab] = useState<FreelancerSettingsTab>('Profile & Skills')
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const defaultTab: FreelancerSettingsTab =
+    tabParam === 'payout' || tabParam === 'wallet'
+      ? 'Payout & Wallet'
+      : tabParam === 'security'
+      ? 'Security'
+      : tabParam === 'notifications'
+      ? 'Notifications'
+      : 'Profile & Skills'
+  const [activeTab, setActiveTab] = useState<FreelancerSettingsTab>(defaultTab)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)

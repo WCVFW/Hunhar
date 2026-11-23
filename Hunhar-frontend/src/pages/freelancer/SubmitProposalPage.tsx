@@ -17,7 +17,7 @@ import { formatBytes, formatINR } from '../../services/format'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
 import KycVerificationModal from '../../components/kyc/KycVerificationModal'
-import { getKycState, calculateKycPercentage } from '../../services/kycState'
+import { getKycState, calculateKycPercentage, isKycFullyVerified } from '../../services/kycState'
 
 const MAX_ATTACHMENTS = 5
 const MIN_LETTER = 30
@@ -45,7 +45,7 @@ export default function SubmitProposalPage(): React.JSX.Element {
   const [submittedSuccess, setSubmittedSuccess] = useState<boolean>(false)
   const [kycModalOpen, setKycModalOpen] = useState<boolean>(false)
   const [kycPercentage, setKycPercentage] = useState<number>(calculateKycPercentage(getKycState()))
-  const isKycComplete = kycPercentage === 100
+  const isKycComplete = isKycFullyVerified() || kycPercentage === 100
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
