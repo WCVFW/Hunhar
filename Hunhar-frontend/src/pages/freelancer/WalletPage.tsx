@@ -122,7 +122,8 @@ export default function WalletPage(): React.JSX.Element {
   }
 
   const box = 'flex min-h-[96px] flex-col justify-between rounded-[18px] border border-[#DEBBA5] bg-[#F7F2EC] px-5 py-4'
-  const input = 'mt-1 w-full rounded-[10px] border border-[#E2E8F0] px-3 py-2 text-[14px] outline-none focus:border-[#C06B3E]'
+  const input =
+    'mt-1 w-full rounded-[10px] border border-[#CBD5E1] bg-white px-3 py-2 text-[14px] font-semibold text-[#08182B] outline-none transition-colors focus:border-[#C06B3E] placeholder:font-normal placeholder:text-[#94A3B8]'
 
   return (
     <div className="w-full font-manrope">
@@ -298,7 +299,14 @@ export default function WalletPage(): React.JSX.Element {
             <div className="mt-4 space-y-3">
               <label className="block text-[12px] font-bold text-[#8C9BA8] uppercase">
                 Amount (₹)
-                <input type="number" min={minPayout} max={wallet.availableBalance} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} className={input} />
+                <input
+                  type="number"
+                  min={minPayout}
+                  max={wallet.availableBalance}
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className={`${input} text-[16px] font-bold text-[#08182B]`}
+                />
               </label>
               <label className="block text-[12px] font-bold text-[#8C9BA8] uppercase">
                 Payout Method
@@ -340,7 +348,14 @@ export default function WalletPage(): React.JSX.Element {
             {modalError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-semibold text-red-600">{modalError}</div>}
             <label className="mt-4 block text-[12px] font-bold text-[#8C9BA8] uppercase">
               Amount (₹)
-              <input type="number" min={100} max={200000} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className={input} />
+              <input
+                type="number"
+                min={100}
+                max={200000}
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                className={`${input} text-[16px] font-bold text-[#08182B]`}
+              />
             </label>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" disabled={busy} onClick={() => setShowAddFunds(false)} className="rounded-[10px] border border-[#CBD5E1] px-4 py-2 text-[13px] font-semibold text-[#64748B]">
