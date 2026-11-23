@@ -45,8 +45,8 @@ const step = (s?: string | null): StepStatus => (s === 'UNDER_REVIEW' || s === '
 
 function fromServer(k: KycInfo): KycVerificationState {
   return {
-    emailVerified: k.emailVerified ?? true,
-    mobileVerified: k.mobileVerified ?? false,
+    emailVerified: true,
+    mobileVerified: true,
     aadhaarStatus: step(k.aadhaarStatus),
     aadhaarDocumentName: k.aadhaarDocumentName || undefined,
     aadhaarDocumentUrl: k.aadhaarDocumentUrl || undefined,
@@ -130,8 +130,9 @@ export async function submitKycSkills(skills: string[], sample?: { url: string; 
 
 export function calculateKycPercentage(state: KycVerificationState): number {
   let score = 0
-  if (state.emailVerified) score += 20
-  if (state.mobileVerified) score += 20
+  // Email and mobile are pre-verified automatically (20% each = 40%)
+  if (state.emailVerified !== false) score += 20
+  if (state.mobileVerified !== false) score += 20
   if (state.aadhaarStatus === 'UNDER_REVIEW' || state.aadhaarStatus === 'VERIFIED') score += 20
   if (state.collegeIdStatus === 'UNDER_REVIEW' || state.collegeIdStatus === 'VERIFIED') score += 20
   if (state.skillsStatus === 'UNDER_REVIEW' || state.skillsStatus === 'VERIFIED') score += 20

@@ -30,6 +30,7 @@ import { formatDate, formatINR, initials } from '../../services/format'
 import { getCharacterAvatar } from '../../services/characterAvatars'
 import KycVerificationModal from '../../components/kyc/KycVerificationModal'
 import { getKycState, calculateKycPercentage } from '../../services/kycState'
+import { getSkillSuggestions, type SkillItem } from '../../services/skillsData'
 
 const PORTFOLIO_COLORS = ['bg-[#EEF2FF]', 'bg-[#ECFDF5]', 'bg-[#FFFBEB]', 'bg-[#FFF1F2]', 'bg-[#F0F9FF]', 'bg-[#FDF4FF]']
 
@@ -83,6 +84,9 @@ export default function FreelancerProfilePage(): React.JSX.Element {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState<EditDraft | null>(null)
   const [newSkill, setNewSkill] = useState('')
+  const [isSkillFocused, setIsSkillFocused] = useState(false)
+  const [skillSuggestions, setSkillSuggestions] = useState<SkillItem[]>([])
+  const skillDropdownRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
 
   const [tempCropImage, setTempCropImage] = useState<string | null>(null)
@@ -119,6 +123,24 @@ export default function FreelancerProfilePage(): React.JSX.Element {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isAvatarPreviewOpen])
+
+  useEffect(() => {
+    if (!isEditing || !draft) return
+    const current = draft.skills || []
+    const title = draft.professionalTitle || profile?.professionalTitle || ''
+    const suggestions = getSkillSuggestions(newSkill, current, title)
+    setSkillSuggestions(suggestions)
+  }, [newSkill, draft?.skills, draft?.professionalTitle, isEditing, profile?.professionalTitle])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (skillDropdownRef.current && !skillDropdownRef.current.contains(e.target as Node)) {
+        setIsSkillFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     profileApi
@@ -195,12 +217,22 @@ export default function FreelancerProfilePage(): React.JSX.Element {
     setIsEditing(true)
   }
 
-  const addSkill = () => {
-    const s = newSkill.trim()
+  const addSkill = (skillToAdd?: string) => {
+    const s = (skillToAdd || newSkill).trim()
     if (!draft || !s) return
-    if (draft.skills.some((x) => x.toLowerCase() === s.toLowerCase())) return setNewSkill('')
-    if (draft.skills.length >= 30) return flash('error', 'You can add up to 30 skills.')
-    setDraft({ ...draft, skills: [...draft.skills, s.slice(0, 50)] })
+    const parts = s.split(/[,]+/).map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return
+
+    let current = [...draft.skills]
+    for (const part of parts) {
+      if (current.some((x) => x.toLowerCase() === part.toLowerCase())) continue
+      if (current.length >= 30) {
+        flash('error', 'You can add up to 30 skills.')
+        break
+      }
+      current.push(part.slice(0, 50))
+    }
+    setDraft({ ...draft, skills: current })
     setNewSkill('')
   }
 
@@ -752,25 +784,82 @@ export default function FreelancerProfilePage(): React.JSX.Element {
                       </span>
                     ))}
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <input
-                      type="text"
-                      value={newSkill}
-                      maxLength={50}
-                      onChange={(e) => setNewSkill(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          addSkill()
-                        }
-                      }}
-                      placeholder="Add a skill and press Enter"
-                      aria-label="New skill"
-                      className={inputClass}
-                    />
-                    <button type="button" onClick={addSkill} className="rounded-[10px] bg-[#08182B] px-3 text-[12px] font-bold text-white">
-                      Add
-                    </button>
+                  <div className="relative mt-3" ref={skillDropdownRef}>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={newSkill}
+                          maxLength={50}
+                          onFocus={() => setIsSkillFocused(true)}
+                          onChange={(e) => {
+                            setNewSkill(e.target.value)
+                            setIsSkillFocused(true)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              addSkill()
+                            } else if (e.key === 'Escape') {
+                              setIsSkillFocused(false)
+                            }
+                          }}
+                          placeholder="Type skill name (e.g. Figma, React, 3D, SEO)..."
+                          aria-label="New skill"
+                          className={inputClass + (newSkill ? ' pr-7' : '')}
+                        />
+                        {newSkill && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewSkill('')
+                              setIsSkillFocused(false)
+                            }}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            aria-label="Clear skill input"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addSkill()}
+                        className="rounded-[10px] bg-[#08182B] hover:bg-[#152B46] px-3.5 text-[12px] font-bold text-white transition-colors cursor-pointer shrink-0"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Suggestions Dropdown */}
+                    {isSkillFocused && skillSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-64 overflow-y-auto rounded-xl bg-white border border-[#E2E8F0] shadow-xl p-1.5 font-manrope">
+                        <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#8E8376] flex items-center justify-between border-b border-[#F0ECE6]/80 mb-1">
+                          <span>{newSkill.trim() ? 'Matching Skills' : 'Recommended for Your Profile'}</span>
+                          <span className="text-[9.5px] font-medium text-[#C06B3E]">Click to add</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          {skillSuggestions.map((item) => (
+                            <button
+                              key={item.name}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                addSkill(item.name)
+                              }}
+                              className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs text-[#08182B] hover:bg-[#FDF4EC] hover:text-[#C06B3E] transition-colors cursor-pointer group"
+                            >
+                              <span className="font-semibold truncate group-hover:translate-x-0.5 transition-transform">
+                                {item.name}
+                              </span>
+                              <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-100 group-hover:bg-[#C06B3E]/10 group-hover:text-[#C06B3E] text-slate-500 font-medium shrink-0">
+                                {item.category}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : profile.skills.length === 0 ? (

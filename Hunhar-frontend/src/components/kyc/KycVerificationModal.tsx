@@ -119,7 +119,7 @@ export default function KycVerificationModal({
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - (circumference * percentage) / 100
 
-  // Continue to the next incomplete step
+  // Continue to the next incomplete step or complete if all submitted
   const handleContinueVerification = () => {
     if (kycState.aadhaarStatus === 'NOT_STARTED') {
       setCurrentView('aadhaar')
@@ -128,7 +128,8 @@ export default function KycVerificationModal({
     } else if (kycState.skillsStatus === 'NOT_STARTED') {
       setCurrentView('skills')
     } else {
-      setCurrentView('overview')
+      if (onVerificationComplete) onVerificationComplete()
+      onClose()
     }
   }
 
@@ -545,9 +546,21 @@ export default function KycVerificationModal({
               {/* Bottom Main Action Button */}
               <div className="mt-6 pt-3">
                 {is100 ? (
-                  <div className="flex w-full items-center justify-center gap-2 rounded-[16px] border border-[#BBF7D0] bg-[#DCFCE7] py-3.5 text-center font-manrope text-[14px] font-extrabold text-[#15803D] shadow-xs">
-                    <CheckCircle2 size={18} />
-                    <span>Profile Fully Verified · Ready to Bid</span>
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="flex flex-1 items-center justify-center gap-2 rounded-[16px] border border-[#BBF7D0] bg-[#DCFCE7] py-3.5 px-4 text-center font-manrope text-[14px] font-extrabold text-[#15803D] shadow-xs">
+                      <CheckCircle2 size={18} />
+                      <span>All Documents Submitted · Under Review (100%)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onVerificationComplete) onVerificationComplete()
+                        onClose()
+                      }}
+                      className="w-full sm:w-auto rounded-[16px] bg-[#C06B3E] hover:bg-[#AA572D] px-6 py-3.5 text-center font-manrope text-[14px] font-bold text-white transition-all cursor-pointer shadow-sm active:scale-98"
+                    >
+                      Done
+                    </button>
                   </div>
                 ) : (
                   <button
@@ -555,7 +568,15 @@ export default function KycVerificationModal({
                     onClick={handleContinueVerification}
                     className="flex w-full items-center justify-center gap-1.5 rounded-[16px] bg-[#C06B3E] py-3.5 text-center font-manrope text-[14px] font-extrabold text-white shadow-[0_4px_14px_rgba(192,107,62,0.35)] transition-all hover:bg-[#AA572D] active:scale-98 cursor-pointer"
                   >
-                    <span>Continue Verification</span>
+                    <span>
+                      {kycState.aadhaarStatus === 'NOT_STARTED'
+                        ? 'Continue Verification (Identity)'
+                        : kycState.collegeIdStatus === 'NOT_STARTED'
+                        ? 'Continue Verification (Education)'
+                        : kycState.skillsStatus === 'NOT_STARTED'
+                        ? 'Continue Verification (Skills)'
+                        : 'Done · Close'}
+                    </span>
                     <ChevronRight size={17} />
                   </button>
                 )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Download, BadgeCheck } from 'lucide-react'
+import { Search, Download, BadgeCheck, AlertTriangle, X } from 'lucide-react'
 import { adminApi, fileUrl, type AdminUser, type UserRole } from '../../services/api'
 import { formatDate, initials } from '../../services/format'
 import { useAdminData, LoadingBlock, ErrorBanner, EmptyBlock, downloadCsv, ROLE_LABEL, roleBadge } from './adminUi'
@@ -34,6 +34,21 @@ export default function AdminUsersPage(): React.JSX.Element {
   }, [params])
   const [actionError, setActionError] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [suspendingUser, setSuspendingUser] = useState<AdminUser | null>(null)
+  const [suspendReason, setSuspendReason] = useState('')
+  const [suspendSubmitting, setSuspendSubmitting] = useState(false)
+
+  // Close suspend modal on Escape
+  useEffect(() => {
+    if (!suspendingUser) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !suspendSubmitting) {
+        setSuspendingUser(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [suspendingUser, suspendSubmitting])
 
   // Search on the server, 350 ms after the admin stops typing
   useEffect(() => {
@@ -48,23 +63,42 @@ export default function AdminUsersPage(): React.JSX.Element {
   const { data: analytics } = useAdminData(() => adminApi.analytics())
   const counts = analytics?.users
 
-  const toggleUserStatus = async (user: AdminUser) => {
-    const next: AdminUser['status'] = user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE'
-    let reason: string | undefined
-    if (next === 'SUSPENDED') {
-      const r = window.prompt(`Reason for suspending ${user.fullName}? (shown in the audit log)`)
-      if (r === null) return
-      reason = r.trim() || undefined
+  const handleActionClick = (user: AdminUser) => {
+    if (user.status === 'ACTIVE') {
+      setSuspendingUser(user)
+      setSuspendReason('')
+    } else {
+      activateUser(user)
     }
+  }
+
+  const activateUser = async (user: AdminUser) => {
     setBusyId(user.id)
     setActionError('')
     try {
-      await adminApi.setUserStatus(user.id, next, reason)
-      setUsers((prev) => (prev || []).map((u) => (u.id === user.id ? { ...u, status: next } : u)))
+      await adminApi.setUserStatus(user.id, 'ACTIVE')
+      setUsers((prev) => (prev || []).map((u) => (u.id === user.id ? { ...u, status: 'ACTIVE' } : u)))
     } catch (err: any) {
       setActionError(err.message || 'Could not update the account')
     } finally {
       setBusyId(null)
+    }
+  }
+
+  const confirmSuspend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!suspendingUser) return
+    setSuspendSubmitting(true)
+    setActionError('')
+    try {
+      await adminApi.setUserStatus(suspendingUser.id, 'SUSPENDED', suspendReason.trim() || undefined)
+      setUsers((prev) => (prev || []).map((u) => (u.id === suspendingUser.id ? { ...u, status: 'SUSPENDED' } : u)))
+      setSuspendingUser(null)
+      setSuspendReason('')
+    } catch (err: any) {
+      setActionError(err.message || 'Could not suspend the account')
+    } finally {
+      setSuspendSubmitting(false)
     }
   }
 
@@ -213,8 +247,8 @@ export default function AdminUsersPage(): React.JSX.Element {
                         <button
                           type="button"
                           disabled={busyId === user.id}
-                          onClick={() => toggleUserStatus(user)}
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors disabled:opacity-50 ${
+                          onClick={() => handleActionClick(user)}
+                          className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors disabled:opacity-50 cursor-pointer ${
                             user.status === 'ACTIVE'
                               ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
                               : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
@@ -228,6 +262,115 @@ export default function AdminUsersPage(): React.JSX.Element {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Suspend User Modal */}
+      {suspendingUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Suspend User Account"
+          onClick={() => {
+            if (!suspendSubmitting) setSuspendingUser(null)
+          }}
+        >
+          <div
+            className="w-full max-w-[460px] rounded-[22px] bg-white p-6 shadow-2xl border border-[#E5DACD] font-manrope animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-[#F0EAE1]">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#08182B]">Suspend Account</h3>
+                  <p className="text-xs text-[#8E8376]">Confirm suspension for this user</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuspendingUser(null)}
+                disabled={suspendSubmitting}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#8E8376] hover:bg-slate-100 hover:text-[#08182B] transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* User Info Card */}
+            <div className="mt-4 rounded-xl bg-[#F8F4EE] p-3.5 border border-[#E5DACD]/60 flex items-center gap-3">
+              {suspendingUser.avatarUrl ? (
+                <img
+                  src={fileUrl(suspendingUser.avatarUrl)}
+                  alt=""
+                  className="h-10 w-10 rounded-full object-cover shrink-0 ring-2 ring-white shadow-xs"
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-[#08182B] to-[#1B254B] flex items-center justify-center text-white font-bold text-xs shrink-0 ring-2 ring-white shadow-xs">
+                  {initials(suspendingUser.fullName)}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-xs text-[#08182B] truncate">{suspendingUser.fullName}</span>
+                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold ${roleBadge(suspendingUser.role)}`}>
+                    {ROLE_LABEL[suspendingUser.role] || suspendingUser.role}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#8E8376] truncate">{suspendingUser.email}</div>
+              </div>
+            </div>
+
+            {/* Warning Message */}
+            <p className="mt-3 text-[12px] text-[#524B42] leading-relaxed">
+              Are you sure you want to suspend <span className="font-bold text-[#08182B]">{suspendingUser.fullName}</span>? This user will be immediately blocked from logging in, accepting jobs, or transacting.
+            </p>
+
+            {/* Form */}
+            <form onSubmit={confirmSuspend} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#08182B] mb-1.5">
+                  Reason for Suspension (Audit Log)
+                </label>
+                <textarea
+                  rows={3}
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  placeholder="e.g. Terms of service violation, fraudulent activity, identity mismatch..."
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-white p-3 text-xs text-[#08182B] placeholder-[#9D9183] focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 font-manrope resize-none"
+                  autoFocus
+                />
+                <span className="text-[10.5px] text-[#8E8376] mt-1 block">
+                  This note will be recorded in the moderation audit log.
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#F0EAE1]">
+                <button
+                  type="button"
+                  onClick={() => setSuspendingUser(null)}
+                  disabled={suspendSubmitting}
+                  className="rounded-xl border border-[#CBD5E1] px-4 py-2 text-xs font-bold text-[#524B42] hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={suspendSubmitting}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
+                >
+                  <AlertTriangle size={13} />
+                  <span>{suspendSubmitting ? 'Suspending…' : 'Suspend User'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
