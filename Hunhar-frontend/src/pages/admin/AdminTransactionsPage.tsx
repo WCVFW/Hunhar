@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Search, Download, Check, X } from 'lucide-react'
+import { Search, Download, Check, X, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react'
 import { adminApi, type AdminPayout } from '../../services/api'
 import { formatDate, formatINR, formatTime } from '../../services/format'
 import { useAdminData, LoadingBlock, ErrorBanner, EmptyBlock, downloadCsv, compactINR, ROLE_LABEL } from './adminUi'
@@ -36,6 +36,12 @@ export default function AdminTransactionsPage(): React.JSX.Element {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
 
+  // Custom modal state for payout approval/rejection
+  const [payoutModal, setPayoutModal] = useState<{ payout: AdminPayout; approve: boolean } | null>(null)
+  const [payoutNote, setPayoutNote] = useState('')
+  const [payoutNoteError, setPayoutNoteError] = useState('')
+  const [processingPayout, setProcessingPayout] = useState(false)
+
   const { data: analytics } = useAdminData(() => adminApi.analytics())
   const payments = analytics?.payments
   const { data: txList, loading, error, reload } = useAdminData(() => adminApi.transactions(typeFilter), [typeFilter])
@@ -49,26 +55,28 @@ export default function AdminTransactionsPage(): React.JSX.Element {
     )
   }, [txList, search])
 
-  const processPayout = async (p: AdminPayout, approve: boolean) => {
-    const notes = window.prompt(
-      approve
-        ? `Approve ${formatINR(p.amount)} to ${p.freelancerName || 'freelancer'}?\nPay it to: ${p.accountDetails}\n\nTransfer reference (UTR) or note:`
-        : `Reject this ${formatINR(p.amount)} withdrawal? The amount goes back to the freelancer's wallet.\n\nReason:`,
-    )
-    if (notes === null) return
-    if (!notes.trim()) {
-      setActionError(approve ? 'Add the transfer reference so the freelancer can trace the payment.' : 'Please give a reason.')
+  const confirmPayoutAction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!payoutModal) return
+    const note = payoutNote.trim()
+    if (!note) {
+      setPayoutNoteError(
+        payoutModal.approve
+          ? 'Please enter the transfer reference (UTR) or transaction note.'
+          : 'Please enter a reason for rejecting this payout.',
+      )
       return
     }
-    setBusyId(p.id)
-    setActionError('')
+    setProcessingPayout(true)
+    setPayoutNoteError('')
     try {
-      await adminApi.processPayout(p.id, approve, notes.trim())
+      await adminApi.processPayout(payoutModal.payout.id, payoutModal.approve, note)
+      setPayoutModal(null)
       await payoutsQuery.reload()
     } catch (err: any) {
-      setActionError(err.message || 'Could not process the payout')
+      setPayoutNoteError(err.message || 'Could not process the payout')
     } finally {
-      setBusyId(null)
+      setProcessingPayout(false)
     }
   }
 
@@ -272,17 +280,25 @@ export default function AdminTransactionsPage(): React.JSX.Element {
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
-                                disabled={busyId === p.id}
-                                onClick={() => processPayout(p, true)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                disabled={processingPayout}
+                                onClick={() => {
+                                  setPayoutModal({ payout: p, approve: true })
+                                  setPayoutNote('')
+                                  setPayoutNoteError('')
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 <Check size={12} /> Mark Paid
                               </button>
                               <button
                                 type="button"
-                                disabled={busyId === p.id}
-                                onClick={() => processPayout(p, false)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                disabled={processingPayout}
+                                onClick={() => {
+                                  setPayoutModal({ payout: p, approve: false })
+                                  setPayoutNote('')
+                                  setPayoutNoteError('')
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 <X size={12} /> Reject
                               </button>
@@ -299,6 +315,157 @@ export default function AdminTransactionsPage(): React.JSX.Element {
             </div>
           )}
         </>
+      )}
+
+      {/* Custom Payout Action Modal */}
+      {payoutModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-[#E5DACD]/60 animate-in zoom-in-95 duration-150 font-manrope">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#F0EAE1]">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                    payoutModal.approve
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-600 border border-rose-200'
+                  }`}
+                >
+                  {payoutModal.approve ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-[#08182B]">
+                    {payoutModal.approve ? 'Approve & Mark Payout as Paid' : 'Reject Withdrawal Request'}
+                  </h3>
+                  <p className="text-xs text-[#8E8376]">
+                    {payoutModal.approve
+                      ? 'Record transfer reference to complete this withdrawal'
+                      : 'Refund requested funds back to freelancer wallet'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPayoutModal(null)}
+                disabled={processingPayout}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#8E8376] hover:bg-slate-100 hover:text-[#08182B] transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Payout Details Card */}
+            <div className="mt-4 rounded-xl bg-[#F8F4EE] p-4 border border-[#E5DACD]/60 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#8E8376]">Withdrawal Amount</span>
+                <span className={`text-[20px] font-bold ${payoutModal.approve ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {formatINR(payoutModal.payout.amount, { decimals: true })}
+                </span>
+              </div>
+              <div className="h-px w-full bg-[#E5DACD]/50" />
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-[11px] text-[#8E8376] block">Freelancer</span>
+                  <span className="font-bold text-[#08182B]">{payoutModal.payout.freelancerName || 'Freelancer'}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-[#8E8376] block">Payout Method</span>
+                  <span className="font-bold text-[#08182B]">
+                    {payoutModal.payout.payoutMethod === 'UPI' ? 'UPI Transfer' : 'Bank Transfer'}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-lg bg-white p-2.5 border border-[#E5DACD]/60 text-xs">
+                <span className="text-[10.5px] font-bold text-[#8E8376] uppercase block mb-1">
+                  Pay To Account Details:
+                </span>
+                <p className="font-mono text-[12px] text-[#08182B] break-all select-all font-medium">
+                  {payoutModal.payout.accountDetails}
+                </p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={confirmPayoutAction} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#08182B] mb-1.5">
+                  {payoutModal.approve ? 'Transfer Reference (UTR) or Note *' : 'Reason for Rejection *'}
+                </label>
+                {payoutModal.approve ? (
+                  <input
+                    type="text"
+                    value={payoutNote}
+                    onChange={(e) => {
+                      setPayoutNote(e.target.value)
+                      if (payoutNoteError) setPayoutNoteError('')
+                    }}
+                    placeholder="e.g. UTR329019283019 or IMPS-302919"
+                    className="w-full rounded-xl border border-[#CBD5E1] bg-white px-3.5 py-2.5 text-xs text-[#08182B] placeholder-[#9D9183] focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-semibold"
+                    autoFocus
+                  />
+                ) : (
+                  <textarea
+                    rows={3}
+                    value={payoutNote}
+                    onChange={(e) => {
+                      setPayoutNote(e.target.value)
+                      if (payoutNoteError) setPayoutNoteError('')
+                    }}
+                    placeholder="e.g. Invalid account details, IFSC mismatch, payment declined by bank..."
+                    className="w-full rounded-xl border border-[#CBD5E1] bg-white p-3 text-xs text-[#08182B] placeholder-[#9D9183] focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 resize-none font-medium"
+                    autoFocus
+                  />
+                )}
+                {payoutNoteError ? (
+                  <span className="text-[11px] font-semibold text-rose-600 mt-1 block">
+                    {payoutNoteError}
+                  </span>
+                ) : (
+                  <span className="text-[10.5px] text-[#8E8376] mt-1 block">
+                    {payoutModal.approve
+                      ? 'The freelancer will see this reference in their wallet transaction history to verify deposit.'
+                      : 'This reason will be sent to the freelancer so they can correct their payout details.'}
+                  </span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#F0EAE1]">
+                <button
+                  type="button"
+                  onClick={() => setPayoutModal(null)}
+                  disabled={processingPayout}
+                  className="rounded-xl border border-[#CBD5E1] px-4 py-2 text-xs font-bold text-[#524B42] hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingPayout}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold text-white transition-colors shadow-sm disabled:opacity-60 cursor-pointer ${
+                    payoutModal.approve
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {payoutModal.approve ? <Check size={14} /> : <X size={14} />}
+                  <span>
+                    {processingPayout
+                      ? 'Processing…'
+                      : payoutModal.approve
+                      ? 'Confirm & Mark Paid'
+                      : 'Reject Withdrawal'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )
