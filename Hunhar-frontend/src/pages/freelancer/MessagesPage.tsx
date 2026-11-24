@@ -21,6 +21,8 @@ import {
   Building2,
   Globe,
   ShieldCheck,
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-react'
 import messageDoodleBg from '../../assets/Message doodle 6.png'
 import {
@@ -81,6 +83,16 @@ function Avatar({ name, url, id, size = 'h-10 w-10' }: { name?: string; url?: st
   return <img src={src} alt={name || 'Avatar'} className={`${size} shrink-0 rounded-full object-cover ring-1 ring-[#DECFBE]/60`} />
 }
 
+interface PendingAttachment {
+  id: string
+  file: File
+  previewUrl?: string
+  isImage: boolean
+  stored?: StoredFile
+  uploading: boolean
+  error?: string
+}
+
 export default function MessagesPage(): React.JSX.Element {
   const base = useRoleBase()
   const me = tokenStorage.getUser()
@@ -91,8 +103,7 @@ export default function MessagesPage(): React.JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [inputText, setInputText] = useState('')
-  const [attachment, setAttachment] = useState<StoredFile | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -216,10 +227,24 @@ export default function MessagesPage(): React.JSX.Element {
     return () => window.clearInterval(t)
   }, [loadConversations])
 
+  // Sync selectedId with URL parameter changes (e.g. forward/back navigation or external link)
+  useEffect(() => {
+    const fromUrl = fromRouteId(searchParams.get('c'))
+    if (fromUrl && fromUrl !== selectedId) {
+      setSelectedId(fromUrl)
+    }
+  }, [searchParams])
+
   // Open the conversation from ?c= and switch to its tab
   useEffect(() => {
     const target = conversations.find((c) => c.id === selectedId)
-    if (target) setActiveTab(target.otherPartyRole === 'FREELANCER' ? 'Hustlers' : 'Client')
+    if (target) {
+      if (base === '/client') {
+        setActiveTab('Hustlers')
+      } else {
+        setActiveTab(target.otherPartyRole === 'FREELANCER' ? 'Hustlers' : 'Client')
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations.length > 0])
 
@@ -253,8 +278,14 @@ export default function MessagesPage(): React.JSX.Element {
     setSearchParams(id ? { c: id } : {}, { replace: true })
   }
 
+  const tabs: ConversationTab[] = base === '/client' ? ['Hustlers'] : ['Client', 'Hustlers']
+
   const tabConversations = conversations.filter((c) =>
-    activeTab === 'Hustlers' ? c.otherPartyRole === 'FREELANCER' : c.otherPartyRole !== 'FREELANCER'
+    base === '/client'
+      ? c.otherPartyRole === 'FREELANCER' || true
+      : activeTab === 'Hustlers'
+      ? c.otherPartyRole === 'FREELANCER'
+      : c.otherPartyRole !== 'FREELANCER'
   )
   const filtered = tabConversations.filter((c) => {
     const q = searchQuery.toLowerCase()
@@ -268,33 +299,71 @@ export default function MessagesPage(): React.JSX.Element {
   const active = conversations.find((c) => c.id === selectedId)
 
   const handleAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!file) return
-    const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
-    if (BLOCKED_EXT.has(ext)) {
-      setError(`Program and script files (.${ext}) cannot be sent. Put them in a .zip if you need to share them.`)
-      return
+    if (!files.length) return
+
+    const newItems: PendingAttachment[] = []
+    for (const file of files) {
+      const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+      if (BLOCKED_EXT.has(ext)) {
+        setError(`Program and script files (.${ext}) cannot be sent. Put them in a .zip if you need to share them.`)
+        continue
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(`"${file.name}" is ${formatBytes(file.size)}. The maximum file size is 20 MB.`)
+        continue
+      }
+
+      const isImage = file.type.startsWith('image/')
+      const previewUrl = isImage ? URL.createObjectURL(file) : undefined
+      newItems.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        previewUrl,
+        isImage,
+        uploading: true,
+      })
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(`"${file.name}" is ${formatBytes(file.size)}. The maximum file size is 20 MB.`)
-      return
-    }
+
+    if (!newItems.length) return
     setError('')
-    setUploading(true)
-    try {
-      setAttachment(await filesApi.upload(file, active?.projectId || undefined))
-    } catch (err: any) {
-      setError(err.message || 'Upload failed')
-    } finally {
-      setUploading(false)
+    setPendingAttachments((prev) => [...prev, ...newItems])
+
+    // Upload each file in parallel
+    for (const item of newItems) {
+      filesApi
+        .upload(item.file, active?.projectId || undefined)
+        .then((stored) => {
+          setPendingAttachments((prev) =>
+            prev.map((p) => (p.id === item.id ? { ...p, stored, uploading: false } : p))
+          )
+        })
+        .catch((err: any) => {
+          setPendingAttachments((prev) =>
+            prev.map((p) => (p.id === item.id ? { ...p, uploading: false, error: err.message || 'Upload failed' } : p))
+          )
+        })
     }
+  }
+
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments((prev) => {
+      const found = prev.find((p) => p.id === id)
+      if (found?.previewUrl) {
+        URL.revokeObjectURL(found.previewUrl)
+      }
+      return prev.filter((p) => p.id !== id)
+    })
   }
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const content = inputText.trim()
-    if (!selectedId || sending) return
+    const readyAttachments = pendingAttachments.filter((p) => p.stored && !p.error)
+    const anyUploading = pendingAttachments.some((p) => p.uploading)
+
+    if (!selectedId || sending || anyUploading) return
 
     if (editingMsg) {
       if (!content && !editingMsg.attachmentUrl) return
@@ -312,21 +381,34 @@ export default function MessagesPage(): React.JSX.Element {
       return
     }
 
-    if (!content && !attachment) return
+    if (!content && !readyAttachments.length) return
     setSending(true)
     try {
-      const msg = await messagesApi.sendMessage(selectedId, content, attachment, replyingTo?.id)
-      setMessages((prev) => [...prev, msg])
+      if (readyAttachments.length > 0) {
+        // Send each attachment as a message, attaching content to the first or last
+        for (let i = 0; i < readyAttachments.length; i++) {
+          const att = readyAttachments[i].stored!
+          // Add user text to the first attachment message if present
+          const textForMsg = i === 0 ? content : ''
+          const replyId = i === 0 ? replyingTo?.id : undefined
+          const msg = await messagesApi.sendMessage(selectedId, textForMsg, att, replyId)
+          setMessages((prev) => [...prev, msg])
+        }
+      } else {
+        // Text-only message
+        const msg = await messagesApi.sendMessage(selectedId, content, null, replyingTo?.id)
+        setMessages((prev) => [...prev, msg])
+      }
+
+      // Cleanup previews
+      pendingAttachments.forEach((p) => {
+        if (p.previewUrl) URL.revokeObjectURL(p.previewUrl)
+      })
+
       setInputText('')
-      setAttachment(null)
+      setPendingAttachments([])
       setReplyingTo(null)
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? { ...c, lastMessage: content || `📎 ${attachment?.originalName || 'Attachment'}`, lastMessageAt: msg.createdAt }
-            : c
-        )
-      )
+      loadConversations()
     } catch (err: any) {
       setError(err.message || 'Message not sent')
     } finally {
@@ -345,32 +427,36 @@ export default function MessagesPage(): React.JSX.Element {
           <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-[#DECFBE] bg-[#FFFFFF] md:w-[300px] lg:w-[320px] 2xl:w-[380px] min-h-0 h-full`}>
             <div className="shrink-0 p-4 pb-2">
               <h1 className="font-manrope text-[20px] font-bold text-[#08182B]">Messages</h1>
-              <p className="mt-0.5 text-[12px] text-[#786D61]">Conversations with clients & collaborators</p>
+              <p className="mt-0.5 text-[12px] text-[#786D61]">
+                {base === '/client' ? 'Conversations with freelancers' : 'Conversations with clients & collaborators'}
+              </p>
             </div>
 
-            <div className="shrink-0 px-4 py-2">
-              <div className="flex rounded-full bg-[#E5D7CA] p-1" role="tablist">
-                {(['Client', 'Hustlers'] as ConversationTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeTab === tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 font-manrope text-[12px] font-bold transition-all ${
-                      activeTab === tab ? 'bg-[#C06B3E] text-white shadow-xs' : 'text-[#6E6357] hover:text-[#08182B]'
-                    }`}
-                  >
-                    {tab === 'Client' ? 'Clients' : 'Freelancers'}
-                    {unreadIn(tab) > 0 && (
-                      <span className={`rounded-full px-1.5 text-[10px] ${activeTab === tab ? 'bg-white text-[#C06B3E]' : 'bg-[#C06B3E] text-white'}`}>
-                        {unreadIn(tab)}
-                      </span>
-                    )}
-                  </button>
-                ))}
+            {base !== '/client' && (
+              <div className="shrink-0 px-4 py-2">
+                <div className="flex rounded-full bg-[#E5D7CA] p-1" role="tablist">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 font-manrope text-[12px] font-bold transition-all ${
+                        activeTab === tab ? 'bg-[#C06B3E] text-white shadow-xs' : 'text-[#6E6357] hover:text-[#08182B]'
+                      }`}
+                    >
+                      {tab === 'Client' ? 'Clients' : 'Freelancers'}
+                      {unreadIn(tab) > 0 && (
+                        <span className={`rounded-full px-1.5 text-[10px] ${activeTab === tab ? 'bg-white text-[#C06B3E]' : 'bg-[#C06B3E] text-white'}`}>
+                          {unreadIn(tab)}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="shrink-0 px-4 py-2">
               <div className="relative">
@@ -394,9 +480,7 @@ export default function MessagesPage(): React.JSX.Element {
                   {searchQuery
                     ? 'No chats match your search.'
                     : base === '/client'
-                    ? activeTab === 'Client'
-                      ? 'No conversations here.'
-                      : 'No freelancer conversations yet. A chat opens automatically when you hire someone, or use "Message" on a proposal.'
+                    ? 'No freelancer conversations yet. A chat opens automatically when you hire someone, or use "Message" on a proposal.'
                     : activeTab === 'Client'
                     ? 'No client conversations yet. A chat opens automatically when a client hires you, or use "Send Message" in a project workspace.'
                     : 'No conversations with other freelancers yet. Team invites open chats here.'}
@@ -409,20 +493,26 @@ export default function MessagesPage(): React.JSX.Element {
                       key={c.id}
                       type="button"
                       onClick={() => selectConversation(c.id)}
-                      className={`flex w-full items-start gap-3 p-3.5 text-left transition-colors ${
-                        isSelected ? 'border-l-4 border-l-[#C06B3E] bg-[#FAF4EE]' : 'hover:bg-[#FAF7F2]'
+                      className={`relative flex w-full items-start gap-3 p-3.5 text-left transition-colors ${
+                        isSelected ? 'bg-[#FAF4EE]' : 'hover:bg-[#FAF7F2]'
                       }`}
                     >
+                      {/* Active indicator bar */}
+                      {isSelected && (
+                        <span className="absolute inset-y-0 left-0 w-1 rounded-r-sm bg-[#C06B3E]" />
+                      )}
                       <Avatar name={c.otherPartyName} url={c.otherPartyAvatarUrl} id={c.otherPartyId} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className={`truncate font-manrope text-[13.5px] text-[#08182B] ${c.unreadCount ? 'font-extrabold' : 'font-bold'}`}>
+                          <h4 className={`truncate font-manrope text-[13.5px] ${isSelected ? 'font-extrabold text-[#C06B3E]' : c.unreadCount ? 'font-extrabold text-[#08182B]' : 'font-bold text-[#08182B]'}`}>
                             {c.otherPartyName || 'User'}
                           </h4>
-                          <span className="shrink-0 text-[11px] text-[#9A8E80]">{timeAgo(c.lastMessageAt)}</span>
+                          <span className={`shrink-0 text-[11px] ${isSelected ? 'font-semibold text-[#C06B3E]' : 'text-[#9A8E80]'}`}>
+                            {timeAgo(c.lastMessageAt)}
+                          </span>
                         </div>
                         <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <p className={`line-clamp-1 font-manrope text-[12px] ${c.unreadCount ? 'font-semibold text-[#08182B]' : 'text-[#7A7065]'}`}>
+                          <p className={`line-clamp-1 font-manrope text-[12px] ${isSelected ? 'font-medium text-[#7A7065]' : c.unreadCount ? 'font-semibold text-[#08182B]' : 'text-[#7A7065]'}`}>
                             {c.lastMessage || 'Say hello 👋'}
                           </p>
                           {c.unreadCount > 0 && (
@@ -658,24 +748,38 @@ export default function MessagesPage(): React.JSX.Element {
                                     <span className="line-clamp-2">{msg.replyToPreview}</span>
                                   </div>
                                 )}
-                                {msg.content}
+                                {msg.content && <p>{msg.content}</p>}
                                 {isImage && (
-                                  <a href={fileUrl(msg.attachmentUrl!)} target="_blank" rel="noreferrer" className="mt-1.5 block">
+                                  <a href={fileUrl(msg.attachmentUrl!)} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-[12px] border border-black/10 shadow-xs transition-opacity hover:opacity-95">
                                     <img
                                       src={fileUrl(msg.attachmentUrl!)}
                                       alt={msg.attachmentName || 'Image'}
-                                      className="max-h-60 max-w-full rounded-[10px] object-contain"
+                                      className="max-h-72 w-auto max-w-full rounded-[12px] object-cover"
                                       loading="lazy"
                                     />
                                   </a>
                                 )}
-                                {msg.attachmentUrl && (
+                                {msg.attachmentUrl && !isImage && (
                                   <a
                                     href={fileUrl(msg.attachmentUrl) + '?download=true'}
-                                    className={`mt-1.5 flex items-center gap-1.5 text-[12px] font-bold underline ${isMe ? 'text-white' : 'text-[#C06B3E]'}`}
+                                    download={msg.attachmentName || 'download'}
+                                    className={`mt-2 flex items-center gap-2.5 rounded-[12px] p-2.5 text-[12.5px] font-bold no-underline transition-all ${
+                                      isMe
+                                        ? 'bg-white/15 text-white hover:bg-white/20'
+                                        : 'border border-[#DECFBE] bg-[#FAF4EE] text-[#08182B] hover:bg-[#F2E8DC]'
+                                    }`}
                                   >
-                                    <FileText size={13} /> <span className="truncate">{msg.attachmentName || 'Attachment'}</span>
-                                    {msg.attachmentSize ? <span className="shrink-0 font-semibold opacity-80">· {formatBytes(msg.attachmentSize)}</span> : null}
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] ${isMe ? 'bg-white/25 text-white' : 'bg-[#E5D7CA] text-[#C06B3E]'}`}>
+                                      <FileText size={18} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <span className="block truncate">{msg.attachmentName || 'Attachment'}</span>
+                                      {msg.attachmentSize ? (
+                                        <span className={`block text-[11px] font-medium ${isMe ? 'text-white/80' : 'text-[#7A7065]'}`}>
+                                          {formatBytes(msg.attachmentSize)}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </a>
                                 )}
                               </>
@@ -751,26 +855,88 @@ export default function MessagesPage(): React.JSX.Element {
                     </button>
                   </div>
                 )}
-                {attachment && (
-                  <div className="mb-2 flex items-center gap-2 rounded-full bg-[#FAF4EE] px-3 py-1 text-[12px] font-semibold text-[#08182B]">
-                    <FileText size={13} /> <span className="truncate">{attachment.originalName}</span>
-                    <span className="shrink-0 text-[11px] font-medium text-[#8E8376]">{formatBytes(attachment.sizeBytes)}</span>
-                    <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)} className="ml-auto text-[#8E8376]">
-                      <X size={13} />
-                    </button>
+                {/* WhatsApp-style Pending Attachments Bar */}
+                {pendingAttachments.length > 0 && (
+                  <div className="mb-2.5 flex items-center gap-2 overflow-x-auto pb-1 pt-0.5">
+                    {pendingAttachments.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`group relative flex shrink-0 items-center gap-2 rounded-[14px] border p-1.5 pr-2.5 transition-all shadow-xs ${
+                          item.error
+                            ? 'border-red-300 bg-red-50 text-red-700'
+                            : 'border-[#DECFBE] bg-[#FAF4EE] text-[#08182B]'
+                        }`}
+                      >
+                        {/* Thumbnail or File Icon */}
+                        {item.isImage && item.previewUrl ? (
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-[10px] bg-black/5">
+                            <img
+                              src={item.previewUrl}
+                              alt={item.file.name}
+                              className="h-full w-full object-cover"
+                            />
+                            {item.uploading && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <Loader2 size={16} className="animate-spin text-white" />
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[10px] bg-[#E5D7CA]/60 text-[#C06B3E]">
+                            <FileText size={22} />
+                            {item.uploading && (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-[10px] bg-black/40">
+                                <Loader2 size={16} className="animate-spin text-white" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* File Details */}
+                        <div className="min-w-0 max-w-[140px] sm:max-w-[180px]">
+                          <p className="truncate font-manrope text-[12px] font-bold text-[#08182B]">
+                            {item.file.name}
+                          </p>
+                          <p className="text-[11px] font-medium text-[#7A7065]">
+                            {item.uploading
+                              ? 'Uploading…'
+                              : item.error
+                              ? 'Failed'
+                              : formatBytes(item.file.size)}
+                          </p>
+                        </div>
+
+                        {/* Remove Attachment Button */}
+                        <button
+                          type="button"
+                          onClick={() => removePendingAttachment(item.id)}
+                          aria-label="Remove attachment"
+                          className="ml-1 rounded-full p-1 text-[#9A8E80] transition-colors hover:bg-black/10 hover:text-[#08182B] cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
+
                 <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-                  <input ref={fileRef} type="file" className="hidden" onChange={handleAttach} />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleAttach}
+                  />
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#9A8E80] hover:bg-[#FAF4EE] hover:text-[#C06B3E] disabled:opacity-50"
-                    title="Attach file"
-                    aria-label="Attach file"
+                    disabled={pendingAttachments.some((p) => p.uploading)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#9A8E80] hover:bg-[#FAF4EE] hover:text-[#C06B3E] disabled:opacity-50 cursor-pointer"
+                    title="Attach files (multiple)"
+                    aria-label="Attach files"
                   >
-                    <Paperclip size={18} className={uploading ? 'animate-pulse' : ''} />
+                    <Paperclip size={18} className={pendingAttachments.some((p) => p.uploading) ? 'animate-pulse' : ''} />
                   </button>
                   <input
                     type="text"
@@ -783,9 +949,15 @@ export default function MessagesPage(): React.JSX.Element {
                   />
                   <button
                     type="submit"
-                    disabled={(editingMsg ? !inputText.trim() && !editingMsg.attachmentUrl : !inputText.trim() && !attachment) || sending}
+                    disabled={
+                      (editingMsg
+                        ? !inputText.trim() && !editingMsg.attachmentUrl
+                        : !inputText.trim() && !pendingAttachments.some((p) => p.stored && !p.error)) ||
+                      pendingAttachments.some((p) => p.uploading) ||
+                      sending
+                    }
                     aria-label={editingMsg ? 'Save edit' : 'Send'}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-50"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C06B3E] text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-50 cursor-pointer"
                   >
                     <Send size={16} />
                   </button>

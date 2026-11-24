@@ -32,8 +32,8 @@ function ProjectPicker({ role }: ProjectTrackingViewProps) {
   }, [role])
   return (
     <div className="w-full rounded-[24px] border border-[#E9EBEF]/60 bg-white p-6 font-manrope shadow-xs sm:p-8">
-      <h1 className="text-[22px] font-extrabold text-[#08182B]">Project Tracking</h1>
-      <p className="mt-1 text-[13px] text-[#7A7065]">Choose a project to see its milestones, submissions and payments.</p>
+      <h1 className="font-makira text-[24px] font-medium uppercase tracking-wide text-[#08182B]">Project Tracking</h1>
+      <p className="mt-1 font-manrope text-[13px] text-[#7A7065]">Choose a project to see its milestones, submissions and payments.</p>
       {error && <p className="mt-4 text-[13px] font-semibold text-[#B91C1C]">{error}</p>}
       {!projects && !error && <p className="mt-6 text-[13px] text-[#8E8376]">Loading…</p>}
       {projects && projects.length === 0 && (
@@ -237,7 +237,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
               <ArrowLeft size={18} />
             </Link>
             <div>
-              <h1 className="font-manrope text-[20px] font-extrabold text-[#08182B] sm:text-[22px]">Project Tracking</h1>
+              <h1 className="font-makira text-[22px] font-medium uppercase tracking-wide text-[#08182B] sm:text-[24px]">Project Tracking</h1>
               <p className="text-[12.5px] text-[#7A7065]">
                 {isClient ? `with ${project.freelancerName || 'your freelancer'}` : `for ${project.clientName || 'the client'}`} · {project.title} · {project.progressPercentage}% done
               </p>
@@ -290,7 +290,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
             {/* Milestones (phases) */}
             <div className="mt-9">
               <div className="flex items-center justify-between pb-3.5">
-                <h2 className="font-manrope text-[17px] font-bold text-[#08182B] sm:text-[18px]">Milestones</h2>
+                <h2 className="font-makira text-[18px] font-medium uppercase tracking-wider text-[#08182B]">Milestones</h2>
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => scroll(phasesRef, -260)} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#64748B] hover:bg-[#FAF8F5]" aria-label="Scroll left">
                     <ChevronLeft size={16} />
@@ -375,7 +375,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
             {/* Submissions board */}
             <div className="mt-10">
               <div className="flex items-center justify-between pb-3.5">
-                <h2 className="font-manrope text-[17px] font-bold text-[#08182B] sm:text-[18px]">Work Submissions</h2>
+                <h2 className="font-makira text-[18px] font-medium uppercase tracking-wider text-[#08182B]">Work Submissions</h2>
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => scroll(boardRef, -300)} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DACD] text-[#64748B] hover:bg-[#FAF8F5]" aria-label="Scroll left">
                     <ChevronLeft size={16} />
@@ -464,7 +464,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
             {/* Progress + activity */}
             <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="rounded-[20px] border border-[#EFE8DF] p-5">
-                <h3 className="flex items-center gap-2 font-manrope text-[16px] font-extrabold text-[#08182B]">
+                <h3 className="flex items-center gap-2 font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">
                   <TrendingUp size={17} className="text-[#C06B3E]" />
                   Progress by Milestone
                 </h3>
@@ -486,7 +486,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                 </div>
               </div>
               <div className="rounded-[20px] border border-[#EFE8DF] p-5">
-                <h3 className="font-manrope text-[16px] font-extrabold text-[#08182B]">Latest Activity</h3>
+                <h3 className="font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">Latest Activity</h3>
                 <div className="mt-4 space-y-3">
                   {activity.map((a, i) => (
                     <div key={i} className="flex items-start gap-3">
@@ -513,7 +513,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <form onSubmit={addMilestone} className="w-full max-w-md rounded-[24px] border border-[#E5DACD] bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-extrabold text-[#08182B]">Add Milestone</h3>
+              <h3 className="font-makira text-[19px] font-medium tracking-wide text-[#08182B]">Add Milestone</h3>
               <button type="button" onClick={() => setShowAdd(false)} className="rounded-full p-1.5 text-[#94A3B8] hover:bg-[#FAF8F5]">
                 <X size={18} />
               </button>
@@ -540,7 +540,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF7ED] text-[#C06B3E]">
               <CreditCard size={28} />
             </div>
-            <h3 className="text-[20px] font-extrabold text-[#08182B]">Fund “{payingFor.title}”?</h3>
+            <h3 className="font-makira text-[20px] font-medium tracking-wide text-[#08182B]">Fund “{payingFor.title}”?</h3>
             <p className="mt-2 text-[13px] leading-relaxed text-[#64748B]">
               {formatINR(payingFor.amount)} moves from your wallet into escrow. The freelancer can start, and the money is released only when you approve the work.
             </p>
@@ -574,7 +574,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EBF7EE] text-[#16A34A]">
               <ShieldCheck size={28} />
             </div>
-            <h3 className="text-[20px] font-extrabold text-[#08182B]">Release {formatINR(releasingFor.amount)}?</h3>
+            <h3 className="font-makira text-[20px] font-medium tracking-wide text-[#08182B]">Release {formatINR(releasingFor.amount)}?</h3>
             <p className="mt-2 text-[13px] leading-relaxed text-[#64748B]">
               The escrowed amount for “{releasingFor.title}” goes to {project.freelancerName || 'the freelancer'} (minus the platform fee) and an invoice is created. This cannot be undone.
             </p>
@@ -603,7 +603,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <form onSubmit={submitWork} className="w-full max-w-md rounded-[24px] border border-[#E5DACD] bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-extrabold text-[#08182B]">Submit work · {submitFor.title}</h3>
+              <h3 className="font-makira text-[19px] font-medium tracking-wide text-[#08182B]">Submit work · {submitFor.title}</h3>
               <button type="button" onClick={() => setSubmitFor(null)} className="rounded-full p-1.5 text-[#94A3B8] hover:bg-[#FAF8F5]">
                 <X size={18} />
               </button>

@@ -293,7 +293,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-manrope text-[24px] sm:text-[26px] font-extrabold text-[#08182B]">{project.title}</h2>
+                  <h2 className="font-makira text-[24px] sm:text-[26px] font-medium tracking-wide text-[#08182B]">{project.title}</h2>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E9F9EE] px-3 py-1 font-manrope text-[12px] font-bold text-[#1F874C]">
                     <span className="h-2 w-2 rounded-full bg-[#1F874C]" />
                     {PROJECT_STATUS_LABEL[project.status] || project.status}

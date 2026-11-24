@@ -61,7 +61,7 @@ export default function ClientProjectsPage(): React.JSX.Element {
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="font-manrope text-[24px] font-extrabold text-[#08182B] sm:text-[28px]">Projects</h1>
+            <h1 className="font-makira text-[24px] font-medium uppercase tracking-wide text-[#08182B] sm:text-[28px]">Projects</h1>
             <p className="mt-1 font-manrope text-[13.5px] text-[#7A7065]">Manage all your posted projects</p>
           </div>
           <Link
@@ -135,7 +135,7 @@ export default function ClientProjectsPage(): React.JSX.Element {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 flex-col">
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <h3 className="font-manrope text-[15.5px] font-bold text-[#08182B]">{project.title}</h3>
+                        <h3 className="font-makira text-[16.5px] font-medium tracking-wide text-[#08182B]">{project.title}</h3>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-manrope text-[11px] font-bold ${badge.cls}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} />
                           {badge.label}

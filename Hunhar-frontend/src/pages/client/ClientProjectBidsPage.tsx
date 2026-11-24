@@ -157,7 +157,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
                   {acceptedBid ? 'Hired · in progress' : PROJECT_STATUS_LABEL[project.status] || project.status}
                 </span>
               </div>
-              <h1 className="font-manrope text-[22px] font-extrabold text-[#08182B] sm:text-[26px]">{project.title}</h1>
+              <h1 className="font-makira text-[22px] font-medium tracking-wide text-[#08182B] sm:text-[26px]">{project.title}</h1>
               <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-[#7A7065]">{project.description}</p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-3">
@@ -223,7 +223,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[#FAF8F5] text-[#C06B3E]">
                 <FileText size={28} />
               </div>
-              <h3 className="font-manrope text-[17px] font-bold text-[#08182B]">{bids.length === 0 ? 'No proposals yet' : 'No proposals in this view'}</h3>
+              <h3 className="font-makira text-[18px] font-medium tracking-wide text-[#08182B]">{bids.length === 0 ? 'No proposals yet' : 'No proposals in this view'}</h3>
               <p className="mt-1 max-w-sm text-[13px] text-[#7A7065]">
                 {bids.length === 0 ? 'Freelancers who bid on this project will appear here.' : 'Try another tab or search term.'}
               </p>
@@ -430,7 +430,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
             <div className="flex items-start justify-between border-b border-[#F0ECE6] pb-4">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#C06B3E]">Proposal Details</span>
-                <h2 className="mt-0.5 text-[20px] font-extrabold text-[#08182B]">{selectedBid.freelancerName || 'Freelancer'}'s Proposal</h2>
+                <h2 className="mt-0.5 font-makira text-[20px] font-medium tracking-wide text-[#08182B]">{selectedBid.freelancerName || 'Freelancer'}'s Proposal</h2>
               </div>
               <button type="button" onClick={() => setSelectedBid(null)} className="cursor-pointer rounded-full p-1.5 text-[#94A3B8] hover:bg-[#FAF8F5] hover:text-[#08182B]">
                 <X size={20} />
@@ -525,7 +525,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EBF7EE] text-[#16A34A]">
               <ShieldCheck size={32} strokeWidth={2.2} />
             </div>
-            <h3 className="text-center text-[20px] font-extrabold text-[#08182B]">Hire {showAcceptModal.freelancerName || 'this freelancer'}?</h3>
+            <h3 className="text-center font-makira text-[20px] font-medium tracking-wide text-[#08182B]">Hire {showAcceptModal.freelancerName || 'this freelancer'}?</h3>
             <p className="mt-2 text-center text-[13px] leading-relaxed text-[#64748B]">
               The project starts and every other proposal is declined. No money moves now: you add milestones and fund each one from your wallet, and it is released only when you approve the work.
             </p>

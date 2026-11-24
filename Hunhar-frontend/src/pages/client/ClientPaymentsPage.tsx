@@ -120,7 +120,7 @@ export default function ClientPaymentsPage(): React.JSX.Element {
 
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="font-manrope text-[24px] font-extrabold text-[#08182B] sm:text-[28px]">Payments</h1>
+            <h1 className="font-makira text-[26px] font-medium uppercase tracking-wide text-[#08182B] sm:text-[30px]">Payments</h1>
             <p className="mt-1 font-manrope text-[13.5px] text-[#7A7065]">Your wallet, escrow, payment schedule and invoices</p>
           </div>
           <button
@@ -176,7 +176,7 @@ export default function ClientPaymentsPage(): React.JSX.Element {
 
         {activeTab === 'Overview' && (
           <div className="mt-7 rounded-[20px] border border-[#EBE6DF] bg-white p-5 shadow-xs sm:p-7">
-            <h3 className="font-manrope text-[15.5px] font-bold text-[#08182B]">Upcoming Payments</h3>
+            <h3 className="font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">Upcoming Payments</h3>
             <div className="mt-5 flex flex-col space-y-3.5">
               {upcoming.length === 0 && (
                 <p className="py-6 text-center text-[13px] text-[#8C9BA8]">{loading ? 'Loading…' : 'No unpaid milestones on your active projects.'}</p>
@@ -270,8 +270,8 @@ export default function ClientPaymentsPage(): React.JSX.Element {
       {showAddFunds && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Add funds">
           <div className="w-full max-w-md rounded-[20px] bg-white p-6 shadow-xl">
-            <h3 className="text-[17px] font-bold text-[#111827]">Add Funds</h3>
-            <p className="mt-1 text-[13px] text-[#64748B]">Top up your wallet to fund milestones. Pay with UPI, card or net banking.</p>
+            <h3 className="font-makira text-[19px] font-medium tracking-wide text-[#111827]">Add Funds</h3>
+            <p className="mt-1 font-manrope text-[13px] text-[#64748B]">Top up your wallet to fund milestones. Pay with UPI, card or net banking.</p>
             {modalError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs font-semibold text-red-600">{modalError}</div>}
             <label className="mt-4 block text-[12px] font-bold uppercase text-[#8C9BA8]">
               Amount (₹)

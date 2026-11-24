@@ -211,7 +211,7 @@ export default function BrowseProjectsPage(): React.JSX.Element {
         {/* Page Title */}
         <div className="flex items-center gap-2 text-[#08182B]">
           <Search size={18} className="text-[#08182B]" />
-          <h1 className="font-manrope text-[18px] sm:text-[20px] font-bold text-[#08182B]">
+          <h1 className="font-makira text-[18px] sm:text-[20px] font-medium uppercase tracking-wide text-[#08182B]">
             Browse Project
           </h1>
         </div>
@@ -229,7 +229,7 @@ export default function BrowseProjectsPage(): React.JSX.Element {
 
           {/* Center Text Header */}
           <div className="mx-auto flex flex-col items-center px-2 text-center">
-            <h2 className="font-manrope text-[20px] sm:text-[24px] lg:text-[26px] font-extrabold tracking-tight text-[#08182B]">
+            <h2 className="font-makira text-[20px] sm:text-[24px] lg:text-[26px] font-medium uppercase tracking-wide text-[#08182B]">
               Find Projects
             </h2>
             <p className="mt-0.5 font-manrope text-[17px] sm:text-[21px] lg:text-[23px] font-extrabold text-[#08182B]">

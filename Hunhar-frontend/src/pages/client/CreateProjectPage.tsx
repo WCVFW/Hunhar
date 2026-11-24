@@ -357,7 +357,7 @@ export default function CreateProjectPage(): React.JSX.Element {
 
       {/* 2. Main Page Header */}
       <div className="mb-8">
-        <h1 className="font-manrope text-[24px] sm:text-[28px] font-extrabold text-[#08182B]">
+        <h1 className="font-makira text-[26px] sm:text-[30px] font-medium uppercase tracking-wide text-[#08182B]">
           {editId ? 'Edit Project' : 'Create Project'}
         </h1>
         <p className="mt-1 font-manrope text-[14px] text-[#7A7065]">
@@ -372,7 +372,7 @@ export default function CreateProjectPage(): React.JSX.Element {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EBF7EE] text-[#16A34A] shadow-inner">
               <Check size={32} strokeWidth={2.5} />
             </div>
-            <h2 className="mt-4 font-manrope text-[22px] font-bold text-[#08182B]">
+            <h2 className="mt-4 font-makira text-[24px] font-medium tracking-wide text-[#08182B]">
               {saved?.status === 'DRAFT' ? 'Draft Saved' : editId ? 'Project Updated' : 'Project Published!'}
             </h2>
             <p className="mt-1.5 max-w-md text-[13.5px] text-[#7A7065]">

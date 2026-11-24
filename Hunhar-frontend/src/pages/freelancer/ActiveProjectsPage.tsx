@@ -132,7 +132,7 @@ export default function ActiveProjectsPage(): React.JSX.Element {
         {/* 1. TOP TITLE */}
         <div className="flex items-center gap-2.5 pb-2 text-[#08182B]">
           <Briefcase size={22} className="text-[#8E8376]" />
-          <h1 className="font-manrope text-[20px] sm:text-[22px] font-bold text-[#08182B]">
+          <h1 className="font-makira text-[20px] sm:text-[22px] font-medium uppercase tracking-wide text-[#08182B]">
             My Projects
           </h1>
         </div>

@@ -114,7 +114,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
       {/* 1. TOP HEADER TITLE */}
       <div className="flex items-center gap-2 text-[#08182B]">
         <Briefcase size={20} className="text-[#8E8376]" />
-        <h1 className="font-manrope text-[18px] sm:text-[20px] font-bold text-[#08182B]">
+        <h1 className="font-makira text-[20px] font-medium uppercase tracking-wide text-[#08182B] sm:text-[22px]">
           Project Overview
         </h1>
       </div>
@@ -148,7 +148,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
             </div>
 
             {/* Title */}
-            <h2 className="mt-5 font-manrope text-[22px] sm:text-[24px] font-extrabold text-[#08182B]">
+            <h2 className="mt-5 font-makira text-[24px] sm:text-[26px] font-medium tracking-wide text-[#08182B]">
               {title}
             </h2>
 
@@ -180,7 +180,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
 
           {/* Required Skills Card */}
           <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
-            <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">
+            <h3 className="font-makira text-[16px] font-medium uppercase tracking-wider text-[#08182B]">
               Required Skills
             </h3>
 
@@ -199,7 +199,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
 
           {attachments.length > 0 && (
             <div className="w-full rounded-[24px] border border-[#E5E5E5] bg-white p-5 sm:p-6 shadow-xs">
-              <h3 className="font-manrope text-[16px] font-bold text-[#08182B]">Attachments</h3>
+              <h3 className="font-makira text-[16px] font-medium uppercase tracking-wider text-[#08182B]">Attachments</h3>
               <div className="mt-3 flex flex-col gap-2">
                 {attachments.map((url, idx) => (
                   <a
@@ -279,7 +279,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
 
           {/* Project Details Box */}
           <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 shadow-xs">
-            <h3 className="font-manrope text-[13px] font-bold uppercase tracking-wider text-[#8A7F73]">
+            <h3 className="font-makira text-[14px] font-medium uppercase tracking-wider text-[#8A7F73]">
               PROJECT DETAILS
             </h3>
 
@@ -323,7 +323,7 @@ export default function ProjectDetailsPage(): React.JSX.Element {
 
           {/* About Client Box */}
           <div className="w-full rounded-[20px] border border-[#E5E5E5] bg-white p-5 shadow-xs">
-            <h3 className="font-manrope text-[14px] font-bold text-[#08182B]">
+            <h3 className="font-makira text-[15px] font-medium uppercase tracking-wider text-[#08182B]">
               About {clientName}
             </h3>
 

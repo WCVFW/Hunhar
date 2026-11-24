@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ChevronDown,
   X,
+  Table as TableIcon,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
@@ -24,6 +25,118 @@ import { blogApi, fileUrl, filesApi, getSessionRole, tokenStorage } from '../ser
 import { renderArticleContent } from '../components/blog/articleContent';
 import BlogFaqSection from '../components/blog/BlogFaqSection';
 import { extractFaqs, embedFaqs } from '../services/blogFaq';
+import { invalidateBlogCache } from '../services/blogPosts';
+
+function markdownToHtml(md: string): string {
+  const lines = (md || '').split('\n');
+  const out: string[] = [];
+  let inList: 'ul' | 'ol' | null = null;
+  let inTable = false;
+  let tableRows: string[][] = [];
+
+  const flushList = () => {
+    if (inList) {
+      out.push(inList === 'ul' ? '</ul>' : '</ol>');
+      inList = null;
+    }
+  };
+
+  const flushTable = () => {
+    if (inTable && tableRows.length > 0) {
+      out.push('<table class="w-full my-4 border-collapse border border-[#DECFBE] rounded-xl overflow-hidden"><tbody>');
+      tableRows.forEach((r, idx) => {
+        const isHeader = idx === 0;
+        const tag = isHeader ? 'th' : 'td';
+        const cls = isHeader
+          ? 'border border-[#DECFBE] bg-[#FAF4EE] px-3.5 py-2.5 font-makira text-left font-medium uppercase text-[#08182B]'
+          : 'border border-[#DECFBE] px-3.5 py-2 text-slate-700 font-manrope';
+        out.push('<tr>' + r.map((c) => `<${tag} class="${cls}">${c || '&nbsp;'}</${tag}>`).join('') + '</tr>');
+      });
+      out.push('</tbody></table>');
+      inTable = false;
+      tableRows = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trim();
+
+    if (!line) {
+      flushList();
+      flushTable();
+      continue;
+    }
+
+    if (line.includes('|')) {
+      flushList();
+      if (!inTable) inTable = true;
+      if (!/^[:\s-–—|]+$/.test(line)) {
+        const cells = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+        tableRows.push(cells);
+      }
+      continue;
+    } else {
+      flushTable();
+    }
+
+    if (/^###\s+/.test(line)) {
+      flushList();
+      const txt = line.replace(/^###\s+/, '');
+      out.push(`<h3 class="text-xl sm:text-2xl font-medium text-navy font-makira uppercase tracking-wide my-4">${txt}</h3>`);
+      continue;
+    }
+
+    if (/^##\s+/.test(line)) {
+      flushList();
+      const txt = line.replace(/^##\s+/, '');
+      out.push(`<h2 class="text-2xl sm:text-3xl font-medium text-navy font-makira uppercase tracking-wide my-5">${txt}</h2>`);
+      continue;
+    }
+
+    if (/^#\s+/.test(line)) {
+      flushList();
+      const txt = line.replace(/^#\s+/, '');
+      out.push(`<h2 class="text-2xl sm:text-3xl font-medium text-navy font-makira uppercase tracking-wide my-5">${txt}</h2>`);
+      continue;
+    }
+
+    if (/^>\s+/.test(line)) {
+      flushList();
+      const txt = line.replace(/^>\s+/, '');
+      out.push(`<blockquote class="border-l-4 border-terracotta bg-[#FFF8F3] p-4 my-4 rounded-r-xl font-manrope text-slate-800">${txt}</blockquote>`);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (inList !== 'ul') {
+        flushList();
+        inList = 'ul';
+        out.push('<ul class="my-4 pl-6 list-disc space-y-1.5 text-slate-700 font-manrope">');
+      }
+      out.push(`<li>${line.replace(/^[-*]\s+/, '')}</li>`);
+      continue;
+    }
+
+    const olMatch = line.match(/^\d+\.\s+(.*)$/);
+    if (olMatch) {
+      if (inList !== 'ol') {
+        flushList();
+        inList = 'ol';
+        out.push('<ol class="my-4 pl-6 list-decimal space-y-1.5 text-slate-700 font-manrope">');
+      }
+      out.push(`<li>${olMatch[1]}</li>`);
+      continue;
+    }
+
+    flushList();
+    out.push(`<p class="text-base text-slate-700 leading-relaxed my-3 font-manrope">${line}</p>`);
+  }
+
+  flushList();
+  flushTable();
+  return out.join('\n');
+}
 
 /** Converts rich HTML copied from Google Docs, Word, or web pages into clean Markdown */
 function htmlToMarkdown(html: string): string {
@@ -89,6 +202,34 @@ function htmlToMarkdown(html: string): string {
       case 'ul':
       case 'ol':
         return `\n${childrenText}\n`;
+      case 'table': {
+        const rows = Array.from(el.querySelectorAll('tr'));
+        if (!rows.length) return '';
+        const mdRows: string[] = [];
+        let headerColsCount = 0;
+
+        rows.forEach((tr, rIdx) => {
+          const cells = Array.from(tr.querySelectorAll('th, td')).map((c) =>
+            (c.textContent || '').replace(/\s+/g, ' ').replace(/\|/g, '-').trim()
+          );
+          if (cells.length > 0) {
+            mdRows.push(`| ${cells.join(' | ')} |`);
+            if (rIdx === 0) {
+              headerColsCount = cells.length;
+              const divider = cells.map(() => '---').join(' | ');
+              mdRows.push(`| ${divider} |`);
+            }
+          }
+        });
+        return `\n\n${mdRows.join('\n')}\n\n`;
+      }
+      case 'thead':
+      case 'tbody':
+      case 'tfoot':
+      case 'tr':
+      case 'td':
+      case 'th':
+        return childrenText;
       case 'blockquote': {
         const clean = childrenText.trim();
         return clean ? `\n\n> ${clean}\n\n` : '';
@@ -164,18 +305,28 @@ export default function BlogAdminPage(): React.JSX.Element {
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [editorTab, setEditorTab] = useState<'write' | 'preview' | 'split'>('split');
+  const [editorTab, setEditorTab] = useState<'write' | 'preview' | 'split'>('write');
+  const [editorMode, setEditorMode] = useState<'visual' | 'markdown'>('visual');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
   const [linkModalOpen, setLinkModalOpen] = useState<boolean>(false);
   const [linkText, setLinkText] = useState<string>('');
   const [linkUrl, setLinkUrl] = useState<string>('');
   const [faqs, setFaqs] = useState<BlogFaqItem[]>([]);
+  const [activeTag, setActiveTag] = useState<'h2' | 'h3' | 'blockquote' | 'ul' | 'ol' | 'table' | 'p'>('p');
+
+  // Table Builder State (supports live adding/removing rows and columns)
+  const [tableModalOpen, setTableModalOpen] = useState<boolean>(false);
+  const [tableHeaders, setTableHeaders] = useState<string[]>(['Heading 1', 'Heading 2']);
+  const [tableRowsData, setTableRowsData] = useState<string[][]>([['Content 1', 'Content 2']]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentImageInputRef = useRef<HTMLInputElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const contentTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const visualEditorRef = useRef<HTMLDivElement>(null);
+  const lastSavedRangeRef = useRef<Range | null>(null);
+  const lastTextareaCursorRef = useRef<{ start: number; end: number } | null>(null);
 
   // Close status dropdown on click outside
   useEffect(() => {
@@ -355,6 +506,7 @@ export default function BlogAdminPage(): React.JSX.Element {
       };
 
       await blogApi.save(payload);
+      invalidateBlogCache();
       showNotification('success', 'Article saved successfully!');
       await fetchPosts();
       setViewMode('list');
@@ -370,6 +522,7 @@ export default function BlogAdminPage(): React.JSX.Element {
   const handleDeletePost = async (id: string) => {
     try {
       await blogApi.remove(id);
+      invalidateBlogCache();
       showNotification('success', 'Article deleted.');
       setDeleteConfirmId(null);
       await fetchPosts();
@@ -394,12 +547,408 @@ export default function BlogAdminPage(): React.JSX.Element {
     );
   };
 
-  // Quick insertion helpers for editor
+  // Visual Editor Selection and Cursor Helpers
+  const saveVisualSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && visualEditorRef.current) {
+      const range = sel.getRangeAt(0);
+      if (visualEditorRef.current.contains(range.commonAncestorContainer)) {
+        lastSavedRangeRef.current = range.cloneRange();
+      }
+    }
+  };
+
+  const saveTextareaCursor = () => {
+    if (contentTextareaRef.current) {
+      lastTextareaCursorRef.current = {
+        start: contentTextareaRef.current.selectionStart || 0,
+        end: contentTextareaRef.current.selectionEnd || 0,
+      };
+    }
+  };
+
+  // Visual Editor Sync & Commands
+  const handleVisualInput = () => {
+    if (!visualEditorRef.current) return;
+    const html = visualEditorRef.current.innerHTML;
+    const md = htmlToMarkdown(html);
+    setFormData((prev) => ({ ...prev, content: md }));
+    updateActiveTagVisual();
+  };
+
+  const updateActiveTagVisual = () => {
+    saveVisualSelection();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !visualEditorRef.current) return;
+    let node: Node | null = sel.anchorNode;
+    let foundTag: typeof activeTag = 'p';
+
+    while (node && node !== visualEditorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'h2') {
+          foundTag = 'h2';
+          break;
+        } else if (tag === 'h3') {
+          foundTag = 'h3';
+        } else if (tag === 'blockquote') {
+          foundTag = 'blockquote';
+        } else if (tag === 'ul') {
+          foundTag = 'ul';
+        } else if (tag === 'ol') {
+          foundTag = 'ol';
+        } else if (tag === 'table' || tag === 'tr' || tag === 'td' || tag === 'th') {
+          foundTag = 'table';
+          break;
+        }
+      }
+      node = node.parentNode;
+    }
+    setActiveTag(foundTag);
+  };
+
+  const execVisualBlock = (tag: 'h2' | 'h3' | 'blockquote' | 'p' | 'ul' | 'ol') => {
+    if (editorMode === 'markdown') {
+      toggleBlockTag(tag as any);
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    visualEditorRef.current.focus();
+
+    if (tag === 'ul') {
+      document.execCommand('insertUnorderedList', false);
+    } else if (tag === 'ol') {
+      document.execCommand('insertOrderedList', false);
+    } else if (tag === 'h2') {
+      const isAlreadyH2 = activeTag === 'h2';
+      document.execCommand('formatBlock', false, isAlreadyH2 ? '<p>' : '<h2>');
+    } else if (tag === 'h3') {
+      const isAlreadyH3 = activeTag === 'h3';
+      document.execCommand('formatBlock', false, isAlreadyH3 ? '<p>' : '<h3>');
+    } else if (tag === 'blockquote') {
+      const isAlreadyQuote = activeTag === 'blockquote';
+      document.execCommand('formatBlock', false, isAlreadyQuote ? '<p>' : '<blockquote>');
+    }
+
+    handleVisualInput();
+  };
+
+  const execVisualInline = (command: 'bold' | 'italic') => {
+    if (editorMode === 'markdown') {
+      insertFormatting(command === 'bold' ? '**' : '*', command === 'bold' ? '**' : '*');
+      return;
+    }
+    if (!visualEditorRef.current) return;
+    visualEditorRef.current.focus();
+    document.execCommand(command, false);
+    handleVisualInput();
+  };
+
+  const handleOpenTableModal = () => {
+    if (editorMode === 'visual') {
+      saveVisualSelection();
+    } else {
+      saveTextareaCursor();
+    }
+    if (!tableHeaders || tableHeaders.length === 0) {
+      setTableHeaders(['Heading 1', 'Heading 2']);
+      setTableRowsData([['Content 1', 'Content 2']]);
+    }
+    setTableModalOpen(true);
+  };
+
+  const handleAddColumn = (afterIndex?: number) => {
+    const colNum = tableHeaders.length + 1;
+    const newHeader = `Heading ${colNum}`;
+    if (typeof afterIndex === 'number') {
+      const nextHeaders = [...tableHeaders];
+      nextHeaders.splice(afterIndex + 1, 0, newHeader);
+      setTableHeaders(nextHeaders);
+      setTableRowsData((prev) =>
+        prev.map((row) => {
+          const nextRow = [...row];
+          nextRow.splice(afterIndex + 1, 0, `Content ${colNum}`);
+          return nextRow;
+        })
+      );
+    } else {
+      setTableHeaders((prev) => [...prev, newHeader]);
+      setTableRowsData((prev) => prev.map((row) => [...row, `Content ${colNum}`]));
+    }
+  };
+
+  const handleAddColumnLeft = () => {
+    const colNum = 1;
+    setTableHeaders((prev) => [`Heading ${prev.length + 1}`, ...prev]);
+    setTableRowsData((prev) => prev.map((row) => [`Content ${row.length + 1}`, ...row]));
+  };
+
+  const handleRemoveColumn = (colIdx: number) => {
+    if (tableHeaders.length <= 1) {
+      showNotification('error', 'Table must have at least one column.');
+      return;
+    }
+    setTableHeaders((prev) => prev.filter((_, i) => i !== colIdx));
+    setTableRowsData((prev) => prev.map((row) => row.filter((_, i) => i !== colIdx)));
+  };
+
+  const handleAddRow = (afterIndex?: number) => {
+    const rowNum = tableRowsData.length + 1;
+    const newRow = tableHeaders.map((_, i) => `Content ${rowNum}.${i + 1}`);
+    if (typeof afterIndex === 'number') {
+      const nextRows = [...tableRowsData];
+      nextRows.splice(afterIndex + 1, 0, newRow);
+      setTableRowsData(nextRows);
+    } else {
+      setTableRowsData((prev) => [...prev, newRow]);
+    }
+  };
+
+  const handleAddRowTop = () => {
+    const newRow = tableHeaders.map((_, i) => `Content 1.${i + 1}`);
+    setTableRowsData((prev) => [newRow, ...prev]);
+  };
+
+  const handleRemoveRow = (rowIdx: number) => {
+    if (tableRowsData.length <= 1) {
+      showNotification('error', 'Table must have at least one content row.');
+      return;
+    }
+    setTableRowsData((prev) => prev.filter((_, i) => i !== rowIdx));
+  };
+
+  const handleHeaderChange = (colIdx: number, val: string) => {
+    setTableHeaders((prev) => prev.map((h, i) => (i === colIdx ? val : h)));
+  };
+
+  const handleCellChange = (rowIdx: number, colIdx: number, val: string) => {
+    setTableRowsData((prev) =>
+      prev.map((row, rI) =>
+        rI === rowIdx ? row.map((cell, cI) => (cI === colIdx ? val : cell)) : row
+      )
+    );
+  };
+
+  const handleInsertBuiltTable = () => {
+    const cleanHeaders = tableHeaders.map((h) => h.trim() || 'Column');
+    const cleanRows = tableRowsData.map((row) =>
+      row.map((c) => c.trim() || '-')
+    );
+
+    if (editorMode === 'markdown') {
+      const mdHeader = `| ${cleanHeaders.join(' | ')} |`;
+      const mdDivider = `| ${cleanHeaders.map(() => '---').join(' | ')} |`;
+      const mdRows = cleanRows.map((r) => `| ${r.join(' | ')} |`).join('\n');
+      const fullMd = `\n\n${mdHeader}\n${mdDivider}\n${mdRows}\n\n`;
+
+      const textarea = contentTextareaRef.current;
+      if (textarea) {
+        const start = lastTextareaCursorRef.current?.start ?? textarea.selectionStart ?? textarea.value.length;
+        const end = lastTextareaCursorRef.current?.end ?? textarea.selectionEnd ?? textarea.value.length;
+        const current = formData.content || '';
+        const updated = current.substring(0, start) + fullMd + current.substring(end);
+        setFormData((prev) => ({ ...prev, content: updated }));
+        setTimeout(() => {
+          textarea.focus();
+          const nextPos = start + fullMd.length;
+          textarea.selectionStart = nextPos;
+          textarea.selectionEnd = nextPos;
+        }, 0);
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          content: (prev.content || '') + fullMd,
+        }));
+      }
+    } else {
+      if (visualEditorRef.current) {
+        visualEditorRef.current.focus();
+        const headerHtml = cleanHeaders
+          .map(
+            (h) =>
+              `<th class="border border-[#DECFBE] bg-[#FAF4EE] px-3.5 py-2.5 font-makira text-left font-medium uppercase text-[#08182B]">${h}</th>`
+          )
+          .join('');
+        const rowsHtml = cleanRows
+          .map(
+            (row) =>
+              `<tr>${row
+                .map(
+                  (cell) =>
+                    `<td class="border border-[#DECFBE] px-3.5 py-2 text-slate-700 font-manrope">${cell}</td>`
+                )
+                .join('')}</tr>`
+          )
+          .join('');
+
+        const tableContainer = document.createElement('div');
+        tableContainer.innerHTML = `
+          <table class="w-full my-4 border-collapse border border-[#DECFBE] rounded-xl overflow-hidden">
+            <thead>
+              <tr>${headerHtml}</tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <p><br></p>
+        `.trim();
+
+        const sel = window.getSelection();
+        let inserted = false;
+
+        if (
+          lastSavedRangeRef.current &&
+          visualEditorRef.current.contains(lastSavedRangeRef.current.commonAncestorContainer)
+        ) {
+          try {
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(lastSavedRangeRef.current);
+            }
+            lastSavedRangeRef.current.deleteContents();
+            const frag = document.createDocumentFragment();
+            while (tableContainer.firstChild) {
+              frag.appendChild(tableContainer.firstChild);
+            }
+            lastSavedRangeRef.current.insertNode(frag);
+            inserted = true;
+          } catch (e) {
+            console.warn('Range insert failed, falling back:', e);
+          }
+        }
+
+        if (!inserted) {
+          // If no saved range inside editor, append to the end
+          const frag = document.createDocumentFragment();
+          while (tableContainer.firstChild) {
+            frag.appendChild(tableContainer.firstChild);
+          }
+          visualEditorRef.current.appendChild(frag);
+        }
+
+        handleVisualInput();
+      }
+    }
+
+    setTableModalOpen(false);
+  };
+
+  // Sync visual editor innerHTML when switching to visual mode or when post is loaded
+  useEffect(() => {
+    if (editorMode === 'visual' && visualEditorRef.current) {
+      const generatedHtml = markdownToHtml(formData.content || '');
+      // Only set if content differs meaningfully to preserve cursor
+      const currentMd = htmlToMarkdown(visualEditorRef.current.innerHTML);
+      if (currentMd !== (formData.content || '').trim()) {
+        visualEditorRef.current.innerHTML = generatedHtml || '<p><br></p>';
+      }
+    }
+  }, [editorMode, formData.id]);
+
+  // Detect what element/tag cursor is currently inside
+  const updateActiveTag = () => {
+    saveTextareaCursor();
+    const textarea = contentTextareaRef.current;
+    if (!textarea) return;
+    const pos = textarea.selectionStart || 0;
+    const text = textarea.value;
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    let lineEnd = text.indexOf('\n', pos);
+    if (lineEnd === -1) lineEnd = text.length;
+    const line = text.substring(lineStart, lineEnd).trim();
+
+    if (/^##\s+/.test(line)) {
+      setActiveTag('h2');
+    } else if (/^###\s+/.test(line)) {
+      setActiveTag('h3');
+    } else if (/^>\s+/.test(line)) {
+      setActiveTag('blockquote');
+    } else if (/^[-*]\s+/.test(line)) {
+      setActiveTag('ul');
+    } else if (/^\d+\.\s+/.test(line)) {
+      setActiveTag('ol');
+    } else if (line.includes('|')) {
+      setActiveTag('table');
+    } else {
+      setActiveTag('p');
+    }
+  };
+
+  // Toggle current line or selection between Heading 2 (##), Heading 3 (###), or normal paragraph
+  const toggleBlockTag = (targetTag: 'h2' | 'h3' | 'blockquote' | 'ul' | 'ol') => {
+    const textarea = contentTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const current = formData.content || '';
+
+    // Find the full line(s) spanned by the selection
+    const lineStart = current.lastIndexOf('\n', start - 1) + 1;
+    let lineEnd = current.indexOf('\n', end);
+    if (lineEnd === -1) lineEnd = current.length;
+
+    const fullLine = current.substring(lineStart, lineEnd);
+    // Strip existing markdown prefixes from the line
+    const cleanText = fullLine.replace(/^(#{1,6}|>|[-*]|\d+\.)\s*/, '').trim();
+
+    let newPrefix = '';
+    if (targetTag === 'h2') {
+      newPrefix = activeTag === 'h2' ? '' : '## ';
+    } else if (targetTag === 'h3') {
+      newPrefix = activeTag === 'h3' ? '' : '### ';
+    } else if (targetTag === 'blockquote') {
+      newPrefix = activeTag === 'blockquote' ? '' : '> ';
+    } else if (targetTag === 'ul') {
+      newPrefix = activeTag === 'ul' ? '' : '- ';
+    } else if (targetTag === 'ol') {
+      newPrefix = activeTag === 'ol' ? '' : '1. ';
+    }
+
+    const replacement = cleanText ? `${newPrefix}${cleanText}` : `${newPrefix}Heading`;
+    const updated = current.substring(0, lineStart) + replacement + current.substring(lineEnd);
+    setFormData((prev) => ({ ...prev, content: updated }));
+
+    setTimeout(() => {
+      textarea.focus();
+      const newCursor = lineStart + replacement.length;
+      textarea.selectionStart = newCursor;
+      textarea.selectionEnd = newCursor;
+      updateActiveTag();
+    }, 0);
+  };
+
+  // Quick insertion helpers for editor (supports cursor position & selection wrapping)
   const insertFormatting = (prefix: string, suffix = '') => {
-    setFormData((prev) => ({
-      ...prev,
-      content: (prev.content || '') + `\n${prefix}Text${suffix}\n`,
-    }));
+    const textarea = contentTextareaRef.current;
+    if (!textarea) {
+      setFormData((prev) => ({
+        ...prev,
+        content: (prev.content || '') + `\n\n${prefix}\n\n`,
+      }));
+      return;
+    }
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const current = formData.content || '';
+    const selected = current.substring(start, end);
+    const placeholder = selected || (prefix.includes('|') ? '' : 'Heading Text');
+    const insertText = prefix.includes('|')
+      ? `\n\n${prefix}\n\n`
+      : `${prefix}${placeholder}${suffix}`;
+
+    const updated = current.substring(0, start) + insertText + current.substring(end);
+    setFormData((prev) => ({ ...prev, content: updated }));
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = start + prefix.length;
+      textarea.selectionEnd = start + prefix.length + placeholder.length;
+    }, 0);
   };
 
   // Handle rich text paste from Google Docs, Word, or web
@@ -407,7 +956,7 @@ export default function BlogAdminPage(): React.JSX.Element {
     const html = e.clipboardData.getData('text/html');
     if (!html) return;
 
-    if (/<(h[1-6]|p|a|ul|ol|li|blockquote|strong|b)[\s>]/i.test(html)) {
+    if (/<(h[1-6]|p|a|ul|ol|li|blockquote|strong|b|table|tr|td|th)[\s>]/i.test(html)) {
       e.preventDefault();
       const markdown = htmlToMarkdown(html);
       const textarea = e.currentTarget;
@@ -1004,30 +1553,36 @@ export default function BlogAdminPage(): React.JSX.Element {
                         <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-manrope">
                           <button
                             type="button"
-                            onClick={() => setEditorTab('write')}
-                            className={`px-3 py-1 rounded-md font-semibold cursor-pointer ${
-                              editorTab === 'write' ? 'bg-white text-navy shadow-sm' : 'text-slate-500'
+                            onClick={() => {
+                              setEditorMode('visual');
+                              setEditorTab('write');
+                            }}
+                            className={`px-3 py-1 rounded-md font-semibold cursor-pointer transition-all ${
+                              editorMode === 'visual' ? 'bg-terracotta text-white shadow-xs' : 'text-slate-600 hover:text-navy'
                             }`}
                           >
-                            Write
+                            Visual Editor
                           </button>
                           <button
                             type="button"
-                            onClick={() => setEditorTab('preview')}
-                            className={`px-3 py-1 rounded-md font-semibold cursor-pointer ${
-                              editorTab === 'preview' ? 'bg-white text-navy shadow-sm' : 'text-slate-500'
+                            onClick={() => setEditorMode('markdown')}
+                            className={`px-3 py-1 rounded-md font-semibold cursor-pointer transition-all ${
+                              editorMode === 'markdown' ? 'bg-white text-navy shadow-xs' : 'text-slate-600 hover:text-navy'
+                            }`}
+                          >
+                            Markdown
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditorMode('markdown');
+                              setEditorTab('preview');
+                            }}
+                            className={`px-3 py-1 rounded-md font-semibold cursor-pointer transition-all ${
+                              editorTab === 'preview' ? 'bg-white text-navy shadow-xs' : 'text-slate-600 hover:text-navy'
                             }`}
                           >
                             Preview
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditorTab('split')}
-                            className={`hidden sm:block px-3 py-1 rounded-md font-semibold cursor-pointer ${
-                              editorTab === 'split' ? 'bg-white text-navy shadow-sm' : 'text-slate-500'
-                            }`}
-                          >
-                            Split Screen
                           </button>
                         </div>
                       </div>
@@ -1036,52 +1591,95 @@ export default function BlogAdminPage(): React.JSX.Element {
                       <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-black/5 text-xs text-slate-700 font-manrope">
                         <button
                           type="button"
-                          onClick={() => insertFormatting('## ')}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-bold cursor-pointer font-makira"
+                          onClick={() => execVisualBlock('h2')}
+                          className={`px-2.5 py-1 rounded font-bold cursor-pointer font-makira transition-all ${
+                            activeTag === 'h2'
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title={activeTag === 'h2' ? 'Active: Heading 2 (Click to remove)' : 'Apply Heading 2 (##)'}
                         >
                           H2
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('### ')}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-bold cursor-pointer font-makira"
+                          onClick={() => execVisualBlock('h3')}
+                          className={`px-2.5 py-1 rounded font-bold cursor-pointer font-makira transition-all ${
+                            activeTag === 'h3'
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title={activeTag === 'h3' ? 'Active: Heading 3 (Click to remove)' : 'Apply Heading 3 (###)'}
                         >
                           H3
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('**', '**')}
+                          onClick={() => execVisualInline('bold')}
                           className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-bold cursor-pointer"
+                          title="Bold (**text**)"
                         >
                           B
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('*', '*')}
+                          onClick={() => execVisualInline('italic')}
                           className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded italic cursor-pointer"
+                          title="Italic (*text*)"
                         >
                           I
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('> ')}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer"
+                          onClick={() => execVisualBlock('blockquote')}
+                          className={`px-2 py-1 rounded cursor-pointer transition-all ${
+                            activeTag === 'blockquote'
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title="Quote (> quote)"
                         >
                           &ldquo;Quote&rdquo;
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('- ')}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer"
+                          onClick={() => execVisualBlock('ul')}
+                          className={`px-2 py-1 rounded cursor-pointer transition-all ${
+                            activeTag === 'ul'
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title="Bullet List (- item)"
                         >
                           • List
                         </button>
                         <button
                           type="button"
-                          onClick={() => insertFormatting('1. ')}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer"
+                          onClick={() => execVisualBlock('ol')}
+                          className={`px-2 py-1 rounded cursor-pointer transition-all ${
+                            activeTag === 'ol'
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title="Numbered List (1. item)"
                         >
                           1. Numbered
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={() => {
+                            if (editorMode === 'visual') saveVisualSelection();
+                            else saveTextareaCursor();
+                          }}
+                          onClick={handleOpenTableModal}
+                          className={`px-2.5 py-1 rounded cursor-pointer font-bold text-xs transition-all ${
+                            activeTag === 'table' || tableModalOpen
+                              ? 'bg-terracotta text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title="Interactive Table Builder"
+                        >
+                          Table
                         </button>
                         <button
                           type="button"
@@ -1091,6 +1689,14 @@ export default function BlogAdminPage(): React.JSX.Element {
                           <LinkIcon className="w-3 h-3" />
                           Link
                         </button>
+
+                        {/* Current cursor block indicator */}
+                        <div className="ml-auto flex items-center gap-1 text-[11px] text-slate-500 font-manrope">
+                          <span>Current:</span>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-200 font-bold uppercase text-navy">
+                            {activeTag}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Inline Image Uploader */}
@@ -1131,38 +1737,33 @@ export default function BlogAdminPage(): React.JSX.Element {
                         </div>
                       </div>
 
-                      {/* Textarea / Preview Pane */}
-                      <div
-                        className={`grid gap-4 ${
-                          editorTab === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
-                        }`}
-                      >
-                        {(editorTab === 'write' || editorTab === 'split') && (
-                          <div>
-                            <textarea
-                              ref={contentTextareaRef}
-                              onPaste={handleContentPaste}
-                              rows={18}
-                              required
-                              placeholder="Write your article in markdown. Use ## for headings, - for bullet points, > for quotes..."
-                              value={formData.content}
-                              onChange={(e) =>
-                                setFormData({ ...formData, content: e.target.value })
-                              }
-                              className="w-full p-4 font-mono text-sm leading-relaxed text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta bg-slate-50/50"
+                      {/* Editor Pane (Visual / Markdown / Preview) */}
+                      <div>
+                        {editorMode === 'visual' && editorTab !== 'preview' ? (
+                          <div className="relative">
+                            <div
+                              ref={visualEditorRef}
+                              contentEditable
+                              onInput={handleVisualInput}
+                              onKeyUp={updateActiveTagVisual}
+                              onMouseUp={updateActiveTagVisual}
+                              onClick={updateActiveTagVisual}
+                              onBlur={saveVisualSelection}
+                              className="min-h-[420px] max-h-[600px] overflow-y-auto p-5 rounded-xl border border-black/10 bg-white focus:outline-none focus:border-terracotta select-text prose-hunhar"
+                              style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                             />
-                          </div>
-                        )}
-
-                        {(editorTab === 'preview' || editorTab === 'split') && (
-                          <div className="p-4 bg-white border border-black/10 rounded-xl max-h-[460px] overflow-y-auto prose-hunhar">
-                            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 font-manrope">
-                              Live Render Preview:
+                            <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 font-manrope">
+                              <span>Visual WYSIWYG Editor active — H2, H3, Tables, Lists render directly in live typography</span>
+                              <span>Auto-syncs to Markdown</span>
                             </div>
-                            {/* Preview Title in Makira */}
-                            <h2 className="text-xl font-medium text-navy font-makira uppercase">{formData.title}</h2>
-                            {/* Preview Excerpt in Manrope */}
-                            <p className="font-manrope text-slate-600 text-sm font-normal not-italic">{formData.excerpt}</p>
+                          </div>
+                        ) : editorTab === 'preview' ? (
+                          <div className="p-5 bg-white border border-black/10 rounded-xl max-h-[500px] overflow-y-auto prose-hunhar">
+                            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 font-manrope">
+                              Live Article Render:
+                            </div>
+                            <h2 className="text-2xl font-medium text-navy font-makira uppercase">{formData.title}</h2>
+                            <p className="font-manrope text-slate-600 text-sm font-normal not-italic mt-1 mb-3">{formData.excerpt}</p>
                             <hr className="my-3 border-black/5" />
                             <div className="text-sm space-y-2 text-slate-800 font-manrope [&_blockquote]:not-italic [&_blockquote]:font-normal [&_em]:not-italic [&_em]:font-normal [&_i]:not-italic">
                               {renderArticleContent(formData.content || '')}
@@ -1170,6 +1771,29 @@ export default function BlogAdminPage(): React.JSX.Element {
                             {faqs.length > 0 && (
                               <BlogFaqSection faqs={faqs} className="my-6 pt-6 border-t border-black/10" />
                             )}
+                          </div>
+                        ) : (
+                          <div>
+                            <textarea
+                              ref={contentTextareaRef}
+                              onPaste={handleContentPaste}
+                              onClick={updateActiveTag}
+                              onKeyUp={updateActiveTag}
+                              onSelect={updateActiveTag}
+                              onBlur={saveTextareaCursor}
+                              rows={18}
+                              required
+                              placeholder="Write your article in markdown. Use ## for headings, - for bullet points, > for quotes..."
+                              value={formData.content}
+                              onChange={(e) => {
+                                setFormData({ ...formData, content: e.target.value })
+                                updateActiveTag()
+                              }}
+                              className="w-full p-4 font-mono text-sm leading-relaxed text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta bg-slate-50/50"
+                            />
+                            <p className="mt-1.5 text-[11px] text-slate-400 font-manrope">
+                              Raw Markdown Editor mode. Switch to Visual Editor anytime to see real H2 & tables.
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1573,6 +2197,189 @@ export default function BlogAdminPage(): React.JSX.Element {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Table Builder Modal */}
+      {tableModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 md:p-8 shadow-2xl border border-black/10 font-manrope my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-black/5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-terracotta/10 text-terracotta flex items-center justify-center">
+                  <TableIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-makira text-lg font-medium text-navy uppercase tracking-wide">
+                    Table Builder
+                  </h3>
+                  <p className="text-xs text-slate-500 font-manrope">
+                    Default heading & content box ready. Click <span className="font-bold text-terracotta">+</span> on any side to add boxes, or trash icon to delete.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTableModalOpen(false)}
+                className="w-8 h-8 rounded-xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Table Construction Area with 4-side + buttons */}
+            <div className="py-6">
+              {/* TOP SIDE: Add Column Left / Add Row Top buttons */}
+              <div className="flex items-center justify-center mb-3 gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddColumnLeft}
+                  className="px-3.5 py-1.5 rounded-xl border border-dashed border-terracotta/40 hover:border-terracotta bg-[#FFF9F5] hover:bg-terracotta/10 text-terracotta text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                  title="Add Column to the Left"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Column (Left)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddRowTop}
+                  className="px-3.5 py-1.5 rounded-xl border border-dashed border-terracotta/40 hover:border-terracotta bg-[#FFF9F5] hover:bg-terracotta/10 text-terracotta text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                  title="Add Row to the Top"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Row (Top)</span>
+                </button>
+              </div>
+
+              {/* CENTER: Grid with Right Column Adder */}
+              <div className="flex items-start justify-center gap-3 overflow-x-auto p-2">
+                {/* Table Grid */}
+                <div className="min-w-fit border border-[#DECFBE] rounded-2xl overflow-hidden shadow-xs bg-[#FAF4EE]/30">
+                  <table className="border-collapse w-full">
+                    <thead>
+                      <tr className="bg-[#FAF4EE] border-b border-[#DECFBE]">
+                        {tableHeaders.map((header, colIdx) => (
+                          <th key={colIdx} className="p-2.5 border-r border-[#DECFBE] last:border-r-0 relative group min-w-[170px]">
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-manrope">
+                                Heading {colIdx + 1}
+                              </span>
+                              {tableHeaders.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveColumn(colIdx)}
+                                  className="p-1 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+                                  title="Delete this column"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={header}
+                              onChange={(e) => handleHeaderChange(colIdx, e.target.value)}
+                              placeholder={`Heading ${colIdx + 1}`}
+                              className="w-full px-3 py-2 text-sm font-makira font-bold uppercase tracking-wide bg-white border border-[#DECFBE] rounded-xl text-navy focus:outline-none focus:border-terracotta shadow-2xs"
+                            />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableRowsData.map((row, rowIdx) => (
+                        <tr key={rowIdx} className="border-b border-[#DECFBE] last:border-b-0 bg-white">
+                          {row.map((cell, colIdx) => (
+                            <td key={colIdx} className="p-2.5 border-r border-[#DECFBE] last:border-r-0 relative min-w-[170px]">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-slate-400 font-manrope">
+                                  Row {rowIdx + 1} • Col {colIdx + 1}
+                                </span>
+                                {colIdx === 0 && tableRowsData.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveRow(rowIdx)}
+                                    className="p-1 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+                                    title="Delete this row"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <input
+                                type="text"
+                                value={cell}
+                                onChange={(e) => handleCellChange(rowIdx, colIdx, e.target.value)}
+                                placeholder={`Content ${rowIdx + 1}.${colIdx + 1}`}
+                                className="w-full px-3 py-2 text-sm font-manrope bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-terracotta focus:bg-white shadow-2xs"
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* RIGHT SIDE: + Add Column Button */}
+                <div className="flex flex-col justify-center self-stretch">
+                  <button
+                    type="button"
+                    onClick={() => handleAddColumn()}
+                    className="h-full min-h-[140px] px-3.5 rounded-2xl border-2 border-dashed border-terracotta/40 hover:border-terracotta bg-[#FFF9F5] hover:bg-terracotta/10 text-terracotta flex flex-col items-center justify-center gap-2 cursor-pointer transition-all shadow-xs group"
+                    title="Add Column to the Right"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-terracotta text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold font-manrope [writing-mode:vertical-rl] tracking-wide">
+                      + Add Column
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* BOTTOM SIDE: + Add Row Button */}
+              <div className="flex items-center justify-center mt-3">
+                <button
+                  type="button"
+                  onClick={() => handleAddRow()}
+                  className="w-full max-w-md py-2.5 rounded-xl border-2 border-dashed border-terracotta/40 hover:border-terracotta bg-[#FFF9F5] hover:bg-terracotta/10 text-terracotta text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs group"
+                  title="Add Row to the Bottom"
+                >
+                  <div className="w-5 h-5 rounded-full bg-terracotta text-white flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                    <Plus className="w-3.5 h-3.5" />
+                  </div>
+                  <span>+ Add Row (Bottom)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-black/5">
+              <div className="text-xs text-slate-500 font-manrope">
+                Current Table: <strong className="text-navy">{tableHeaders.length} Columns</strong> × <strong className="text-navy">{tableRowsData.length} Rows</strong>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTableModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleInsertBuiltTable}
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-terracotta hover:bg-[#AA572D] text-white shadow-md cursor-pointer transition-all flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Insert Table into Post</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

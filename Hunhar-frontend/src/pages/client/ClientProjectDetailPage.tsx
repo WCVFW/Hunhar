@@ -271,8 +271,8 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[22px] font-extrabold text-[#08182B] sm:text-[26px]">{project.title}</h1>
-              <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-bold ${status.cls}`}>{status.label}</span>
+              <h1 className="font-makira text-[22px] font-medium tracking-wide text-[#08182B] sm:text-[28px]">{project.title}</h1>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-bold font-manrope ${status.cls}`}>{status.label}</span>
             </div>
             <p className="mt-1 text-[13px] text-[#7A7065]">
               {project.category} · Posted {formatDate(project.createdAt, true)} · {project.timelineDays} day timeline
@@ -450,7 +450,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 lg:col-span-8">
             <div className="rounded-[20px] border border-[#E5E7EB] bg-white p-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-[16px] font-bold text-[#08182B]">Milestones</h3>
+                <h3 className="font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">Milestones</h3>
                 {project.status === 'ACTIVE' && !msForm && (
                   <button type="button" onClick={() => setMsForm({ title: '', amount: '', due: '', description: '' })} className="flex items-center gap-1 rounded-full bg-[#F5ECE1] px-3 py-1.5 text-[12px] font-bold text-[#9C5128]">
                     <Plus size={14} /> Add milestone
@@ -560,7 +560,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
 
           <div className="flex flex-col gap-4 lg:col-span-4">
             <div className="rounded-[20px] border border-[#E5E7EB] bg-white p-5">
-              <h3 className="text-[14px] font-bold text-[#08182B]">Freelancer</h3>
+              <h3 className="font-makira text-[15px] font-medium uppercase tracking-wider text-[#08182B]">Freelancer</h3>
               <div className="mt-3 flex items-center gap-3">
                 <Avatar name={project.freelancerName} />
                 <div>
@@ -580,7 +580,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
 
             {ws.team.filter((t) => t.status === 'ACCEPTED').length > 0 && (
               <div className="rounded-[20px] border border-[#E5E7EB] bg-white p-5">
-                <h3 className="flex items-center gap-1.5 text-[14px] font-bold text-[#08182B]">
+                <h3 className="flex items-center gap-1.5 font-makira text-[15px] font-medium uppercase tracking-wider text-[#08182B]">
                   <Users2 size={15} /> Team
                 </h3>
                 {ws.team.filter((t) => t.status === 'ACCEPTED').map((t) => (
@@ -644,7 +644,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
           ))}
           {!openDispute && project.status === 'ACTIVE' && (
             <form onSubmit={raiseDispute} className="rounded-[18px] border border-[#FECACA] bg-[#FFF5F5] p-5">
-              <h3 className="flex items-center gap-1.5 text-[15px] font-bold text-[#B91C1C]"><ShieldAlert size={16} /> Raise a dispute</h3>
+              <h3 className="flex items-center gap-1.5 font-makira text-[16px] font-medium uppercase tracking-wider text-[#B91C1C]"><ShieldAlert size={16} /> Raise a dispute</h3>
               <p className="mt-1 text-[12.5px] text-[#7F1D1D]">Use this only if you can't sort it out with the freelancer. Hunhar support will review and contact both of you.</p>
               <textarea value={disputeText} onChange={(e) => setDisputeText(e.target.value)} maxLength={4000} placeholder="What went wrong? Include dates and what you expected." className={input + ' mt-3 h-28 py-2'} />
               <button type="submit" disabled={busy !== null} className="mt-3 rounded-full bg-[#DC2626] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-60">
@@ -723,7 +723,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
             </div>
 
             {/* Title & Description */}
-            <h3 className="text-center text-[19px] sm:text-[20px] font-extrabold text-[#08182B]">
+            <h3 className="text-center font-makira text-[20px] font-medium tracking-wide text-[#08182B]">
               Hire {hireModalBid.freelancerName || 'this freelancer'}?
             </h3>
             <p className="mt-2 text-center text-[12.5px] sm:text-[13px] leading-relaxed text-[#64748B]">
@@ -797,7 +797,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF2F2] text-[#EF4444]">
               <X size={24} strokeWidth={2.5} />
             </div>
-            <h3 className="text-[18px] font-extrabold text-[#08182B]">Decline Proposal?</h3>
+            <h3 className="font-makira text-[19px] font-medium tracking-wide text-[#08182B]">Decline Proposal?</h3>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#64748B]">
               Are you sure you want to decline {declineModalBid.freelancerName || 'this freelancer'}&apos;s proposal? They will be notified.
             </p>

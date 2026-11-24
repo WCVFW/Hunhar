@@ -125,7 +125,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
         {/* 1. Header Welcome Bar & Create Project CTA */}
         <div className="flex flex-col justify-between gap-4 border-b border-[#F5F2ED] pb-6 sm:flex-row sm:items-center">
           <div>
-            <h1 className="font-manrope text-[24px] sm:text-[28px] 2xl:text-[32px] font-extrabold text-[#C06B3E]">
+            <h1 className="font-makira text-[26px] sm:text-[30px] 2xl:text-[34px] font-medium tracking-wide text-[#C06B3E]">
               {greeting()}{clientName ? `, ${clientName.split(' ')[0]}` : ''}
             </h1>
             <p className="mt-1 font-manrope text-[13px] 2xl:text-[14px] text-[#7A7065]">
@@ -156,7 +156,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
             <div>
               {/* Top row: Title + ACTIVE status */}
               <div className="flex items-center justify-between">
-                <h2 className="font-manrope text-[15px] font-bold text-[#08182B]">
+                <h2 className="font-makira text-[16px] font-medium uppercase tracking-wider text-[#08182B]">
                   Project Overview
                 </h2>
                 {activeProject && (
@@ -186,7 +186,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
                 </div>
               ) : (
                 <div className="mt-5">
-                  <h3 className="font-manrope text-[18px] font-extrabold text-[#08182B]">{activeProject.title}</h3>
+                  <h3 className="font-makira text-[18px] font-medium tracking-wide text-[#08182B]">{activeProject.title}</h3>
                   <p className="mt-0.5 font-manrope text-[13px] text-[#7A7065]">
                     {activeProject.freelancerName
                       ? `Assigned to ${activeProject.freelancerName}`
@@ -236,7 +236,7 @@ export default function ClientDashboardPage(): React.JSX.Element {
           {/* Right: Project Tracking Card (lg:col-span-6) */}
           <div className="flex flex-col justify-between rounded-[22px] border border-[#F2ECE6] bg-white p-6 lg:col-span-6 shadow-xs">
             <div>
-              <h2 className="font-manrope text-[15px] font-bold text-[#08182B]">
+              <h2 className="font-makira text-[16px] font-medium uppercase tracking-wider text-[#08182B]">
                 Project Tracking
               </h2>
 

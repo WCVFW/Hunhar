@@ -66,25 +66,101 @@ export function renderArticleContent(content: string) {
       continue;
     }
 
-    // Headings in Makira font
-    if (line.startsWith('### ')) {
+    // Headings in Makira font (supports ### H3, ## H2, # H1, and uppercase HTML-like tags)
+    const h3Match = line.match(/^###\s+(.*)$/i) || line.match(/^<h3[^>]*>(.*?)<\/h3>$/i);
+    if (h3Match) {
       flushList();
       elements.push(
         <h3 key={i} className="text-xl sm:text-2xl font-medium text-navy mt-8 mb-3 font-makira uppercase tracking-wide">
-          {line.replace('### ', '')}
+          {h3Match[1].trim()}
         </h3>
       );
       continue;
     }
 
-    if (line.startsWith('## ')) {
+    const h2Match = line.match(/^##\s+(.*)$/i) || line.match(/^<h2[^>]*>(.*?)<\/h2>$/i);
+    if (h2Match) {
       flushList();
       elements.push(
         <h2 key={i} className="text-2xl sm:text-3xl font-medium text-navy mt-10 mb-4 font-makira uppercase tracking-wide">
-          {line.replace('## ', '')}
+          {h2Match[1].trim()}
         </h2>
       );
       continue;
+    }
+
+    const h1Match = line.match(/^#\s+(.*)$/i) || line.match(/^<h1[^>]*>(.*?)<\/h1>$/i);
+    if (h1Match) {
+      flushList();
+      elements.push(
+        <h2 key={i} className="text-2xl sm:text-3xl font-medium text-navy mt-10 mb-4 font-makira uppercase tracking-wide">
+          {h1Match[1].trim()}
+        </h2>
+      );
+      continue;
+    }
+
+    // Markdown Table: lines starting and containing |
+    if (line.includes('|')) {
+      const tableLines: string[] = [];
+      let j = i;
+      while (j < lines.length && lines[j].trim().includes('|')) {
+        tableLines.push(lines[j].trim());
+        j++;
+      }
+
+      if (tableLines.length >= 2) {
+        flushList();
+        i = j - 1; // Advance main loop
+
+        // Parse header and rows
+        const parseRow = (rowStr: string) =>
+          rowStr
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map((c) => c.trim());
+
+        const headerCells = parseRow(tableLines[0]);
+        // Row 1 might be divider |---|---|
+        const isDivider = (s: string) => /^[:\s-–—|]+$/.test(s);
+        const dataRows = tableLines.slice(1).filter((r) => !isDivider(r));
+
+        elements.push(
+          <div key={`table-${i}`} className="my-8 w-full overflow-x-auto rounded-[18px] border border-[#DECFBE] bg-white shadow-xs">
+            <table className="w-full min-w-[500px] border-collapse text-left font-manrope text-sm">
+              <thead>
+                <tr className="border-b border-[#DECFBE] bg-[#FAF4EE]">
+                  {headerCells.map((cell, idx) => (
+                    <th
+                      key={idx}
+                      className="px-4 py-3 font-makira text-[13px] font-medium uppercase tracking-wider text-[#08182B]"
+                      dangerouslySetInnerHTML={{ __html: parseInline(cell) }}
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F2E8DC]">
+                {dataRows.map((rowStr, rIdx) => {
+                  const cells = parseRow(rowStr);
+                  return (
+                    <tr key={rIdx} className="transition-colors hover:bg-[#FAF7F2]">
+                      {cells.map((cell, cIdx) => (
+                        <td
+                          key={cIdx}
+                          className="px-4 py-3 text-[13.5px] leading-relaxed text-[#334155]"
+                          dangerouslySetInnerHTML={{ __html: parseInline(cell) }}
+                        />
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
     }
 
     // Blockquote

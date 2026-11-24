@@ -26,6 +26,10 @@ function withUrls(p: BlogPost): BlogPost {
 
 let cache: BlogPost[] | null = null
 
+export function invalidateBlogCache() {
+  cache = null
+}
+
 async function loadAll(): Promise<BlogPost[]> {
   try {
     cache = (await blogApi.posts()).map(withUrls)
