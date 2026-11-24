@@ -1,5 +1,6 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
+import { setPageCanonical, BASE_SITE_URL } from './services/seo'
 import LandingPage from './pages/LandingPage'
 import AboutPage from './pages/AboutPage'
 import FeaturesPage from './pages/FeaturesPage'
@@ -61,9 +62,23 @@ import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import { toRouteId } from './services/routeIds'
 
+function SeoRouteTracker(): null {
+  const location = useLocation()
+
+  React.useEffect(() => {
+    if (!location.pathname.startsWith('/blog')) {
+      const path = location.pathname === '/' ? '/' : location.pathname.replace(/\/$/, '')
+      setPageCanonical(`${BASE_SITE_URL}${path}`)
+    }
+  }, [location.pathname])
+
+  return null
+}
+
 export default function App(): React.JSX.Element {
   return (
     <BrowserRouter>
+      <SeoRouteTracker />
       <LoaderProvider>
         <React.Suspense fallback={<PageLoader />}>
           <Routes>

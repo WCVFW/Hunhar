@@ -4,6 +4,7 @@ import Footer from '../components/layout/Footer'
 import SignupModal from '../components/landing/SignupModal'
 import BlogList from '../components/blog/BlogList'
 import { useBlogPosts } from '../services/blogPosts'
+import { setPageCanonical, setMetaTag, resetBlogMetaTags, BASE_SITE_URL } from '../services/seo'
 
 const SUBSCRIBE_EMAIL = 'howdy@theunoia.com'
 
@@ -13,7 +14,17 @@ export default function BlogPage(): React.JSX.Element {
 
   useEffect(() => {
     document.title = 'Hunhar Blog — Creative Freelance Marketplace & Growth Insights'
+    setPageCanonical(`${BASE_SITE_URL}/blog`)
+    setMetaTag(
+      'name',
+      'description',
+      'Explore actionable guides, freelancing strategies, student career tips, and creative hiring insights on the Hunhar Blog.'
+    )
     window.scrollTo(0, 0)
+
+    return () => {
+      resetBlogMetaTags()
+    }
   }, [])
 
   const subscribe = (e: React.FormEvent<HTMLFormElement>) => {

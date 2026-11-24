@@ -9,15 +9,7 @@ import { useBlogPost } from '../services/blogPosts'
 import { renderArticleContent } from '../components/blog/articleContent'
 import BlogFaqSection from '../components/blog/BlogFaqSection'
 import { extractFaqs, buildFaqSchema } from '../services/blogFaq'
-
-/** Sets a <meta> tag (name= or property=) for this article and returns a function that removes it again. */
-function setMeta(attr: 'name' | 'property', key: string, value: string) {
-  const el = document.createElement('meta')
-  el.setAttribute(attr, key)
-  el.setAttribute('content', value)
-  el.dataset.blog = 'true'
-  document.head.appendChild(el)
-}
+import { setPageCanonical, setMetaTag, resetBlogMetaTags, BASE_SITE_URL } from '../services/seo'
 
 export default function BlogPostPage(): React.JSX.Element {
   const { slug = '' } = useParams()
@@ -31,24 +23,24 @@ export default function BlogPostPage(): React.JSX.Element {
     const previousTitle = document.title
     const title = post.metaTitle || `${post.title} | Hunhar Blog`
     const description = post.metaDescription || post.excerpt
-    const url = `https://www.hunhar.in/blog/${post.slug}`
+    const url = `${BASE_SITE_URL}/blog/${post.slug}`
+
     document.title = title
-    setMeta('name', 'description', description)
-    setMeta('name', 'keywords', post.tags.join(', '))
-    setMeta('property', 'og:type', 'article')
-    setMeta('property', 'og:title', title)
-    setMeta('property', 'og:description', description)
-    setMeta('property', 'og:url', url)
-    setMeta('property', 'og:image', post.coverImage)
-    setMeta('name', 'twitter:card', 'summary_large_image')
-    setMeta('name', 'twitter:title', title)
-    setMeta('name', 'twitter:description', description)
-    setMeta('name', 'twitter:image', post.coverImage)
-    const canonical = document.createElement('link')
-    canonical.rel = 'canonical'
-    canonical.href = url
-    canonical.dataset.blog = 'true'
-    document.head.appendChild(canonical)
+    setMetaTag('name', 'description', description)
+    setMetaTag('name', 'keywords', post.tags.join(', '))
+    setMetaTag('property', 'og:type', 'article')
+    setMetaTag('property', 'og:title', title)
+    setMetaTag('property', 'og:description', description)
+    setMetaTag('property', 'og:url', url)
+    setMetaTag('property', 'og:image', post.coverImage)
+    setMetaTag('name', 'twitter:card', 'summary_large_image')
+    setMetaTag('name', 'twitter:title', title)
+    setMetaTag('name', 'twitter:description', description)
+    setMetaTag('name', 'twitter:image', post.coverImage)
+
+    // Ensure single self-referencing canonical URL
+    setPageCanonical(url)
+
     const ld = document.createElement('script')
     ld.type = 'application/ld+json'
     ld.dataset.blog = 'true'
@@ -84,7 +76,8 @@ export default function BlogPostPage(): React.JSX.Element {
 
     return () => {
       document.title = previousTitle
-      document.head.querySelectorAll('[data-blog="true"]').forEach((el) => el.remove())
+      resetBlogMetaTags()
+      document.head.querySelectorAll('script[data-blog="true"]').forEach((el) => el.remove())
     }
   }, [post])
 
