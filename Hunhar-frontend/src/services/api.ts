@@ -155,10 +155,27 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 import { getCharacterAvatar } from './characterAvatars'
 import type { BlogPost, BlogPostInput } from '../types/blog'
 
-/** Turns a server file path (/api/v1/projects/files/...) into a full URL for <img>/<a>. */
+/** Turns a server file path (/api/v1/projects/files/...) into a full URL for <img>/<a>.
+ * Automatically upgrades Google avatar URLs from low-res thumbnail (=s96-c) to crisp high-res (=s800-c).
+ */
 export const fileUrl = (path?: string | null): string => {
   if (!path) return ''
-  return path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('/assets/') || path.includes('/CHARACTERS/') ? path : `${API_BASE_URL}${path}`
+  let url =
+    path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('/assets/') || path.includes('/CHARACTERS/')
+      ? path
+      : `${API_BASE_URL}${path}`
+
+  if (url.includes('googleusercontent.com')) {
+    if (/=s\d+(-[a-zA-Z0-9]+)?/i.test(url)) {
+      url = url.replace(/=s\d+(-[a-zA-Z0-9]+)?/i, '=s800-c')
+    } else if (/\/s\d+(-[a-zA-Z0-9]+)?\//i.test(url)) {
+      url = url.replace(/\/s\d+(-[a-zA-Z0-9]+)?\//i, '/s800-c/')
+    } else if (!url.includes('=s')) {
+      url = `${url}=s800-c`
+    }
+  }
+
+  return url
 }
 
 // =============================================================================

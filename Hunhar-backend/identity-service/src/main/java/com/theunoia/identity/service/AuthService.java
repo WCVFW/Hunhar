@@ -69,7 +69,9 @@ public class AuthService {
                 throw new UnauthorizedException("Account is suspended. Please contact platform administration.");
             }
             if (user.getGoogleId() == null) user.setGoogleId(g.sub());
-            if (user.getAvatarUrl() == null && g.picture() != null) user.setAvatarUrl(g.picture());
+            if (g.picture() != null && (user.getAvatarUrl() == null || user.getAvatarUrl().contains("googleusercontent.com"))) {
+                user.setAvatarUrl(g.picture());
+            }
             user.setEmailVerified(true);
             return buildResponse(userRepository.save(user));
         }

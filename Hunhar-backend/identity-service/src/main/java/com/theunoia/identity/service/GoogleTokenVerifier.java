@@ -90,8 +90,22 @@ public class GoogleTokenVerifier {
         }
         String email = String.valueOf(profile.get("email")).toLowerCase().trim();
         String name = profile.get("name") != null ? String.valueOf(profile.get("name")) : email.substring(0, email.indexOf('@'));
-        String picture = profile.get("picture") != null ? String.valueOf(profile.get("picture")) : null;
+        String picture = profile.get("picture") != null ? upgradeGooglePictureUrl(String.valueOf(profile.get("picture"))) : null;
         return new GoogleUser(sub, email, name, picture);
+    }
+
+    private static String upgradeGooglePictureUrl(String picture) {
+        if (picture == null || picture.isBlank()) return picture;
+        if (picture.contains("googleusercontent.com")) {
+            if (picture.matches(".*=s\\d+(-[a-zA-Z0-9]+)?.*")) {
+                return picture.replaceAll("=s\\d+(-[a-zA-Z0-9]+)?", "=s800-c");
+            } else if (picture.matches(".*/s\\d+(-[a-zA-Z0-9]+)?/.*")) {
+                return picture.replaceAll("/s\\d+(-[a-zA-Z0-9]+)?/", "/s800-c/");
+            } else if (!picture.contains("=s")) {
+                return picture + "=s800-c";
+            }
+        }
+        return picture;
     }
 
     @SuppressWarnings("unchecked")
@@ -123,7 +137,7 @@ public class GoogleTokenVerifier {
         }
         String email = String.valueOf(info.get("email")).toLowerCase().trim();
         String name = info.get("name") != null ? String.valueOf(info.get("name")) : email.substring(0, email.indexOf('@'));
-        String picture = info.get("picture") != null ? String.valueOf(info.get("picture")) : null;
+        String picture = info.get("picture") != null ? upgradeGooglePictureUrl(String.valueOf(info.get("picture"))) : null;
         return new GoogleUser(String.valueOf(info.get("sub")), email, name, picture);
     }
 }
