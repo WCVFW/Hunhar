@@ -12,6 +12,10 @@ import meeraImg from '../assets/about/meera_arch.jpg'
 import mascotLaptopImg from '../assets/image.png'
 import mascotBusinessImg from '../assets/mascot_business.png'
 
+const GOOGLE_SHEET_URL =
+  import.meta.env.VITE_GOOGLE_SHEET_CONTACT_URL ||
+  'https://script.google.com/macros/s/AKfycbzyxgrDbMzd5car463t1nSy0-dXyDl3FCR8N6Fd9_PjCc77AnXCEcSUnOc40nae08Z2jA/exec'
+
 export default function ContactPage(): React.JSX.Element {
   const [isSignupModalOpen, setIsSignupModalOpen] = useState<boolean>(false)
   const [activeRole, setActiveRole] = useState<'student' | 'business'>('student')
@@ -22,15 +26,45 @@ export default function ContactPage(): React.JSX.Element {
     message: '',
   })
   const [submitted, setSubmitted] = useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.name || !formData.email || !formData.message) return
-    setSubmitted(true)
+    if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim() || isSubmitting) return
+
+    setIsSubmitting(true)
+    setSubmitError(null)
+
+    const payload = {
+      role: activeRole === 'student' ? 'Student / Freelancer' : 'Business / Client',
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      skillOrCompany: formData.skill.trim(),
+      message: formData.message.trim(),
+    }
+
+    try {
+      await fetch(GOOGLE_SHEET_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      setSubmitted(true)
+    } catch (err: any) {
+      console.error('Failed to submit contact form to Google Sheet:', err)
+      setSubmitError('Failed to send message. Please try again or email us directly at hello@hunhar.com.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -541,13 +575,29 @@ export default function ContactPage(): React.JSX.Element {
                         />
                       </div>
 
+                      {submitError && (
+                        <p className="font-manrope text-xs text-red-500 font-semibold mb-3">
+                          {submitError}
+                        </p>
+                      )}
+
                       {/* Submit Button */}
                       <button
                         type="submit"
-                        className="w-full py-4 rounded-xl bg-terracotta hover:bg-[#AA572D] active:scale-[0.99] text-white font-manrope font-bold text-base shadow-lg shadow-terracotta/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        disabled={isSubmitting}
+                        className="w-full py-4 rounded-xl bg-terracotta hover:bg-[#AA572D] active:scale-[0.99] text-white font-manrope font-bold text-base shadow-lg shadow-terracotta/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
                       >
-                        <span>Send Message</span>
-                        <span aria-hidden="true">&rarr;</span>
+                        {isSubmitting ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Sending Message...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Message</span>
+                            <span aria-hidden="true">&rarr;</span>
+                          </>
+                        )}
                       </button>
                     </form>
                   )}
