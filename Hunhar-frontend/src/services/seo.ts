@@ -34,20 +34,54 @@ export function setPageCanonical(url: string): void {
 }
 
 /**
+ * Ensures meta description complies with Google SERP & Detailed SEO extension limits (maximum 155 characters).
+ * If a description exceeds 155 chars, it simplifies common verbose phrases or cleanly truncates
+ * at the nearest word boundary so Detailed SEO always awards a green check (✔) and Google never cuts it off.
+ */
+export function formatSeoDescription(text: string, maxLen = 155): string {
+  if (!text) return ''
+  const clean = text.replace(/\s+/g, ' ').trim()
+  if (clean.length <= maxLen) return clean
+
+  // 1. Try removing common verbose filler phrases without changing the core meaning
+  const simplified = clean
+    .replace(/\bways to find\b/gi, 'find')
+    .replace(/\bways to get\b/gi, 'get')
+    .replace(/\bin order to\b/gi, 'to')
+    .replace(/\bas well as\b/gi, 'and')
+  if (simplified.length <= maxLen) {
+    return simplified
+  }
+
+  // 2. Otherwise cleanly truncate at the nearest word boundary <= maxLen
+  const sub = simplified.slice(0, maxLen)
+  const lastSpace = sub.lastIndexOf(' ')
+  if (lastSpace > 80) {
+    const trimmed = sub.slice(0, lastSpace).replace(/[,;:\-\s]+$/, '')
+    return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+  }
+
+  return sub.slice(0, maxLen).replace(/[,;:\-\s]+$/, '') + '.'
+}
+
+/**
  * Updates an existing <meta> tag or creates a new one if not present.
  */
 export function setMetaTag(attr: 'name' | 'property', key: string, value: string): void {
+  // Automatically ensure meta descriptions stay <= 155 characters for SEO compliance
+  const finalValue = key.toLowerCase().includes('description') ? formatSeoDescription(value, 155) : value
+
   const existing = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)
   if (existing) {
     if (!existing.dataset.originalContent && !existing.dataset.blog) {
       existing.dataset.originalContent = existing.getAttribute('content') || ''
     }
     existing.dataset.blog = 'true'
-    existing.setAttribute('content', value)
+    existing.setAttribute('content', finalValue)
   } else {
     const el = document.createElement('meta')
     el.setAttribute(attr, key)
-    el.setAttribute('content', value)
+    el.setAttribute('content', finalValue)
     el.dataset.blog = 'true'
     document.head.appendChild(el)
   }

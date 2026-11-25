@@ -9,7 +9,7 @@ import { useBlogPost } from '../services/blogPosts'
 import { renderArticleContent } from '../components/blog/articleContent'
 import BlogFaqSection from '../components/blog/BlogFaqSection'
 import { extractFaqs, buildFaqSchema } from '../services/blogFaq'
-import { setPageCanonical, setMetaTag, resetBlogMetaTags, BASE_SITE_URL } from '../services/seo'
+import { setPageCanonical, setMetaTag, resetBlogMetaTags, BASE_SITE_URL, formatSeoDescription } from '../services/seo'
 
 export default function BlogPostPage(): React.JSX.Element {
   const { slug = '' } = useParams()
@@ -22,7 +22,7 @@ export default function BlogPostPage(): React.JSX.Element {
     if (!post) return
     const previousTitle = document.title
     const title = post.metaTitle || `${post.title} | Hunhar Blog`
-    const description = post.metaDescription || post.excerpt
+    const description = formatSeoDescription(post.metaDescription || post.excerpt)
     const url = `${BASE_SITE_URL}/blog/${post.slug}`
 
     document.title = title
@@ -48,7 +48,7 @@ export default function BlogPostPage(): React.JSX.Element {
       '@context': 'https://schema.org',
       '@type': 'Article',
       headline: post.title,
-      description: post.excerpt,
+      description: description,
       image: [post.coverImage],
       datePublished: post.publishedAt,
       dateModified: post.updatedAt || post.publishedAt,
