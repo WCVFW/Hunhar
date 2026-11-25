@@ -68,10 +68,16 @@ public class WorkspaceService {
                 .build();
     }
 
-    /** Client or the awarded freelancer can plan milestones while the project is active. */
+    /**
+     * Milestones are agreed through the milestone plan (MilestonePlanService); adding one directly is only for admins
+     * (e.g. fixing a project by hand).
+     */
     @Transactional
     public Milestone addMilestone(UUID projectId, MilestoneDto dto, AuthUser user) {
         Project project = access.requireParticipant(projectId, user);
+        if (!user.hasRole("ADMIN")) {
+            throw new BadRequestException("Milestones are agreed through the milestone plan: propose or edit the plan and accept it");
+        }
         if (!access.isClient(project, user.id()) && !access.isAwardedFreelancer(project, user.id())) {
             throw new ForbiddenException("Only the client or the lead freelancer can add milestones");
         }
@@ -109,6 +115,10 @@ public class WorkspaceService {
         }
         if (milestone.getStatus() == MilestoneStatus.APPROVED || milestone.getStatus() == MilestoneStatus.PAID) {
             throw new BadRequestException("This milestone is already approved");
+        }
+        // Milestone-based payment: work starts once the client has put the money in escrow
+        if (!milestone.isFunded()) {
+            throw new BadRequestException("Wait until the client funds this milestone before submitting work");
         }
 
         Deliverable deliverable = deliverableRepository.save(Deliverable.builder()

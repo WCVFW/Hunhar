@@ -26,6 +26,43 @@ import static com.theunoia.project.service.ProjectAccessService.requireUser;
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
+    private final com.theunoia.project.service.MilestonePlanService planService;
+
+    // ---------------------------------------------------------------- milestone plan (agreed before milestones exist)
+
+    public record PlanRequest(List<com.theunoia.project.service.MilestonePlanService.Item> items, String note) {}
+
+    @GetMapping("/projects/{projectId}/milestone-plan")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> plan(@CurrentUser AuthUser user, @PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.ok(planService.view(projectId, requireUser(user))));
+    }
+
+    /** Save without sending (your draft, or edits while the plan is with you). */
+    @PutMapping("/projects/{projectId}/milestone-plan")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> savePlan(@CurrentUser AuthUser user, @PathVariable UUID projectId,
+                                                                               @RequestBody PlanRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Plan saved", planService.save(projectId, req.items(), req.note(), requireUser(user))));
+    }
+
+    /** Send the plan (with your changes) to the other side. */
+    @PostMapping("/projects/{projectId}/milestone-plan/send")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> sendPlan(@CurrentUser AuthUser user, @PathVariable UUID projectId,
+                                                                               @RequestBody(required = false) PlanRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Plan sent",
+                planService.send(projectId, req == null ? null : req.items(), req == null ? null : req.note(), requireUser(user))));
+    }
+
+    /** Accept the plan you received: its milestones are created. */
+    @PostMapping("/projects/{projectId}/milestone-plan/accept")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> acceptPlan(@CurrentUser AuthUser user, @PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.ok("Milestone plan accepted", planService.accept(projectId, requireUser(user))));
+    }
+
+    /** After acceptance: propose more milestones (new round). */
+    @PostMapping("/projects/{projectId}/milestone-plan/new-round")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> newRound(@CurrentUser AuthUser user, @PathVariable UUID projectId) {
+        return ResponseEntity.ok(ApiResponse.ok(planService.startRound(projectId, requireUser(user))));
+    }
 
     @GetMapping("/projects/{projectId}")
     public ResponseEntity<ApiResponse<WorkspaceViewDto>> getWorkspace(@CurrentUser AuthUser user, @PathVariable UUID projectId) {

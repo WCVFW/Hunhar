@@ -1,3 +1,4 @@
+import MilestonePlanPanel from '../../components/dashboard/MilestonePlanPanel'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -10,7 +11,6 @@ import {
   Paperclip,
   UploadCloud,
   ArrowDownCircle,
-  Plus,
   ShieldAlert,
   ShieldCheck,
   Users2,
@@ -104,7 +104,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   const [profile, setProfile] = useState<FreelancerProfile | null>(null)
   const [hireModalBid, setHireModalBid] = useState<Bid | null>(null)
   const [declineModalBid, setDeclineModalBid] = useState<Bid | null>(null)
-  const [msForm, setMsForm] = useState<{ title: string; amount: string; due: string; description: string } | null>(null)
   const [disputeText, setDisputeText] = useState('')
   const filesRef = useRef<HTMLInputElement>(null)
 
@@ -190,26 +189,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
     } catch (err: any) {
       flash('error', err.message)
     }
-  }
-
-  const addMilestone = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!msForm) return
-    const amount = Number(msForm.amount)
-    if (!msForm.title.trim()) return flash('error', 'Give the milestone a title.')
-    if (!(amount >= 50)) return flash('error', 'Milestone amount must be at least ₹50.')
-    await act(
-      'add-ms',
-      () =>
-        workspaceApi.addMilestone(project.id, {
-          title: msForm.title.trim(),
-          amount,
-          description: msForm.description.trim() || undefined,
-          dueDate: msForm.due ? new Date(msForm.due + 'T18:00:00').toISOString() : undefined,
-        }),
-      'Milestone added. Fund it so the freelancer can start.'
-    )
-    setMsForm(null)
   }
 
   const complete = () => {
@@ -448,34 +427,18 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
       {tab === 'workspace' && ws && (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12">
           <div className="flex flex-col gap-4 lg:col-span-8">
+            {project.status !== 'OPEN' && <MilestonePlanPanel projectId={project.id} onAccepted={load} />}
             <div className="rounded-[20px] border border-[#E5E7EB] bg-white p-5">
               <div className="flex items-center justify-between">
                 <h3 className="font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">Milestones</h3>
-                {project.status === 'ACTIVE' && !msForm && (
-                  <button type="button" onClick={() => setMsForm({ title: '', amount: '', due: '', description: '' })} className="flex items-center gap-1 rounded-full bg-[#F5ECE1] px-3 py-1.5 text-[12px] font-bold text-[#9C5128]">
-                    <Plus size={14} /> Add milestone
-                  </button>
-                )}
               </div>
               <p className="mt-1 text-[12.5px] text-[#8C9BA8]">
                 Fund a milestone to hold the money in escrow. When the work is approved, release it — the freelancer receives it minus the {commissionPercent}% platform fee.
               </p>
 
-              {msForm && (
-                <form onSubmit={addMilestone} className="mt-4 grid grid-cols-1 gap-3 rounded-[14px] border border-[#EFE4D7] bg-[#FAF7F2] p-4 sm:grid-cols-2">
-                  <input className={input + ' sm:col-span-2'} placeholder="Title, e.g. First draft" maxLength={150} value={msForm.title} onChange={(e) => setMsForm({ ...msForm, title: e.target.value })} />
-                  <input className={input} type="number" min={50} placeholder="Amount (₹)" value={msForm.amount} onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} />
-                  <input className={input} type="date" aria-label="Due date" min={new Date().toISOString().slice(0, 10)} value={msForm.due} onChange={(e) => setMsForm({ ...msForm, due: e.target.value })} />
-                  <textarea className={input + ' h-20 py-2 sm:col-span-2'} placeholder="What should be delivered? (optional)" value={msForm.description} onChange={(e) => setMsForm({ ...msForm, description: e.target.value })} />
-                  <div className="flex gap-2 sm:col-span-2">
-                    <button type="submit" disabled={busy !== null} className="rounded-full bg-[#C06B3E] px-5 py-2 text-[13px] font-bold text-white disabled:opacity-60">Add</button>
-                    <button type="button" onClick={() => setMsForm(null)} className="rounded-full border border-[#DECFBE] bg-white px-5 py-2 text-[13px] font-bold text-[#5C5248]">Cancel</button>
-                  </div>
-                </form>
-              )}
 
               <div className="mt-4 flex flex-col gap-3">
-                {milestones.length === 0 && <p className="rounded-[14px] border border-dashed border-[#DCD3C7] p-5 text-center text-[13px] text-[#8E8376]">No milestones yet. Add one to start paying in stages.</p>}
+                {milestones.length === 0 && <p className="rounded-[14px] border border-dashed border-[#DCD3C7] p-5 text-center text-[13px] text-[#8E8376]">No milestones yet. They appear here once you accept the freelancer's milestone plan.</p>}
                 {milestones.map(({ milestone: m, deliverables }) => {
                   const latest = deliverables[0]
                   return (
