@@ -46,7 +46,7 @@ type TabType = 'overview' | 'files' | 'payments' | 'hustlers'
 
 const MILESTONE_LABEL: Record<MilestoneStatus, string> = {
   PENDING: 'Not started',
-  IN_PROGRESS: 'Changes requested',
+  IN_PROGRESS: 'In progress',
   SUBMITTED: 'Awaiting review',
   APPROVED: 'Approved',
   PAID: 'Paid',
@@ -54,7 +54,7 @@ const MILESTONE_LABEL: Record<MilestoneStatus, string> = {
 
 const MILESTONE_STYLE: Record<MilestoneStatus, string> = {
   PENDING: 'bg-[#F1F5F9] text-[#64748B]',
-  IN_PROGRESS: 'bg-[#FEF3C7] text-[#B45309]',
+  IN_PROGRESS: 'bg-[#E0F2FE] text-[#0369A1]',
   SUBMITTED: 'bg-[#EDE9FE] text-[#6D28D9]',
   APPROVED: 'bg-[#DCFCE7] text-[#15803D]',
   PAID: 'bg-[#DCFCE7] text-[#15803D]',
@@ -408,6 +408,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                   const done = m.status === 'APPROVED' || m.status === 'PAID'
                   const isCurrent = current?.milestone.id === m.id
                   const latest = deliverables[0]
+                  const hasRequestedChanges = m.status === 'IN_PROGRESS' && !!latest && !latest.approved
                   return (
                     <div key={m.id} className="rounded-[14px] border border-[#F0ECE6] p-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -430,7 +431,9 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${MILESTONE_STYLE[m.status]}`}>{MILESTONE_LABEL[m.status]}</span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${hasRequestedChanges ? 'bg-[#FEF3C7] text-[#B45309]' : MILESTONE_STYLE[m.status]}`}>
+                            {hasRequestedChanges ? 'Changes requested' : MILESTONE_LABEL[m.status]}
+                          </span>
                           {canDeliver && active && !done && !m.funded && (
                             <span className="rounded-full bg-[#FFF7ED] px-2.5 py-0.5 text-[11px] font-bold text-[#B45309]">Waiting for funding</span>
                           )}
@@ -444,7 +447,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                               }}
                               className="rounded-full bg-[#08182B] px-3 py-1 text-[11px] font-bold text-white hover:bg-[#12294A]"
                             >
-                              {m.status === 'SUBMITTED' ? 'Resubmit' : 'Submit work'}
+                              {m.status === 'SUBMITTED' ? 'Resubmit' : hasRequestedChanges ? 'Submit revisions' : 'Submit work'}
                             </button>
                           )}
                         </div>
