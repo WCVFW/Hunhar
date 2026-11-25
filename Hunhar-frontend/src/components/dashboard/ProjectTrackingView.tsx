@@ -1,3 +1,4 @@
+import MilestonePlanPanel from './MilestonePlanPanel'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Lock, Unlock, ChevronLeft, ChevronRight, TrendingUp, Clock, Send, Plus, X, CreditCard, ShieldCheck, AlertCircle, FileText, Paperclip, Upload } from 'lucide-react'
@@ -79,7 +80,6 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const [showAdd, setShowAdd] = useState(false)
-  const [msForm, setMsForm] = useState({ title: '', amount: '', due: '', description: '' })
   const [payingFor, setPayingFor] = useState<Milestone | null>(null)
   const [releasingFor, setReleasingFor] = useState<Milestone | null>(null)
   const [submitFor, setSubmitFor] = useState<Milestone | null>(null)
@@ -163,26 +163,6 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
   const overdue = rows.filter((r) => isOverdue(r.milestone)).length
   const backLink = role === 'client' ? `/client/projects/${toRouteId(project.id)}` : `/freelancer/projects/${toRouteId(project.id)}`
 
-  const addMilestone = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const amount = Number(msForm.amount)
-    if (!msForm.title.trim()) return flash('error', 'Give the milestone a title.')
-    if (!(amount >= 50)) return flash('error', 'Milestone amount must be at least ₹50.')
-    await act(
-      'add',
-      () =>
-        workspaceApi.addMilestone(project.id, {
-          title: msForm.title.trim(),
-          description: msForm.description.trim() || undefined,
-          amount,
-          dueDate: msForm.due ? new Date(msForm.due + 'T18:00:00').toISOString() : undefined,
-        }),
-      'Milestone added'
-    )
-    setShowAdd(false)
-    setMsForm({ title: '', amount: '', due: '', description: '' })
-  }
-
   const uploadWork = async (list: FileList | null) => {
     if (!list?.length) return
     setUploading(true)
@@ -250,7 +230,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
               className="inline-flex items-center gap-1.5 rounded-[12px] border border-[#DECFBE] bg-[#FAF8F5] px-3.5 py-2 font-manrope text-[12.5px] font-bold text-[#863D1A] shadow-2xs transition-all hover:bg-[#F3ECE1]"
             >
               <Plus size={15} />
-              <span>Add Milestone</span>
+              <span>Milestone Plan</span>
             </button>
           )}
         </div>
@@ -277,11 +257,11 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
           <div className="mt-9 rounded-[20px] border border-dashed border-[#E5DACD] p-10 text-center">
             <p className="text-[15px] font-bold text-[#08182B]">No milestones yet</p>
             <p className="mt-1 text-[13px] text-[#7A7065]">
-              {canAddMilestone ? 'Split the work into milestones: each is funded, delivered, approved and paid on its own.' : 'Milestones appear here once they are added.'}
+              {canAddMilestone ? 'Agree a milestone plan: the freelancer proposes it, the client accepts or edits it. Each milestone is then funded, delivered, approved and paid on its own.' : 'Milestones appear here once the milestone plan is agreed.'}
             </p>
             {canAddMilestone && (
               <button type="button" onClick={() => setShowAdd(true)} className="mt-4 rounded-full bg-[#C06B3E] px-5 py-2 text-[13px] font-bold text-white">
-                Add the first milestone
+                Open milestone plan
               </button>
             )}
           </div>
@@ -508,28 +488,20 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
         )}
       </div>
 
-      {/* Add milestone */}
+      {/* Milestone plan (agreed between client and freelancer) */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <form onSubmit={addMilestone} className="w-full max-w-md rounded-[24px] border border-[#E5DACD] bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[18px] font-extrabold text-[#08182B]">Add Milestone</h3>
-              <button type="button" onClick={() => setShowAdd(false)} className="rounded-full p-1.5 text-[#94A3B8] hover:bg-[#FAF8F5]">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="mt-4 space-y-3">
-              <input value={msForm.title} onChange={(e) => setMsForm({ ...msForm, title: e.target.value })} placeholder="Title, e.g. Logo concepts" className="w-full rounded-[12px] border border-[#E5DACD] px-3 py-2.5 text-[13px] focus:border-[#C06B3E] focus:outline-none" />
-              <div className="grid grid-cols-2 gap-3">
-                <input type="number" min={50} value={msForm.amount} onChange={(e) => setMsForm({ ...msForm, amount: e.target.value })} placeholder="Amount ₹ (min 50)" className="w-full rounded-[12px] border border-[#E5DACD] px-3 py-2.5 text-[13px] focus:border-[#C06B3E] focus:outline-none" />
-                <input type="date" value={msForm.due} onChange={(e) => setMsForm({ ...msForm, due: e.target.value })} className="w-full rounded-[12px] border border-[#E5DACD] px-3 py-2.5 text-[13px] focus:border-[#C06B3E] focus:outline-none" />
-              </div>
-              <textarea value={msForm.description} onChange={(e) => setMsForm({ ...msForm, description: e.target.value })} rows={3} placeholder="What will be delivered (optional)" className="w-full rounded-[12px] border border-[#E5DACD] px-3 py-2.5 text-[13px] focus:border-[#C06B3E] focus:outline-none" />
-            </div>
-            <button type="submit" disabled={busy !== null} className="mt-5 w-full rounded-[12px] bg-[#C06B3E] py-2.5 text-[13px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-60">
-              Add Milestone
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs sm:items-center" onClick={() => setShowAdd(false)}>
+          <div className="relative w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setShowAdd(false)}
+              aria-label="Close"
+              className="absolute right-3 top-3 z-10 rounded-full bg-white p-1.5 text-[#94A3B8] hover:bg-[#FAF8F5]"
+            >
+              <X size={18} />
             </button>
-          </form>
+            <MilestonePlanPanel projectId={project.id} onAccepted={load} />
+          </div>
         </div>
       )}
 

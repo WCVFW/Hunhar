@@ -618,11 +618,49 @@ export const bidsApi = {
 // =============================================================================
 // 4. Workspace & Team
 // =============================================================================
+export interface MilestonePlanItem {
+  title: string
+  description?: string | null
+  amount: number
+  /** yyyy-MM-dd */
+  dueDate?: string | null
+}
+
+export interface MilestonePlan {
+  projectId: string
+  myRole: 'CLIENT' | 'FREELANCER' | 'ADMIN'
+  status: 'NONE' | 'DRAFT' | 'WITH_CLIENT' | 'WITH_FREELANCER' | 'ACCEPTED'
+  draftBy?: 'CLIENT' | 'FREELANCER' | null
+  round: number
+  revisions: number
+  items: MilestonePlanItem[]
+  note?: string | null
+  lastEditedBy?: 'CLIENT' | 'FREELANCER' | null
+  lastEditedAt?: string | null
+  acceptedAt?: string | null
+  agreedAmount: number
+  milestonesTotal: number
+  canEdit: boolean
+  canAccept: boolean
+  canStartRound: boolean
+}
+
 export const workspaceApi = {
   get: (projectId: string) => apiRequest<Workspace>(`/api/v1/workspace/projects/${projectId}`),
 
   addMilestone: (projectId: string, data: { title: string; description?: string; amount: number; dueDate?: string }) =>
     apiRequest<Milestone>(`/api/v1/workspace/projects/${projectId}/milestones`, json('POST', data)),
+
+  // Milestone plan: freelancer proposes -> client accepts or edits & sends back -> ... -> accepted creates milestones
+  milestonePlan: (projectId: string) => apiRequest<MilestonePlan>(`/api/v1/workspace/projects/${projectId}/milestone-plan`),
+  saveMilestonePlan: (projectId: string, items: MilestonePlanItem[], note?: string) =>
+    apiRequest<MilestonePlan>(`/api/v1/workspace/projects/${projectId}/milestone-plan`, json('PUT', { items, note })),
+  sendMilestonePlan: (projectId: string, items: MilestonePlanItem[], note?: string) =>
+    apiRequest<MilestonePlan>(`/api/v1/workspace/projects/${projectId}/milestone-plan/send`, json('POST', { items, note })),
+  acceptMilestonePlan: (projectId: string) =>
+    apiRequest<MilestonePlan>(`/api/v1/workspace/projects/${projectId}/milestone-plan/accept`, json('POST')),
+  newMilestoneRound: (projectId: string) =>
+    apiRequest<MilestonePlan>(`/api/v1/workspace/projects/${projectId}/milestone-plan/new-round`, json('POST')),
 
   submitDeliverable: (milestoneId: string, data: { notes: string; fileUrls: string[] }) =>
     apiRequest<Deliverable>(`/api/v1/workspace/milestones/${milestoneId}/deliverables`, json('POST', data)),
