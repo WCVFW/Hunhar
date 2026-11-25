@@ -1,4 +1,5 @@
 import MilestonePlanPanel from '../../components/dashboard/MilestonePlanPanel'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -104,6 +105,9 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   const [profile, setProfile] = useState<FreelancerProfile | null>(null)
   const [hireModalBid, setHireModalBid] = useState<Bid | null>(null)
   const [declineModalBid, setDeclineModalBid] = useState<Bid | null>(null)
+  const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false)
+  const [cancelProjectConfirmOpen, setCancelProjectConfirmOpen] = useState(false)
+  const [releaseTarget, setReleaseTarget] = useState<{ id: string; amount: number; freelancerName?: string } | null>(null)
   const [disputeText, setDisputeText] = useState('')
   const filesRef = useRef<HTMLInputElement>(null)
 
@@ -192,9 +196,7 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   }
 
   const complete = () => {
-    const warn = unpaid.length ? `\n\n${unpaid.length} milestone(s) are not paid yet.` : ''
-    if (!window.confirm(`Mark "${project.title}" as complete?${warn}`)) return
-    act('complete', () => projectsApi.completeProject(project.id), 'Project marked complete. Thank you!')
+    setCompleteConfirmOpen(true)
   }
 
   const uploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,8 +277,8 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                 <button
                   type="button"
                   disabled={busy !== null}
-                  onClick={() => window.confirm('Cancel this project? Freelancers who applied will be notified.') && act('cancel', () => clientApi.cancelProject(project.id), 'Project cancelled')}
-                  className="rounded-[10px] px-3 py-2 text-[12.5px] font-bold text-[#EF4444] hover:bg-[#FEF2F2] disabled:opacity-60"
+                  onClick={() => setCancelProjectConfirmOpen(true)}
+                  className="rounded-[10px] px-3 py-2 text-[12.5px] font-bold text-[#EF4444] hover:bg-[#FEF2F2] disabled:opacity-60 cursor-pointer"
                 >
                   Cancel project
                 </button>
@@ -501,8 +503,8 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                               type="button"
                               disabled={busy !== null || !m.funded}
                               title={!m.funded ? 'Fund the milestone first' : undefined}
-                              onClick={() => window.confirm(`Release ${formatINR(m.amount)} to ${project.freelancerName || 'the freelancer'}?`) && act('rel-' + m.id, () => clientApi.releaseMilestone(m.id), 'Payment released. An invoice was created.')}
-                              className="rounded-[10px] bg-[#C06B3E] px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-60"
+                              onClick={() => setReleaseTarget({ id: m.id, amount: m.amount, freelancerName: project.freelancerName || 'the freelancer' })}
+                              className="rounded-[10px] bg-[#C06B3E] px-3.5 py-1.5 text-[12px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-60 cursor-pointer"
                             >
                               {busy === 'rel-' + m.id ? 'Releasing…' : 'Release payment'}
                             </button>
@@ -788,6 +790,57 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
           </div>
         </div>
       )}
+
+      {/* Mark Project Complete Custom Dialog */}
+      <ConfirmDialog
+        isOpen={completeConfirmOpen}
+        onClose={() => setCompleteConfirmOpen(false)}
+        onConfirm={() => {
+          setCompleteConfirmOpen(false)
+          act('complete', () => projectsApi.completeProject(project.id), 'Project marked complete. Thank you!')
+        }}
+        title="Mark Project as Complete?"
+        message={`Are you sure you want to mark "${project.title}" as complete?`}
+        warning={unpaid.length ? `${unpaid.length} milestone(s) are not paid yet.` : undefined}
+        confirmText="Yes, Mark Complete"
+        cancelText="Cancel"
+        variant={unpaid.length ? 'warning' : 'primary'}
+        confirmLoading={busy === 'complete'}
+      />
+
+      {/* Cancel Project Custom Dialog */}
+      <ConfirmDialog
+        isOpen={cancelProjectConfirmOpen}
+        onClose={() => setCancelProjectConfirmOpen(false)}
+        onConfirm={() => {
+          setCancelProjectConfirmOpen(false)
+          act('cancel', () => clientApi.cancelProject(project.id), 'Project cancelled')
+        }}
+        title="Cancel this project?"
+        message="Are you sure you want to cancel this project? Freelancers who applied or submitted proposals will be notified."
+        confirmText="Yes, Cancel Project"
+        cancelText="Keep Project"
+        variant="danger"
+        confirmLoading={busy === 'cancel'}
+      />
+
+      {/* Release Milestone Payment Custom Dialog */}
+      <ConfirmDialog
+        isOpen={releaseTarget !== null}
+        onClose={() => setReleaseTarget(null)}
+        onConfirm={() => {
+          if (!releaseTarget) return
+          const target = releaseTarget
+          setReleaseTarget(null)
+          act('rel-' + target.id, () => clientApi.releaseMilestone(target.id), 'Payment released. An invoice was created.')
+        }}
+        title="Release Milestone Payment?"
+        message={`Are you sure you want to release ${releaseTarget ? formatINR(releaseTarget.amount) : ''} to ${releaseTarget?.freelancerName || 'the freelancer'}?`}
+        confirmText="Release Payment"
+        cancelText="Cancel"
+        variant="primary"
+        confirmLoading={!!busy?.startsWith('rel-')}
+      />
     </div>
   )
 }

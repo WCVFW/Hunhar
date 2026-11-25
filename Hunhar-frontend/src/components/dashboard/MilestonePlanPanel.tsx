@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardList, Plus, Send, Trash2, Clock, AlertCircle } from 'lucide-react'
 import { workspaceApi, type MilestonePlan, type MilestonePlanItem } from '../../services/api'
 import { formatDate, formatINR } from '../../services/format'
+import ConfirmDialog from '../common/ConfirmDialog'
 
 interface Props {
   projectId: string
@@ -39,6 +40,7 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [confirmAcceptOpen, setConfirmAcceptOpen] = useState(false)
 
   const apply = useCallback((p: MilestonePlan) => {
     setPlan(p)
@@ -287,11 +289,8 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
             type="button"
             disabled={!!busy || edited}
             title={edited ? `You changed the plan — send it to the ${other} instead` : undefined}
-            onClick={() =>
-              window.confirm(`Accept this plan? ${plan.items.length} milestone(s) will be created.`) &&
-              run('accept', () => workspaceApi.acceptMilestonePlan(projectId), 'Plan accepted — milestones created', true)
-            }
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#C06B3E] px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-50"
+            onClick={() => setConfirmAcceptOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#C06B3E] px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-50 cursor-pointer"
           >
             <CheckCircle2 size={14} /> {busy === 'accept' ? 'Accepting…' : 'Accept plan'}
           </button>
@@ -307,6 +306,21 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
           </button>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmAcceptOpen}
+        onClose={() => setConfirmAcceptOpen(false)}
+        onConfirm={() => {
+          setConfirmAcceptOpen(false)
+          run('accept', () => workspaceApi.acceptMilestonePlan(projectId), 'Plan accepted — milestones created', true)
+        }}
+        title="Accept Milestone Plan?"
+        message={`Accept this plan? ${plan.items.length} milestone(s) will be created and added to your project workspace.`}
+        confirmText="Yes, Accept Plan"
+        cancelText="Cancel"
+        variant="primary"
+        confirmLoading={busy === 'accept'}
+      />
     </div>
   )
 }

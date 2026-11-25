@@ -5,6 +5,7 @@ import { bidsApi, clientApi, fileUrl, messagesApi, profileApi, projectsApi, type
 import { formatINR, initials, PROJECT_STATUS_LABEL, splitList, timeAgo } from '../../services/format'
 import { getCharacterAvatar } from '../../services/characterAvatars'
 import { fromRouteId, toRouteId } from '../../services/routeIds'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
 
 type Tab = 'all' | 'shortlisted' | 'accepted' | 'rejected'
 
@@ -27,6 +28,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBid, setSelectedBid] = useState<Bid | null>(null)
   const [showAcceptModal, setShowAcceptModal] = useState<Bid | null>(null)
+  const [declineConfirmBid, setDeclineConfirmBid] = useState<Bid | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -385,7 +387,7 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
                         <button
                           type="button"
                           disabled={busy !== null}
-                          onClick={() => window.confirm('Decline this proposal? The freelancer is notified.') && act('rj-' + bid.id, () => clientApi.rejectBid(bid.id), 'Proposal declined')}
+                          onClick={() => setDeclineConfirmBid(bid)}
                           className="inline-flex cursor-pointer items-center gap-1 rounded-[10px] border border-transparent px-2.5 py-2 text-[12px] font-semibold text-[#94A3B8] transition-all hover:bg-[#FEF2F2] hover:text-[#EF4444] disabled:opacity-60"
                         >
                           <X size={14} />
@@ -569,6 +571,24 @@ export default function ClientProjectBidsPage(): React.JSX.Element {
           </div>
         </div>
       )}
+
+      {/* Decline Proposal Custom Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={declineConfirmBid !== null}
+        onClose={() => setDeclineConfirmBid(null)}
+        onConfirm={async () => {
+          if (!declineConfirmBid) return
+          const b = declineConfirmBid
+          setDeclineConfirmBid(null)
+          await act('rj-' + b.id, () => clientApi.rejectBid(b.id), 'Proposal declined')
+        }}
+        title="Decline Proposal?"
+        message={`Are you sure you want to decline ${declineConfirmBid?.freelancerName || 'this freelancer'}'s proposal? The freelancer will be notified.`}
+        confirmText="Yes, Decline"
+        cancelText="Cancel"
+        variant="danger"
+        confirmLoading={busy?.startsWith('rj-')}
+      />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { FileText, ArrowRight } from 'lucide-react'
 import { BID_STATUS_LABEL, BID_STATUS_STYLE, formatDate, formatINR } from '../../services/format'
 import { toRouteId } from '../../services/routeIds'
 import { usePlatformSettings } from '../../services/usePlatformSettings'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
 
 type FilterKey = 'ALL' | BidStatus
 
@@ -59,6 +60,7 @@ export default function MyBidsPage(): React.JSX.Element {
   const [error, setError] = useState<string>('')
   const [filter, setFilter] = useState<FilterKey>('ALL')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [withdrawTargetId, setWithdrawTargetId] = useState<string | null>(null)
 
   useEffect(() => {
     bidsApi
@@ -68,8 +70,7 @@ export default function MyBidsPage(): React.JSX.Element {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleWithdraw = async (id: string) => {
-    if (!window.confirm('Withdraw this proposal? The credits used to submit it are not refunded.')) return
+  const executeWithdraw = async (id: string) => {
     setBusyId(id)
     setError('')
     try {
@@ -270,9 +271,9 @@ export default function MyBidsPage(): React.JSX.Element {
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"
-                        onClick={() => handleWithdraw(bid.id)}
+                        onClick={() => setWithdrawTargetId(bid.id)}
                         disabled={busyId === bid.id}
-                        className="font-manrope text-[12px] font-medium text-[#9CA3AF] transition-colors hover:text-[#EF4444] disabled:opacity-50"
+                        className="font-manrope text-[12px] font-medium text-[#9CA3AF] transition-colors hover:text-[#EF4444] disabled:opacity-50 cursor-pointer"
                       >
                         {busyId === bid.id ? 'Withdrawing…' : 'Withdraw proposal'}
                       </button>
@@ -284,6 +285,25 @@ export default function MyBidsPage(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {/* Withdraw Proposal Custom Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={withdrawTargetId !== null}
+        onClose={() => setWithdrawTargetId(null)}
+        onConfirm={async () => {
+          if (!withdrawTargetId) return
+          const id = withdrawTargetId
+          setWithdrawTargetId(null)
+          await executeWithdraw(id)
+        }}
+        title="Withdraw Proposal?"
+        message="Are you sure you want to withdraw this proposal?"
+        warning="The credits used to submit this proposal will not be refunded."
+        confirmText="Yes, Withdraw"
+        cancelText="Keep Proposal"
+        variant="danger"
+        confirmLoading={busyId !== null}
+      />
     </div>
   )
 }
