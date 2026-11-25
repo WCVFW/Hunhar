@@ -1523,24 +1523,42 @@ export default function BlogAdminPage(): React.JSX.Element {
                           Meta Description
                         </label>
                         <span
-                          className={`text-[11px] font-semibold ${
-                            (formData.excerpt?.length || 0) > 160
-                              ? 'text-amber-600'
+                          className={`text-[11px] font-semibold flex items-center gap-1 ${
+                            (formData.excerpt?.length || 0) > 155
+                              ? 'text-red-500 font-bold'
+                              : (formData.excerpt?.length || 0) >= 120
+                              ? 'text-emerald-600 font-bold'
                               : 'text-slate-400'
                           }`}
                         >
-                          {formData.excerpt?.length || 0} / 160 chars (Recommended for Google)
+                          <span>{formData.excerpt?.length || 0} / 155 chars</span>
+                          <span>
+                            {(formData.excerpt?.length || 0) > 155
+                              ? '❌ Too long (>155 turns Detailed SEO red)'
+                              : (formData.excerpt?.length || 0) >= 120
+                              ? '✔ Optimal SEO (Detailed SEO Green)'
+                              : '(Recommended 120-155 chars)'}
+                          </span>
                         </span>
                       </div>
                       <textarea
                         rows={3}
-                        placeholder="Brief 1-2 sentence summary of what readers will learn in this post."
+                        placeholder="Brief 1-2 sentence summary of what readers will learn in this post (optimal: 120-155 characters)."
                         value={formData.excerpt}
                         onChange={(e) =>
                           setFormData({ ...formData, excerpt: e.target.value })
                         }
-                        className="w-full px-4 py-2.5 text-sm text-navy border border-black/10 rounded-xl focus:outline-none focus:border-terracotta font-manrope"
+                        className={`w-full px-4 py-2.5 text-sm text-navy border rounded-xl focus:outline-none font-manrope transition-colors ${
+                          (formData.excerpt?.length || 0) > 155
+                            ? 'border-red-300 focus:border-red-500 bg-red-50/20'
+                            : 'border-black/10 focus:border-terracotta'
+                        }`}
                       />
+                      {(formData.excerpt?.length || 0) > 155 && (
+                        <p className="mt-1.5 text-xs text-red-500 font-manrope">
+                          Tip: Detailed SEO extension marks descriptions over 155 characters as red (❌). Shorten slightly to get a green tick (✔).
+                        </p>
+                      )}
                     </div>
 
                     {/* Content Editor */}
