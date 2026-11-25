@@ -41,6 +41,16 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [confirmAcceptOpen, setConfirmAcceptOpen] = useState(false)
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false)
+
+  const DISMISS_KEY = `hunhar_dismissed_round_${projectId}`
+  const [dismissedRound, setDismissedRound] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(`hunhar_dismissed_round_${projectId}`)
+    } catch {
+      return null
+    }
+  })
 
   const apply = useCallback((p: MilestonePlan) => {
     setPlan(p)
@@ -85,16 +95,30 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
     }
   }
 
+  const handleDiscardRound = () => {
+    if (!plan) return
+    try {
+      localStorage.setItem(DISMISS_KEY, String(plan.round))
+    } catch {}
+    setDismissedRound(String(plan.round))
+    setNotice(`Round ${plan.round} draft discarded. Existing funded milestones remain active.`)
+  }
+
+  const isDismissed = plan.round > 1 && String(plan.round) === dismissedRound
+  const isUnsentEmptyDraft = plan.round > 1 && plan.status === 'DRAFT' && (!plan.items || plan.items.length === 0) && !plan.canEdit
+  const effectiveRound = isDismissed || isUnsentEmptyDraft ? 1 : plan.round
+  const effectiveStatus = isDismissed || isUnsentEmptyDraft ? 'ACCEPTED' : plan.status
+
   const update = (i: number, field: keyof Row, value: string) => setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)))
   const other = plan.myRole === 'CLIENT' ? 'freelancer' : 'client'
-  const withMe = plan.canAccept
-  const editing = plan.canEdit
+  const withMe = plan.canAccept && !isDismissed && !isUnsentEmptyDraft
+  const editing = plan.canEdit && !isDismissed && !isUnsentEmptyDraft
   const difference = Math.round((total - Number(plan.agreedAmount)) * 100) / 100
 
   // --- status line
   let statusText = ''
   let statusTone = 'bg-[#FAF4EE] text-[#C06B3E]'
-  switch (plan.status) {
+  switch (effectiveStatus) {
     case 'NONE':
       statusText = plan.myRole === 'FREELANCER' ? 'Propose your milestone plan to the client' : 'Waiting for the freelancer to propose milestones'
       break
@@ -113,7 +137,7 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
       break
   }
 
-  const readOnlyItems = !editing && plan.items.length > 0
+  const readOnlyItems = !editing && plan.items.length > 0 && !isDismissed && !isUnsentEmptyDraft
 
   return (
     <div className="rounded-[20px] border border-[#DECFBE] bg-white p-4 sm:p-5 font-manrope">
@@ -121,20 +145,29 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
         <div className="flex items-center gap-2">
           <ClipboardList size={18} className="text-[#C06B3E]" />
           <h3 className="text-[16px] font-extrabold text-[#08182B]">
-            Milestone plan{plan.round > 1 ? ` · round ${plan.round}` : ''}
+            Milestone plan{effectiveRound > 1 ? ` · round ${effectiveRound}` : ''}
           </h3>
+          {plan.round > 1 && !isDismissed && !isUnsentEmptyDraft && (
+            <button
+              type="button"
+              onClick={() => setConfirmDiscardOpen(true)}
+              className="ml-2 inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50/60 px-2.5 py-0.5 text-[11px] font-bold text-red-600 hover:bg-red-100 transition-colors cursor-pointer"
+            >
+              <Trash2 size={11} /> Discard round {plan.round}
+            </button>
+          )}
         </div>
         <span className={`rounded-full px-3 py-1 text-[11.5px] font-bold ${statusTone}`}>{statusText}</span>
       </div>
 
-      {plan.lastEditedAt && plan.status !== 'NONE' && (
+      {plan.lastEditedAt && effectiveStatus !== 'NONE' && (
         <p className="mt-1 flex items-center gap-1 text-[11.5px] text-[#8E8376]">
           <Clock size={12} /> Last change by the {who(plan.lastEditedBy)} · {formatDate(plan.lastEditedAt, true)}
           {plan.revisions > 0 ? ` · ${plan.revisions} revision${plan.revisions > 1 ? 's' : ''}` : ''}
         </p>
       )}
 
-      {plan.note && plan.status !== 'ACCEPTED' && (
+      {plan.note && effectiveStatus !== 'ACCEPTED' && (
         <div className="mt-3 rounded-[12px] border-l-4 border-l-[#C06B3E] bg-[#FAF4EE] px-3 py-2 text-[12.5px] text-[#4A4036]">
           <span className="font-bold">Message from the {who(plan.lastEditedBy)}:</span> {plan.note}
         </div>
@@ -168,11 +201,35 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
       {/* ---------- editor ---------- */}
       {editing && (
         <div className="mt-4 space-y-3">
+          {rows.length === 0 && (
+            <div className="rounded-[14px] border border-dashed border-[#DECFBE] bg-[#FDFBF7] p-5 text-center">
+              <p className="text-[13px] font-semibold text-[#08182B]">Round {plan.round} draft has no milestones.</p>
+              <p className="mt-0.5 text-[12px] text-[#7A7065]">Add extra milestones below or discard this draft if not needed.</p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRows([emptyRow()])}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#08182B] px-3.5 py-1.5 text-[12px] font-bold text-white hover:bg-[#13294A]"
+                >
+                  <Plus size={13} /> Add milestone
+                </button>
+                {plan.round > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDiscardOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-white px-3.5 py-1.5 text-[12px] font-bold text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={13} /> Discard round {plan.round}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {rows.map((r, i) => (
             <div key={i} className="rounded-[14px] border border-[#E5DACD] bg-[#FDFBF7] p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11.5px] font-bold uppercase tracking-wide text-[#8E8376]">Milestone {i + 1}</span>
-                {rows.length > 1 && (
+                {(rows.length > 1 || plan.round > 1) && (
                   <button
                     type="button"
                     onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
@@ -237,7 +294,7 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
       )}
 
       {/* ---------- totals ---------- */}
-      {(editing || readOnlyItems) && plan.round <= 1 && (
+      {(editing || readOnlyItems) && effectiveRound <= 1 && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-[#F8F4EE] px-3 py-2 text-[12.5px]">
           <span className="text-[#7A7065]">
             Agreed project amount <span className="font-bold text-[#08182B]">{formatINR(plan.agreedAmount)}</span>
@@ -253,7 +310,7 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
           </span>
         </div>
       )}
-      {plan.status === 'ACCEPTED' && (
+      {effectiveStatus === 'ACCEPTED' && (
         <p className="mt-3 text-[12.5px] text-[#7A7065]">
           Milestones total <span className="font-bold text-[#08182B]">{formatINR(plan.milestonesTotal)}</span>. Payment works milestone by milestone: the
           client funds it (held in escrow), the freelancer submits the work, the client approves and releases the payment.
@@ -262,6 +319,16 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
 
       {/* ---------- actions ---------- */}
       <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {plan.round > 1 && !isDismissed && !isUnsentEmptyDraft && (
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => setConfirmDiscardOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50/50 px-4 py-2 text-[12.5px] font-bold text-red-600 hover:bg-red-50 hover:border-red-300 disabled:opacity-50 cursor-pointer"
+          >
+            <Trash2 size={13} /> Discard round {plan.round}
+          </button>
+        )}
         {editing && (
           <button
             type="button"
@@ -295,11 +362,17 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
             <CheckCircle2 size={14} /> {busy === 'accept' ? 'Accepting…' : 'Accept plan'}
           </button>
         )}
-        {plan.canStartRound && plan.status === 'ACCEPTED' && (
+        {plan.canStartRound && effectiveStatus === 'ACCEPTED' && (
           <button
             type="button"
             disabled={!!busy}
-            onClick={() => run('round', () => workspaceApi.newMilestoneRound(projectId), 'Add the new milestones, then send them for approval')}
+            onClick={() => {
+              try {
+                localStorage.removeItem(DISMISS_KEY)
+              } catch {}
+              setDismissedRound(null)
+              run('round', () => workspaceApi.newMilestoneRound(projectId), 'Add the new milestones, then send them for approval')
+            }}
             className="inline-flex items-center gap-1.5 rounded-full border border-[#C06B3E] px-4 py-2 text-[12.5px] font-bold text-[#C06B3E] hover:bg-[#FAF4EE] disabled:opacity-50"
           >
             <Plus size={14} /> Propose more milestones
@@ -320,6 +393,20 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
         cancelText="Cancel"
         variant="primary"
         confirmLoading={busy === 'accept'}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDiscardOpen}
+        onClose={() => setConfirmDiscardOpen(false)}
+        onConfirm={() => {
+          setConfirmDiscardOpen(false)
+          handleDiscardRound()
+        }}
+        title={`Discard Round ${plan.round} Draft?`}
+        message={`Are you sure you want to discard this round ${plan.round} draft? Your existing active milestones will not be affected.`}
+        confirmText="Yes, Discard Draft"
+        cancelText="Keep Draft"
+        variant="danger"
       />
     </div>
   )
