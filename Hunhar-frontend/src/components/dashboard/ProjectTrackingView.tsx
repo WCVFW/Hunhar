@@ -1,11 +1,9 @@
 import MilestonePlanPanel from './MilestonePlanPanel'
 import MilestoneCardBoard from './MilestoneCardBoard'
-import { getDefaultPhases } from '../../data/skillsCatalogue'
-import { phaseSync, type ProjectPhaseSync } from '../../services/phaseSync'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Lock, Unlock, ChevronLeft, ChevronRight, TrendingUp, Clock, Send, Plus, X, CreditCard, ShieldCheck, AlertCircle, FileText, Paperclip, Upload } from 'lucide-react'
-import { clientApi, fileUrl, filesApi, projectsApi, workspaceApi, type Deliverable, type Milestone, type Project, type StoredFile, type Workspace } from '../../services/api'
+import { clientApi, fileUrl, filesApi, projectsApi, workspaceApi, type Milestone, type MilestoneView, type Project, type StoredFile, type Workspace } from '../../services/api'
 import { formatDate, formatINR, splitList, timeAgo } from '../../services/format'
 import { fromRouteId, toRouteId } from '../../services/routeIds'
 
@@ -13,7 +11,7 @@ interface ProjectTrackingViewProps {
   role: 'client' | 'freelancer'
 }
 
-type Row = { milestone: Milestone; deliverables: Deliverable[] }
+type Row = MilestoneView
 
 const isDone = (m: Milestone) => m.status === 'APPROVED' || m.status === 'PAID'
 const isFunded = (m: Milestone) => m.funded || m.status !== 'PENDING'
@@ -75,7 +73,6 @@ export default function ProjectTrackingView({ role }: ProjectTrackingViewProps):
   return <TrackingBoard role={role} projectId={fromRouteId(token)} />
 }
 
-const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
 
 function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; projectId: string }) {
   const [ws, setWs] = useState<Workspace | null>(null)
@@ -112,37 +109,11 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     }
   }, [projectId])
 
-  const [remoteSync, setRemoteSync] = useState<ProjectPhaseSync | null>(null)
 
   useEffect(() => {
     load()
   }, [load])
 
-  useEffect(() => {
-    let active = true
-    const syncData = async () => {
-      const pId = ws?.project?.id || projectId
-      if (!pId) return
-      const s = await phaseSync.get(pId, projectId)
-      if (active && s) setRemoteSync(s)
-    }
-    syncData()
-    const timer = setInterval(syncData, 2000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [projectId, ws?.project?.id])
-
-  useEffect(() => {
-    const onStorage = () => {
-      load()
-      const pId = ws?.project?.id || projectId
-      if (pId) phaseSync.get(pId, projectId).then(setRemoteSync)
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [load, projectId, ws?.project?.id])
 
   const act = async (key: string, fn: () => Promise<unknown>, success: string) => {
     setBusy(key)
@@ -157,69 +128,8 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     }
   }
 
-  const rows: Row[] = useMemo(() => {
-    if (ws?.milestones && ws.milestones.length > 0) return ws.milestones
-    if (!ws?.project) return []
-    const project = ws.project
-    let phaseList: string[] = []
-    if (project.phases && project.phases.trim()) {
-      phaseList = project.phases.split('||').map((p) => p.trim()).filter(Boolean)
-    }
-    if (phaseList.length === 0) {
-      phaseList = getDefaultPhases(project.subCategory || project.title, project.category)
-    }
-    const total = ws.agreedAmount || project.budget || 1000
-    const count = Math.max(1, phaseList.length)
-    const perPhase = Math.round(total / count)
-    return phaseList.map((phaseTitle, idx) => {
-      const phaseId = `phase-${idx + 1}`
-      const statusKeys = [
-        remoteSync?.status?.[phaseId],
-        localStorage.getItem(`hunhar_milestone_status_${project.id}_${phaseId}`),
-        projectId ? localStorage.getItem(`hunhar_milestone_status_${projectId}_${phaseId}`) : null,
-      ]
-      const savedStatus =
-        (statusKeys.find((s) => s && s !== 'PENDING') as any) ||
-        (statusKeys.find(Boolean) as any) ||
-        (idx === 0 ? 'IN_PROGRESS' : 'PENDING')
-
-      const isFunded =
-        remoteSync?.funded?.[phaseId] ??
-        ((idx === 0 && (project.status === 'ACTIVE' || project.status === 'COMPLETED')) ||
-          localStorage.getItem(`hunhar_milestone_funded_${project.id}_${phaseId}`) === 'true' ||
-          (projectId ? localStorage.getItem(`hunhar_milestone_funded_${projectId}_${phaseId}`) === 'true' : false))
-
-      let phaseDeliverables: Deliverable[] = remoteSync?.deliverables?.[phaseId] || []
-      if (phaseDeliverables.length === 0) {
-        try {
-          const rawDel =
-            localStorage.getItem(`hunhar_deliverables_${project.id}_${phaseId}`) ||
-            (projectId ? localStorage.getItem(`hunhar_deliverables_${projectId}_${phaseId}`) : null)
-          if (rawDel) phaseDeliverables = JSON.parse(rawDel)
-        } catch {}
-      }
-
-      return {
-        milestone: {
-          id: phaseId,
-          projectId: project.id,
-          title: phaseTitle,
-          description: `Phase ${idx + 1} deliverable checkpoint`,
-          amount: idx === count - 1 ? Math.max(0, total - perPhase * (count - 1)) : perPhase,
-          status: savedStatus,
-          dueDate: null,
-          funded: isFunded,
-          fundedAt: isFunded ? project.createdAt : null,
-          paidAt: savedStatus === 'PAID' ? new Date().toISOString() : null,
-          submittedAt: phaseDeliverables[0]?.createdAt || null,
-          invoiceNumber: null,
-          tasksJson: null,
-          createdAt: project.createdAt || new Date().toISOString(),
-        },
-        deliverables: phaseDeliverables,
-      }
-    })
-  }, [ws, remoteSync, projectId])
+  // Phases come from the agreed milestone plan (server); they run one at a time
+  const rows: Row[] = useMemo(() => ws?.milestones || [], [ws])
 
   // Latest activity from real timestamps
   const activity = useMemo(() => {
@@ -240,6 +150,8 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
       const found = rows.find((r) => r.milestone.id === selectedMilestoneId)
       if (found) return found.milestone
     }
+    const currentPhase = rows.find((r) => r.phaseState === 'CURRENT')
+    if (currentPhase) return currentPhase.milestone
     const inProg = rows.find((r) => isFunded(r.milestone) && !isDone(r.milestone))
     if (inProg) return inProg.milestone
     const firstUnpaid = rows.find((r) => !isDone(r.milestone))
@@ -294,117 +206,20 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     const m = submitFor
     setSubmitFor(null)
 
-    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
-      const pId = ws?.project?.id || projectId
-      const newDeliverable: Deliverable = {
-        id: 'del-' + Date.now(),
-        milestoneId: m.id,
-        projectId: pId,
-        freelancerId: ws?.project?.awardedFreelancerId || '',
-        notes: workNotes.trim(),
-        fileUrls: workFiles.map((f) => f.url).join(','),
-        approved: false,
-        createdAt: new Date().toISOString(),
-      }
-      const key1 = `hunhar_deliverables_${projectId}_${m.id}`
-      const key2 = ws?.project?.id ? `hunhar_deliverables_${ws.project.id}_${m.id}` : null
-      const existingRaw = localStorage.getItem(key1) || (key2 ? localStorage.getItem(key2) : null)
-      const existingList: Deliverable[] = existingRaw ? JSON.parse(existingRaw) : []
-      const updatedList = [newDeliverable, ...existingList]
-      localStorage.setItem(key1, JSON.stringify(updatedList))
-      if (key2) localStorage.setItem(key2, JSON.stringify(updatedList))
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'SUBMITTED')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'SUBMITTED')
-
-      await phaseSync.update(pId, (prev) => ({
-        ...prev,
-        deliverables: { ...prev.deliverables, [m.id]: updatedList },
-        status: { ...prev.status, [m.id]: 'SUBMITTED' },
-      }), projectId)
-
-      window.dispatchEvent(new Event('storage'))
-      flash('success', 'Work submitted. The client will review it.')
-      setWorkNotes('')
-      setWorkFiles([])
-      await load()
-      return
-    }
-
     await act('sub-' + m.id, () => workspaceApi.submitDeliverable(m.id, { notes: workNotes.trim(), fileUrls: workFiles.map((f) => f.url) }), 'Work submitted. The client will review it.')
     setWorkNotes('')
     setWorkFiles([])
   }
 
   const handleReview = async (mId: string, deliverableId: string, approve: boolean) => {
-    if (mId.startsWith('phase-') || deliverableId.startsWith('del-') || !isUuid(mId)) {
-      const pId = ws?.project?.id || projectId
-      const raw =
-        (ws?.project?.id ? localStorage.getItem(`hunhar_deliverables_${ws.project.id}_${mId}`) : null) ||
-        localStorage.getItem(`hunhar_deliverables_${projectId}_${mId}`)
-      let updated: Deliverable[] = []
-      if (raw) {
-        try {
-          const list: Deliverable[] = JSON.parse(raw)
-          updated = list.map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
-        } catch {}
-      } else if (remoteSync?.deliverables?.[mId]) {
-        updated = remoteSync.deliverables[mId].map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
-      }
-      const statusToSet = approve ? 'APPROVED' : 'IN_PROGRESS'
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${mId}`, statusToSet)
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${mId}`, statusToSet)
-      if (updated.length > 0) {
-        localStorage.setItem(`hunhar_deliverables_${projectId}_${mId}`, JSON.stringify(updated))
-        if (ws?.project?.id) localStorage.setItem(`hunhar_deliverables_${ws.project.id}_${mId}`, JSON.stringify(updated))
-      }
-      await phaseSync.update(pId, (prev) => ({
-        ...prev,
-        deliverables: { ...prev.deliverables, [mId]: updated.length > 0 ? updated : prev.deliverables[mId] || [] },
-        status: { ...prev.status, [mId]: statusToSet },
-      }), projectId)
-      window.dispatchEvent(new Event('storage'))
-      flash('success', approve ? 'Work approved — release the payment when ready' : 'Changes requested — the freelancer has been notified')
-      await load()
-      return
-    }
     act(approve ? 'ap-' + mId : 'ch-' + mId, () => clientApi.reviewDeliverable(deliverableId, approve), approve ? 'Work approved — release the payment when ready' : 'Changes requested — the freelancer has been notified')
   }
 
   const handleFund = async (m: Milestone) => {
-    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
-      const pId = ws?.project?.id || projectId
-      localStorage.setItem(`hunhar_milestone_funded_${projectId}_${m.id}`, 'true')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_funded_${ws.project.id}_${m.id}`, 'true')
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'IN_PROGRESS')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'IN_PROGRESS')
-      await phaseSync.update(pId, (prev) => ({
-        ...prev,
-        funded: { ...prev.funded, [m.id]: true },
-        status: { ...prev.status, [m.id]: 'IN_PROGRESS' },
-      }), projectId)
-      window.dispatchEvent(new Event('storage'))
-      flash('success', `${formatINR(m.amount)} moved to escrow`)
-      await load()
-      return
-    }
     act('fund-' + m.id, () => clientApi.fundMilestone(m.id), `${formatINR(m.amount)} moved to escrow`)
   }
 
   const handleRelease = async (m: Milestone) => {
-    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
-      const pId = ws?.project?.id || projectId
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'PAID')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'PAID')
-      await phaseSync.update(pId, (prev) => ({
-        ...prev,
-        status: { ...prev.status, [m.id]: 'PAID' },
-      }), projectId)
-      window.dispatchEvent(new Event('storage'))
-      window.dispatchEvent(new Event('hunhar:balances-changed'))
-      flash('success', 'Payment released')
-      await load()
-      return
-    }
     act('rel-' + m.id, () => clientApi.releaseMilestone(m.id), 'Payment released')
   }
 
@@ -540,7 +355,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                         )}
                       </div>
                       <div className="mt-4 pt-2">
-                        {isClient && active && !isFunded(m) ? (
+                        {isClient && active && !isFunded(m) && rows.find((r) => r.milestone.id === m.id)?.phaseState === 'CURRENT' && !!m.tasksSubmittedAt ? (
                           <button
                             type="button"
                             disabled={busy !== null}
@@ -550,7 +365,7 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                             }}
                             className="flex h-10 w-full items-center justify-center rounded-[12px] bg-[#C06B3E] text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-60 cursor-pointer"
                           >
-                            Fund {formatINR(m.amount)}
+                            Approve & pay {formatINR(m.amount)}
                           </button>
                         ) : isClient && m.status === 'APPROVED' ? (
                           <button
@@ -632,12 +447,13 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                   </div>
                 </div>
 
-                <MilestoneCardBoard
-                  milestone={activeMilestone}
-                  canManage={canDeliver && active && !isDone(activeMilestone)}
-                  onChanged={load}
-                  altProjectId={projectId}
-                />
+                {rows.find((r) => r.milestone.id === activeMilestone.id) && (
+                  <MilestoneCardBoard
+                    view={rows.find((r) => r.milestone.id === activeMilestone.id)!}
+                    role={!active ? 'VIEWER' : isClient ? 'CLIENT' : canDeliver ? 'FREELANCER' : 'VIEWER'}
+                    onChanged={load}
+                  />
+                )}
               </div>
             )}
 

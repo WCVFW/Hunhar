@@ -67,11 +67,8 @@ public class WorkspaceService {
         Bid winning = project.getAwardedFreelancerId() == null ? null
                 : bidRepository.findByProjectIdAndFreelancerId(projectId, project.getAwardedFreelancerId()).orElse(null);
 
-        List<Milestone> existingMilestones = milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
-        if (existingMilestones.isEmpty() && project.getStatus() == ProjectStatus.ACTIVE) {
-            initDefaultMilestonesForProject(project, winning != null ? winning.getProposedCost() : project.getBudget());
-            existingMilestones = milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
-        }
+        List<Milestone> existingMilestones = phases(projectId);
+        Milestone current = currentPhase(existingMilestones);
 
         Map<UUID, List<Deliverable>> deliverables = deliverableRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
                 .stream().collect(Collectors.groupingBy(Deliverable::getMilestoneId));
@@ -80,6 +77,9 @@ public class WorkspaceService {
                 .map(m -> WorkspaceViewDto.MilestoneView.builder()
                         .milestone(m)
                         .deliverables(deliverables.getOrDefault(m.getId(), List.of()))
+                        .phaseNumber(existingMilestones.indexOf(m) + 1)
+                        .phaseState(m.getStatus() == MilestoneStatus.PAID ? "DONE" : m == current ? "CURRENT" : "LOCKED")
+                        .tasks(parseTasks(m.getTasksJson()))
                         .build())
                 .collect(Collectors.toList());
 
@@ -89,10 +89,6 @@ public class WorkspaceService {
                 .agreedAmount(winning != null ? winning.getProposedCost() : project.getBudget())
                 .agreedTimelineDays(winning != null ? winning.getDeliveryTimelineDays() : project.getTimelineDays())
                 .milestones(milestones)
-                .files(enricher.files(storedFileRepository.findByProjectIdOrderByCreatedAtDesc(projectId)))
-                .team(enricher.team(collaboratorRepository.findByProjectId(projectId)))
-                .build();
-    }
                 .files(enricher.files(storedFileRepository.findByProjectIdOrderByCreatedAtDesc(projectId)))
                 .team(enricher.team(collaboratorRepository.findByProjectId(projectId)))
                 .build();
@@ -150,6 +146,9 @@ public class WorkspaceService {
         if (!milestone.isFunded()) {
             throw new BadRequestException("Wait until the client funds this milestone before submitting work");
         }
+        requireCurrentPhase(milestone);
+        long open = parseTasks(milestone.getTasksJson()).stream().filter(t -> !"DONE".equals(t.status())).count();
+        if (open > 0) throw new BadRequestException("Move every sub-task to Done before submitting the phase (" + open + " left)");
 
         Deliverable deliverable = deliverableRepository.save(Deliverable.builder()
                 .milestoneId(milestoneId)
@@ -222,6 +221,13 @@ public class WorkspaceService {
         Project project = access.requireClient(m.getProjectId(), user);
         if (project.getStatus() != ProjectStatus.ACTIVE) throw new BadRequestException("Only milestones of active projects can be funded");
         if (m.isFunded()) throw new BadRequestException("This milestone is already funded");
+        requireCurrentPhase(m);
+        if (m.getTasksSubmittedAt() == null && !parseTasks(m.getTasksJson()).isEmpty()) {
+            throw new BadRequestException("Wait for the freelancer to send this phase's sub-tasks");
+        }
+        if (parseTasks(m.getTasksJson()).isEmpty()) {
+            throw new BadRequestException("The freelancer has not planned this phase's sub-tasks yet");
+        }
         if (m.getStatus() == MilestoneStatus.PAID) throw new BadRequestException("This milestone is already paid");
 
         internalClient.postChecked(internalClient.billing() + "/internal/escrow/lock",
@@ -258,7 +264,17 @@ public class WorkspaceService {
         m.setStatus(MilestoneStatus.PAID);
         m.setPaidAt(java.time.Instant.now());
         if (res != null && res.get("invoiceNumber") != null) m.setInvoiceNumber(String.valueOf(res.get("invoiceNumber")));
-        return milestoneRepository.save(m);
+        Milestone saved = milestoneRepository.save(m);
+        Milestone next = currentPhase(phases(project.getId()));
+        if (next != null) {
+            notifications.notify(project.getAwardedFreelancerId(), "PHASE_OPEN", "Next phase is open",
+                    "\"" + m.getTitle() + "\" is paid. Plan the sub-tasks for \"" + next.getTitle() + "\" and send them to the client.",
+                    "/freelancer/projects/" + project.getId());
+            notifications.notify(project.getClientId(), "PHASE_OPEN", "Next phase is open",
+                    "\"" + m.getTitle() + "\" is complete. The freelancer will now plan \"" + next.getTitle() + "\".",
+                    "/client/projects/" + project.getId());
+        }
+        return saved;
     }
 
     /**
@@ -305,6 +321,69 @@ public class WorkspaceService {
         return projectRepository.save(project);
     }
 
+    // ------------------------------------------------------------------ phases (run one at a time, in order)
+
+    /** The project's phases in the order they run. */
+    public List<Milestone> phases(UUID projectId) {
+        List<Milestone> list = new ArrayList<>(milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId));
+        list.sort(java.util.Comparator.comparing((Milestone m) -> m.getSequence() == null ? Integer.MAX_VALUE : m.getSequence())
+                .thenComparing(Milestone::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return list;
+    }
+
+    /** The first phase that is not paid yet: the only one that can be worked on. */
+    private static Milestone currentPhase(List<Milestone> ordered) {
+        return ordered.stream().filter(m -> m.getStatus() != MilestoneStatus.PAID).findFirst().orElse(null);
+    }
+
+    private void requireCurrentPhase(Milestone m) {
+        List<Milestone> ordered = phases(m.getProjectId());
+        Milestone current = currentPhase(ordered);
+        if (current == null || !current.getId().equals(m.getId())) {
+            int n = ordered.indexOf(m) + 1;
+            throw new BadRequestException("Phase " + n + " is locked. It opens when phase " + Math.max(1, n - 1) + " is completed and paid.");
+        }
+    }
+
+    private boolean isDeliveryMember(Project p, UUID userId) {
+        return access.isAwardedFreelancer(p, userId) || access.isCollaborator(p, userId);
+    }
+
+    /** Freelancer sends this phase's sub-tasks to the client: the client approves them by funding the phase. */
+    @Transactional
+    public Milestone submitPhaseTasks(UUID milestoneId, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId).orElseThrow(() -> new ResourceNotFoundException("Phase not found"));
+        Project p = access.requireDeliveryMember(m.getProjectId(), user);
+        if (p.getStatus() != ProjectStatus.ACTIVE) throw new BadRequestException("The project is not active");
+        requireCurrentPhase(m);
+        if (m.isFunded()) throw new BadRequestException("The client already approved and funded this phase");
+        if (parseTasks(m.getTasksJson()).isEmpty()) throw new BadRequestException("Add the sub-tasks you will do in this phase first");
+        m.setTasksSubmittedAt(Instant.now());
+        m.setTasksChangeNote(null);
+        milestoneRepository.save(m);
+        notifications.notify(p.getClientId(), "PHASE_TASKS", "Phase plan ready for approval",
+                "The freelancer listed the work for \"" + m.getTitle() + "\" on \"" + p.getTitle()
+                        + "\". Approve and fund the phase to start, or ask for changes.", "/client/projects/" + p.getId());
+        return m;
+    }
+
+    /** Client asks for changes to the sub-tasks before paying for the phase. */
+    @Transactional
+    public Milestone requestTaskChanges(UUID milestoneId, String note, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId).orElseThrow(() -> new ResourceNotFoundException("Phase not found"));
+        Project p = access.requireClient(m.getProjectId(), user);
+        if (m.isFunded()) throw new BadRequestException("This phase is already funded");
+        if (m.getTasksSubmittedAt() == null) throw new BadRequestException("The freelancer has not sent the sub-tasks yet");
+        String n = note == null ? "" : note.trim();
+        if (n.isEmpty()) throw new BadRequestException("Tell the freelancer what to change");
+        m.setTasksSubmittedAt(null);
+        m.setTasksChangeNote(n.length() > 500 ? n.substring(0, 500) : n);
+        milestoneRepository.save(m);
+        notifications.notify(p.getAwardedFreelancerId(), "PHASE_TASKS", "Changes requested on the phase plan",
+                "The client asked for changes to \"" + m.getTitle() + "\": " + m.getTasksChangeNote(), "/freelancer/projects/" + p.getId());
+        return m;
+    }
+
     // ------------------------------------------------------------------ milestone tasks / card board
 
     private List<MilestoneTaskItem> parseTasks(String json) {
@@ -329,12 +408,10 @@ public class WorkspaceService {
         Milestone m = milestoneRepository.findById(milestoneId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         Project p = access.requireParticipant(m.getProjectId(), user);
-        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
-            throw new ForbiddenException("Only project participants can manage tasks");
-        }
-        if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
-            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
-        }
+        if (!isDeliveryMember(p, user.id())) throw new ForbiddenException("Only the freelancer plans the phase's sub-tasks");
+        requireCurrentPhase(m);
+        if (m.isFunded()) throw new BadRequestException("The client approved these sub-tasks; you can only move them on the board now");
+        if (m.getTasksSubmittedAt() != null) throw new BadRequestException("The sub-tasks are with the client for approval");
         String title = req.title() != null ? req.title().trim() : "";
         if (title.isEmpty()) throw new BadRequestException("Task title is required");
 
@@ -343,9 +420,9 @@ public class WorkspaceService {
                 UUID.randomUUID().toString(),
                 title,
                 req.description() != null ? req.description().trim() : null,
-                req.status() != null && !req.status().isBlank() ? req.status().toUpperCase() : "TODO",
+                "TODO",
                 Instant.now().toString(),
-                "DONE".equalsIgnoreCase(req.status()) ? Instant.now().toString() : null
+                null
         ));
         m.setTasksJson(writeTasks(list));
         milestoneRepository.save(m);
@@ -357,11 +434,20 @@ public class WorkspaceService {
         Milestone m = milestoneRepository.findById(milestoneId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         Project p = access.requireParticipant(m.getProjectId(), user);
-        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
-            throw new ForbiddenException("Only project participants can manage tasks");
-        }
+        if (!isDeliveryMember(p, user.id())) throw new ForbiddenException("Only the freelancer updates the phase's sub-tasks");
+        requireCurrentPhase(m);
         if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
-            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
+            throw new BadRequestException("This phase is already approved");
+        }
+        String requested = req.status() == null ? null : req.status().trim().toUpperCase();
+        if (requested != null && !requested.isEmpty() && !java.util.Set.of("TODO", "IN_PROGRESS", "DONE").contains(requested)) {
+            throw new BadRequestException("Status must be TODO, IN_PROGRESS or DONE");
+        }
+        boolean editsText = (req.title() != null && !req.title().isBlank()) || req.description() != null;
+        if (m.isFunded() && editsText) throw new BadRequestException("The client approved these sub-tasks; you can only move them on the board now");
+        if (!m.isFunded() && m.getTasksSubmittedAt() != null) throw new BadRequestException("The sub-tasks are with the client for approval");
+        if (!m.isFunded() && requested != null && !requested.isEmpty() && !"TODO".equals(requested)) {
+            throw new BadRequestException("Work starts after the client approves and funds this phase");
         }
         List<MilestoneTaskItem> list = new ArrayList<>(parseTasks(m.getTasksJson()));
         boolean found = false;
@@ -393,65 +479,15 @@ public class WorkspaceService {
         Milestone m = milestoneRepository.findById(milestoneId)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
         Project p = access.requireParticipant(m.getProjectId(), user);
-        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
-            throw new ForbiddenException("Only project participants can manage tasks");
-        }
-        if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
-            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
-        }
+        if (!isDeliveryMember(p, user.id())) throw new ForbiddenException("Only the freelancer plans the phase's sub-tasks");
+        requireCurrentPhase(m);
+        if (m.isFunded()) throw new BadRequestException("The client approved these sub-tasks; you can only move them on the board now");
+        if (m.getTasksSubmittedAt() != null) throw new BadRequestException("The sub-tasks are with the client for approval");
         List<MilestoneTaskItem> list = new ArrayList<>(parseTasks(m.getTasksJson()));
         list.removeIf(t -> t.id().equals(taskId));
         m.setTasksJson(writeTasks(list));
         milestoneRepository.save(m);
         return list;
-    }
-
-    // ------------------------------------------------------------------ auto milestone generation
-
-    @Transactional
-    public void initDefaultMilestonesForProject(Project p, BigDecimal agreedAmount) {
-        if (p.getStatus() != ProjectStatus.ACTIVE) return;
-        if (!milestoneRepository.findByProjectId(p.getId()).isEmpty()) return;
-
-        if (agreedAmount == null || agreedAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            agreedAmount = p.getBudget() != null ? p.getBudget() : BigDecimal.valueOf(1000);
-        }
-
-        List<String> phaseList = new ArrayList<>();
-        if (p.getPhases() != null && !p.getPhases().isBlank()) {
-            for (String s : p.getPhases().split("\\|\\|")) {
-                String trimmed = s.trim();
-                if (!trimmed.isEmpty()) phaseList.add(trimmed);
-            }
-        }
-        if (phaseList.isEmpty()) {
-            phaseList.addAll(SkillPhasesCatalogue.getPhasesForSkill(p.getSubCategory(), p.getCategory(), p.getTitle()));
-        }
-
-        int count = Math.max(1, phaseList.size());
-        BigDecimal total = agreedAmount;
-        BigDecimal perPhase = total.divide(BigDecimal.valueOf(count), 0, RoundingMode.HALF_UP);
-        BigDecimal accumulated = BigDecimal.ZERO;
-
-        for (int i = 0; i < count; i++) {
-            BigDecimal amt;
-            if (i == count - 1) {
-                amt = total.subtract(accumulated);
-                if (amt.compareTo(BigDecimal.ZERO) < 0) amt = BigDecimal.ZERO;
-            } else {
-                amt = perPhase;
-                accumulated = accumulated.add(amt);
-            }
-            milestoneRepository.save(Milestone.builder()
-                    .projectId(p.getId())
-                    .title(phaseList.get(i))
-                    .description("Phase " + (i + 1) + " deliverable checkpoint")
-                    .amount(amt)
-                    .status(MilestoneStatus.PENDING)
-                    .funded(false)
-                    .tasksJson("[]")
-                    .build());
-        }
     }
 
     private List<String> defaultPhasesForCategory(String category) {

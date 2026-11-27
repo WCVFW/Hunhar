@@ -130,6 +130,22 @@ public class WorkspaceController {
                 workspaceService.updateProgress(projectId, progressPercentage, user)));
     }
 
+    /** Freelancer: send this phase's sub-tasks to the client for approval. */
+    @PostMapping("/milestones/{milestoneId}/tasks/submit")
+    public ResponseEntity<ApiResponse<Milestone>> submitPhaseTasks(@CurrentUser AuthUser user, @PathVariable UUID milestoneId) {
+        return ResponseEntity.ok(ApiResponse.ok("Sent to the client for approval", workspaceService.submitPhaseTasks(milestoneId, requireUser(user))));
+    }
+
+    public record ChangeRequest(String note) {}
+
+    /** Client: ask for changes to the sub-tasks before approving and funding the phase. */
+    @PostMapping("/milestones/{milestoneId}/tasks/request-changes")
+    public ResponseEntity<ApiResponse<Milestone>> requestTaskChanges(@CurrentUser AuthUser user, @PathVariable UUID milestoneId,
+                                                                     @RequestBody ChangeRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Changes requested",
+                workspaceService.requestTaskChanges(milestoneId, req == null ? null : req.note(), requireUser(user))));
+    }
+
     @PostMapping("/milestones/{milestoneId}/tasks")
     public ResponseEntity<ApiResponse<List<WorkspaceService.MilestoneTaskItem>>> addMilestoneTask(
             @CurrentUser AuthUser user,

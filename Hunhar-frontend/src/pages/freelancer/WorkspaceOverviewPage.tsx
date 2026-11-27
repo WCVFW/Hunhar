@@ -1,8 +1,6 @@
 import MilestoneCardBoard from '../../components/dashboard/MilestoneCardBoard'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { getDefaultPhases } from '../../data/skillsCatalogue'
-import { phaseSync, type ProjectPhaseSync } from '../../services/phaseSync'
 import {
   Briefcase,
   CheckCircle2,
@@ -24,7 +22,6 @@ import {
   messagesApi,
   tokenStorage,
   workspaceApi,
-  type Deliverable,
   type Milestone,
   type MilestoneStatus,
   type StoredFile,
@@ -66,7 +63,6 @@ const MILESTONE_STYLE: Record<MilestoneStatus, string> = {
 const inputClass =
   'h-10 w-full rounded-[12px] border border-[#DECFBE] bg-[#FDFBF7] px-3 font-manrope text-[13px] text-[#08182B] focus:border-[#C06B3E] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C06B3E]/20'
 
-const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
 
 export default function WorkspaceOverviewPage(): React.JSX.Element {
   const { projectId: projectToken = '' } = useParams<{ projectId: string }>()
@@ -107,35 +103,11 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
     }
   }, [projectId])
 
-  const [remoteSync, setRemoteSync] = useState<ProjectPhaseSync | null>(null)
 
   useEffect(() => {
     load()
   }, [load])
 
-  useEffect(() => {
-    let active = true
-    const syncData = async () => {
-      if (!projectId) return
-      const s = await phaseSync.get(projectId)
-      if (active && s) setRemoteSync(s)
-    }
-    syncData()
-    const timer = setInterval(syncData, 2000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [projectId])
-
-  useEffect(() => {
-    const onStorage = () => {
-      load()
-      if (projectId) phaseSync.get(projectId).then(setRemoteSync)
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [load, projectId])
 
   const flash = (type: 'success' | 'error', text: string) => {
     setNotice({ type, text })
@@ -143,73 +115,8 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
   }
 
   const milestones = ws?.milestones || []
-  const displayMilestones: { milestone: Milestone; deliverables: Deliverable[] }[] = useMemo(() => {
-    if (milestones.length > 0) return milestones
-    if (!ws?.project) return []
-    const project = ws.project
-    let phaseList: string[] = []
-    if (project?.phases && project.phases.trim()) {
-      phaseList = project.phases.split('||').map((p) => p.trim()).filter(Boolean)
-    }
-    if (phaseList.length === 0) {
-      phaseList = getDefaultPhases(project?.subCategory || project?.title, project?.category)
-    }
-    const total = ws.agreedAmount || project?.budget || 1000
-    const count = Math.max(1, phaseList.length)
-    const perPhase = Math.round(total / count)
-    return phaseList.map((phaseTitle, idx) => {
-      const phaseId = `phase-${idx + 1}`
-      let savedStatus: MilestoneStatus =
-        remoteSync?.status?.[phaseId] ||
-        (localStorage.getItem(`hunhar_milestone_status_${project.id}_${phaseId}`) as MilestoneStatus) ||
-        (idx === 0 ? 'IN_PROGRESS' : 'PENDING')
-      const isFunded =
-        remoteSync?.funded?.[phaseId] ??
-        ((idx === 0 && (project.status === 'ACTIVE' || project.status === 'COMPLETED')) ||
-          localStorage.getItem(`hunhar_milestone_funded_${project.id}_${phaseId}`) === 'true')
-
-      let phaseDeliverables: Deliverable[] = remoteSync?.deliverables?.[phaseId] || []
-      if (phaseDeliverables.length === 0) {
-        try {
-          const rawDel = localStorage.getItem(`hunhar_deliverables_${project.id}_${phaseId}`)
-          if (rawDel) phaseDeliverables = JSON.parse(rawDel)
-        } catch { }
-      }
-
-      // Auto-seed existing local deliverable or status to remote sync
-      if (
-        (phaseDeliverables.length > 0 && !remoteSync?.deliverables?.[phaseId]) ||
-        (savedStatus !== 'PENDING' && !remoteSync?.status?.[phaseId])
-      ) {
-        phaseSync.update(project.id, (prev) => ({
-          ...prev,
-          status: { ...prev.status, [phaseId]: savedStatus },
-          funded: { ...prev.funded, [phaseId]: isFunded },
-          deliverables: { ...prev.deliverables, [phaseId]: phaseDeliverables },
-        }))
-      }
-
-      return {
-        milestone: {
-          id: phaseId,
-          projectId: project.id,
-          title: phaseTitle,
-          description: `Phase ${idx + 1} deliverable checkpoint`,
-          amount: idx === count - 1 ? Math.max(0, total - perPhase * (count - 1)) : perPhase,
-          status: savedStatus,
-          dueDate: null,
-          funded: isFunded,
-          fundedAt: isFunded ? project.createdAt : null,
-          paidAt: savedStatus === 'PAID' ? new Date().toISOString() : null,
-          submittedAt: phaseDeliverables[0]?.createdAt || null,
-          invoiceNumber: null,
-          tasksJson: null,
-          createdAt: project.createdAt || new Date().toISOString(),
-        },
-        deliverables: phaseDeliverables,
-      }
-    })
-  }, [milestones, ws, remoteSync])
+  // Phases come from the agreed milestone plan (server); they run one at a time
+  const displayMilestones = milestones
 
   if (loading) {
     return (
@@ -235,7 +142,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
   const isLead = ws.myRole === 'OWNER'
   const canDeliver = ws.myRole === 'OWNER' || ws.myRole === 'COLLABORATOR'
   const active = project.status === 'ACTIVE'
-  const current = displayMilestones.find((m) => m.milestone.status !== 'APPROVED' && m.milestone.status !== 'PAID')
+  const current = displayMilestones.find((m) => m.phaseState === 'CURRENT') || displayMilestones.find((m) => m.milestone.status !== 'PAID')
   const clientName = project.clientName || 'Client'
   const team = ws.team.filter((t) => t.status === 'ACCEPTED')
   const pendingInvites = ws.team.filter((t) => t.status === 'INVITED')
@@ -261,32 +168,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
     if (!workNotes.trim()) return flash('error', 'Describe what you are submitting.')
     setSubmittingWork(true)
     try {
-      if (submitFor.id.startsWith('phase-') || !isUuid(submitFor.id)) {
-        const newDeliverable: Deliverable = {
-          id: 'del-' + Date.now(),
-          milestoneId: submitFor.id,
-          projectId,
-          freelancerId: me?.id || '',
-          notes: workNotes.trim(),
-          fileUrls: workFiles.map((f) => f.url).join(','),
-          approved: false,
-          createdAt: new Date().toISOString(),
-        }
-        const key = `hunhar_deliverables_${projectId}_${submitFor.id}`
-        const existingRaw = localStorage.getItem(key)
-        const existingList: Deliverable[] = existingRaw ? JSON.parse(existingRaw) : []
-        const updatedList = [newDeliverable, ...existingList]
-        localStorage.setItem(key, JSON.stringify(updatedList))
-        localStorage.setItem(`hunhar_milestone_status_${projectId}_${submitFor.id}`, 'SUBMITTED')
-        await phaseSync.update(projectId, (prev) => ({
-          ...prev,
-          deliverables: { ...prev.deliverables, [submitFor.id]: updatedList },
-          status: { ...prev.status, [submitFor.id]: 'SUBMITTED' },
-        }))
-        window.dispatchEvent(new Event('storage'))
-      } else {
-        await workspaceApi.submitDeliverable(submitFor.id, { notes: workNotes.trim(), fileUrls: workFiles.map((f) => f.url) })
-      }
+      await workspaceApi.submitDeliverable(submitFor.id, { notes: workNotes.trim(), fileUrls: workFiles.map((f) => f.url) })
       setSubmitFor(null)
       setWorkNotes('')
       setWorkFiles([])
@@ -521,10 +403,12 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
               <div className="mt-4 flex flex-col gap-3.5">
                 {displayMilestones.length === 0 && (
                   <p className="rounded-[14px] border border-dashed border-[#DCD3C7] p-5 text-center text-[13px] text-[#8E8376]">
-                    No milestones yet. Milestones appear here once active.
+                    No phases yet. They appear here once the milestone plan above is accepted.
                   </p>
                 )}
-                {displayMilestones.map(({ milestone: m, deliverables }) => {
+                {displayMilestones.map((view) => {
+                  const { milestone: m, deliverables } = view
+                  const locked = view.phaseState === 'LOCKED'
                   const done = m.status === 'APPROVED' || m.status === 'PAID'
                   const isCurrent = current?.milestone.id === m.id
                   const latest = deliverables[0]
@@ -554,10 +438,18 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${hasRequestedChanges ? 'bg-[#FEF3C7] text-[#B45309]' : MILESTONE_STYLE[m.status]}`}>
                             {hasRequestedChanges ? 'Changes requested' : MILESTONE_LABEL[m.status]}
                           </span>
-                          {canDeliver && active && !done && !m.funded && (
-                            <span className="rounded-full bg-[#FFF7ED] px-2.5 py-0.5 text-[11px] font-bold text-[#B45309]">Waiting for funding</span>
+                          {view.phaseNumber && (
+                            <span className="rounded-full bg-[#F4EFE6] px-2.5 py-0.5 text-[11px] font-bold text-[#6B5E51]">Phase {view.phaseNumber}</span>
                           )}
-                          {canDeliver && active && !done && m.funded && (
+                          {locked && (
+                            <span className="rounded-full bg-[#F1F5F9] px-2.5 py-0.5 text-[11px] font-bold text-[#64748B]">Locked</span>
+                          )}
+                          {canDeliver && active && !done && !locked && !m.funded && (
+                            <span className="rounded-full bg-[#FFF7ED] px-2.5 py-0.5 text-[11px] font-bold text-[#B45309]">
+                              {m.tasksSubmittedAt ? 'Waiting for client approval' : 'Plan sub-tasks'}
+                            </span>
+                          )}
+                          {canDeliver && active && !done && !locked && m.funded && (
                             <button
                               type="button"
                               onClick={() => {
@@ -575,7 +467,7 @@ export default function WorkspaceOverviewPage(): React.JSX.Element {
                       {m.description && <p className="mt-2 pl-8 text-[12px] text-[#73685C]">{m.description}</p>}
 
                       <div className="pl-0 sm:pl-8">
-                        <MilestoneCardBoard milestone={m} canManage={canDeliver && active} onChanged={load} />
+                        <MilestoneCardBoard view={view} role={canDeliver && active ? 'FREELANCER' : 'VIEWER'} onChanged={load} />
                       </div>
                       {latest && (
                         <div className="mt-2 ml-8 rounded-[10px] bg-[#FAF7F2] p-2.5 text-[12px] text-[#5C5248]">

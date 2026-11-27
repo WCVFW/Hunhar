@@ -1,7 +1,5 @@
 import MilestoneCardBoard from '../../components/dashboard/MilestoneCardBoard'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
-import { getDefaultPhases } from '../../data/skillsCatalogue'
-import { phaseSync, type ProjectPhaseSync } from '../../services/phaseSync'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -32,10 +30,8 @@ import {
   walletApi,
   workspaceApi,
   type Bid,
-  type Deliverable,
   type Dispute,
   type FreelancerProfile,
-  type Milestone,
   type MilestoneStatus,
   type Project,
   type Workspace,
@@ -90,7 +86,6 @@ function Avatar({ name, url, id, size = 'h-11 w-11' }: { name?: string; url?: st
   return <img src={src} alt={name || 'Avatar'} className={`${size} shrink-0 rounded-full object-cover ring-1 ring-[#DECFBE]/60`} />
 }
 
-const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
 
 export default function ClientProjectDetailPage(): React.JSX.Element {
   const { projectId: projectToken = '' } = useParams<{ projectId: string }>()
@@ -107,7 +102,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const [remoteSync, setRemoteSync] = useState<ProjectPhaseSync | null>(null)
 
   const [profile, setProfile] = useState<FreelancerProfile | null>(null)
   const [hireModalBid, setHireModalBid] = useState<Bid | null>(null)
@@ -149,29 +143,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
     load()
   }, [load])
 
-  useEffect(() => {
-    let active = true
-    const syncData = async () => {
-      if (!projectId) return
-      const s = await phaseSync.get(projectId)
-      if (active && s) setRemoteSync(s)
-    }
-    syncData()
-    const timer = setInterval(syncData, 2000)
-    return () => {
-      active = false
-      clearInterval(timer)
-    }
-  }, [projectId])
-
-  useEffect(() => {
-    const onStorage = () => {
-      load()
-      if (projectId) phaseSync.get(projectId).then(setRemoteSync)
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [load, projectId])
 
   // Open the most useful tab once loaded
   useEffect(() => {
@@ -192,109 +163,13 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
     }
   }
 
-  const fundMilestoneItem = async (mId: string, amount: number) => {
-    if (mId.startsWith('phase-') || !isUuid(mId)) {
-      localStorage.setItem(`hunhar_milestone_funded_${projectId}_${mId}`, 'true')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_funded_${ws.project.id}_${mId}`, 'true')
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${mId}`, 'IN_PROGRESS')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${mId}`, 'IN_PROGRESS')
-      await phaseSync.update(projectId, (prev) => ({
-        ...prev,
-        funded: { ...prev.funded, [mId]: true },
-        status: { ...prev.status, [mId]: 'IN_PROGRESS' },
-      }), ws?.project?.id)
-      window.dispatchEvent(new Event('storage'))
-      flash('success', `${formatINR(amount)} moved to escrow`)
-      load()
-      return
-    }
-    act('fund-' + mId, () => clientApi.fundMilestone(mId), `${formatINR(amount)} moved to escrow`)
-  }
-
   const reviewDeliverableItem = async (mId: string, deliverableId: string, approve: boolean) => {
-    if (mId.startsWith('phase-') || deliverableId.startsWith('del-') || !isUuid(mId)) {
-      const raw =
-        (ws?.project?.id ? localStorage.getItem(`hunhar_deliverables_${ws.project.id}_${mId}`) : null) ||
-        localStorage.getItem(`hunhar_deliverables_${projectId}_${mId}`)
-      let updated: Deliverable[] = []
-      if (raw) {
-        try {
-          const list: Deliverable[] = JSON.parse(raw)
-          updated = list.map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
-          localStorage.setItem(`hunhar_deliverables_${projectId}_${mId}`, JSON.stringify(updated))
-          if (ws?.project?.id) localStorage.setItem(`hunhar_deliverables_${ws.project.id}_${mId}`, JSON.stringify(updated))
-        } catch { }
-      } else if (remoteSync?.deliverables?.[mId]) {
-        updated = remoteSync.deliverables[mId].map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
-      }
-      localStorage.setItem(`hunhar_milestone_status_${projectId}_${mId}`, approve ? 'APPROVED' : 'IN_PROGRESS')
-      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${mId}`, approve ? 'APPROVED' : 'IN_PROGRESS')
-      await phaseSync.update(projectId, (prev) => ({
-        ...prev,
-        deliverables: { ...prev.deliverables, [mId]: updated.length > 0 ? updated : prev.deliverables[mId] || [] },
-        status: { ...prev.status, [mId]: approve ? 'APPROVED' : 'IN_PROGRESS' },
-      }), ws?.project?.id)
-      window.dispatchEvent(new Event('storage'))
-      flash('success', approve ? 'Work approved' : 'Changes requested — the freelancer has been notified')
-      load()
-      return
-    }
     act(approve ? 'ap-' + mId : 'ch-' + mId, () => clientApi.reviewDeliverable(deliverableId, approve), approve ? 'Work approved' : 'Changes requested — the freelancer has been notified')
   }
 
   const milestones = ws?.milestones || []
-  const displayMilestones: { milestone: Milestone; deliverables: Deliverable[] }[] = useMemo(() => {
-    if (milestones.length > 0) return milestones
-    if (!project) return []
-    let phaseList: string[] = []
-    if (project?.phases && project.phases.trim()) {
-      phaseList = project.phases.split('||').map((p) => p.trim()).filter(Boolean)
-    }
-    if (phaseList.length === 0) {
-      phaseList = getDefaultPhases(project?.subCategory || project?.title, project?.category)
-    }
-    const total = ws?.agreedAmount || project?.budget || 1000
-    const count = Math.max(1, phaseList.length)
-    const perPhase = Math.round(total / count)
-    return phaseList.map((phaseTitle, idx) => {
-      const phaseId = `phase-${idx + 1}`
-      const savedStatus: MilestoneStatus =
-        remoteSync?.status?.[phaseId] ||
-        (localStorage.getItem(`hunhar_milestone_status_${project.id}_${phaseId}`) as MilestoneStatus) ||
-        (idx === 0 ? 'IN_PROGRESS' : 'PENDING')
-      const isFunded =
-        remoteSync?.funded?.[phaseId] ??
-        ((idx === 0 && (project.status === 'ACTIVE' || project.status === 'COMPLETED')) ||
-          localStorage.getItem(`hunhar_milestone_funded_${project.id}_${phaseId}`) === 'true')
-      let phaseDeliverables: Deliverable[] = remoteSync?.deliverables?.[phaseId] || []
-      if (phaseDeliverables.length === 0) {
-        try {
-          const rawDel = localStorage.getItem(`hunhar_deliverables_${project.id}_${phaseId}`)
-          if (rawDel) phaseDeliverables = JSON.parse(rawDel)
-        } catch { }
-      }
-
-      return {
-        milestone: {
-          id: phaseId,
-          projectId: project.id,
-          title: phaseTitle,
-          description: `Phase ${idx + 1} deliverable checkpoint`,
-          amount: idx === count - 1 ? Math.max(0, total - perPhase * (count - 1)) : perPhase,
-          status: savedStatus,
-          dueDate: null,
-          funded: isFunded,
-          fundedAt: isFunded ? project.createdAt : null,
-          paidAt: savedStatus === 'PAID' ? new Date().toISOString() : null,
-          submittedAt: phaseDeliverables[0]?.createdAt || null,
-          invoiceNumber: null,
-          tasksJson: null,
-          createdAt: project.createdAt || new Date().toISOString(),
-        },
-        deliverables: phaseDeliverables,
-      }
-    })
-  }, [milestones, project, ws, remoteSync])
+  // Phases come from the agreed milestone plan (server); they run one at a time
+  const displayMilestones = milestones
   const unpaid = useMemo(() => displayMilestones.filter((m) => m.milestone.status !== 'PAID'), [displayMilestones])
 
   if (loading) {
@@ -569,19 +444,24 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                 <h3 className="font-makira text-[17px] font-medium uppercase tracking-wider text-[#08182B]">Milestones</h3>
               </div>
               <p className="mt-1 text-[12.5px] text-[#8C9BA8]">
-                Fund a milestone to hold the money in escrow. When the work is approved, release it — the freelancer receives it minus the {commissionPercent}% platform fee.
+                Phases run one at a time. In each phase the freelancer lists the sub-tasks; you approve them and pay (held in escrow), the freelancer delivers, you approve and release the payment — then the next phase opens. The freelancer receives each payment minus the {commissionPercent}% platform fee.
               </p>
 
 
               <div className="mt-4 flex flex-col gap-3">
-                {displayMilestones.length === 0 && <p className="rounded-[14px] border border-dashed border-[#DCD3C7] p-5 text-center text-[13px] text-[#8E8376]">No milestones yet.</p>}
-                {displayMilestones.map(({ milestone: m, deliverables }) => {
+                {displayMilestones.length === 0 && <p className="rounded-[14px] border border-dashed border-[#DCD3C7] p-5 text-center text-[13px] text-[#8E8376]">No phases yet. They appear once the milestone plan is accepted.</p>}
+                {displayMilestones.map((view) => {
+                  const { milestone: m, deliverables } = view
                   const latest = deliverables[0]
+                  const locked = view.phaseState === 'LOCKED'
                   return (
                     <div key={m.id} className="rounded-[14px] border border-[#F0ECE6] p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <h4 className="text-[14px] font-bold text-[#08182B]">{m.title}</h4>
+                          <h4 className="text-[14px] font-bold text-[#08182B]">
+                            {view.phaseNumber ? <span className="mr-1.5 rounded-full bg-[#F4EFE6] px-2 py-0.5 text-[11px] font-bold text-[#6B5E51]">Phase {view.phaseNumber}</span> : null}
+                            {m.title}
+                          </h4>
                           <p className="text-[12px] text-[#8C9BA8]">
                             {formatINR(m.amount)}
                             {m.dueDate ? ` · due ${formatDate(m.dueDate)}` : ''}
@@ -589,13 +469,13 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
                             {m.paidAt ? ` · paid ${formatDate(m.paidAt)}` : ''}
                           </p>
                         </div>
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${MILESTONE_STYLE[m.status]}`}>
-                          {m.status === 'PENDING' && m.funded ? 'Funded' : MILESTONE_LABEL[m.status]}
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${locked ? 'bg-[#F1F5F9] text-[#64748B]' : MILESTONE_STYLE[m.status]}`}>
+                          {locked ? 'Locked' : m.status === 'PENDING' && m.funded ? 'Funded' : m.status === 'PENDING' && m.tasksSubmittedAt ? 'Awaiting your approval' : MILESTONE_LABEL[m.status]}
                         </span>
                       </div>
                       {m.description && <p className="mt-1.5 text-[12.5px] text-[#5C5248]">{m.description}</p>}
 
-                      <MilestoneCardBoard milestone={m} canManage={false} onChanged={load} />
+                      <MilestoneCardBoard view={view} role={project.status === 'ACTIVE' ? 'CLIENT' : 'VIEWER'} onChanged={load} />
 
                       {latest && (
                         <div className="mt-2.5 rounded-[10px] bg-[#FAF7F2] p-3 text-[12.5px] text-[#4A4036]">
@@ -614,16 +494,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
 
                       {project.status === 'ACTIVE' && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {!m.funded && m.status !== 'PAID' && (
-                            <button
-                              type="button"
-                              disabled={busy !== null}
-                              onClick={() => fundMilestoneItem(m.id, m.amount)}
-                              className="rounded-[10px] bg-[#08182B] px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-60 cursor-pointer"
-                            >
-                              {busy === 'fund-' + m.id ? 'Funding…' : `Fund ${formatINR(m.amount)}`}
-                            </button>
-                          )}
                           {m.status === 'SUBMITTED' && latest && (
                             <>
                               <button type="button" disabled={busy !== null} onClick={() => reviewDeliverableItem(m.id, latest.id, true)} className="flex items-center gap-1 rounded-[10px] bg-[#16A34A] px-3.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-60 cursor-pointer">
@@ -933,21 +803,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
         onClose={() => setCompleteConfirmOpen(false)}
         onConfirm={async () => {
           setCompleteConfirmOpen(false)
-          try {
-            await phaseSync.update(projectId, (prev) => {
-              const nextStatus = { ...prev.status }
-              const nextFunded = { ...prev.funded }
-              displayMilestones.forEach(({ milestone: m }) => {
-                nextStatus[m.id] = 'PAID'
-                nextFunded[m.id] = true
-                localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'PAID')
-                if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'PAID')
-              })
-              return { ...prev, status: nextStatus, funded: nextFunded }
-            }, ws?.project?.id)
-            window.dispatchEvent(new Event('storage'))
-            window.dispatchEvent(new Event('hunhar:balances-changed'))
-          } catch {}
           act('complete', () => projectsApi.completeProject(project.id), 'Project marked complete. Thank you!')
         }}
         title="Mark Project as Complete?"
@@ -983,18 +838,6 @@ export default function ClientProjectDetailPage(): React.JSX.Element {
           if (!releaseTarget) return
           const target = releaseTarget
           setReleaseTarget(null)
-          if (target.id.startsWith('phase-') || !isUuid(target.id)) {
-            localStorage.setItem(`hunhar_milestone_status_${projectId}_${target.id}`, 'PAID')
-            if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${target.id}`, 'PAID')
-            phaseSync.update(projectId, (prev) => ({
-              ...prev,
-              status: { ...prev.status, [target.id]: 'PAID' },
-            }), ws?.project?.id)
-            window.dispatchEvent(new Event('storage'))
-            flash('success', 'Payment released. Thank you!')
-            load()
-            return
-          }
           act('rel-' + target.id, () => clientApi.releaseMilestone(target.id), 'Payment released. An invoice was created.')
         }}
         title="Release Milestone Payment?"

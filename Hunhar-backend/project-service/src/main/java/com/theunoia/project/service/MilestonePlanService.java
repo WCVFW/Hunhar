@@ -217,7 +217,9 @@ public class MilestonePlanService {
         List<Item> list = items(plan);
         if (list.isEmpty()) throw new BadRequestException("The plan has no milestones");
 
+        int seq = milestoneRepository.findByProjectId(projectId).size();
         for (Item it : list) {
+            seq++;
             Instant dueDate = null;
             if (it.dueDate() != null && !it.dueDate().isBlank()) {
                 try {
@@ -227,6 +229,8 @@ public class MilestonePlanService {
                 } catch (Exception ignored) {}
             }
             milestoneRepository.save(Milestone.builder()
+                    .sequence(seq)
+                    .tasksJson("[]")
                     .projectId(projectId)
                     .title(it.title())
                     .description(it.description())

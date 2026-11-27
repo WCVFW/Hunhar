@@ -31,5 +31,11 @@ public class WorkspaceViewDto {
     public static class MilestoneView {
         private Milestone milestone;
         private List<Deliverable> deliverables;
+        /** 1, 2, 3 ... in the order the phases run */
+        private Integer phaseNumber;
+        /** DONE (paid), CURRENT (the one being worked on) or LOCKED (opens after the previous phase is paid) */
+        private String phaseState;
+        /** Sub-tasks of this phase (kanban: TODO, IN_PROGRESS, DONE) */
+        private List<com.theunoia.project.service.WorkspaceService.MilestoneTaskItem> tasks;
     }
 }
