@@ -55,4 +55,14 @@ public class Milestone extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String tasksJson;
+
+    /** Phase number in the project (1, 2, 3 ...). Phases run strictly in this order. */
+    private Integer sequence;
+
+    /** The freelancer sent this phase's sub-tasks to the client for approval */
+    private Instant tasksSubmittedAt;
+
+    /** The client asked for changes to the sub-tasks (cleared when they are sent again) */
+    @Column(length = 500)
+    private String tasksChangeNote;
 }

@@ -198,7 +198,6 @@ public class BidService {
         project.setStatus(ProjectStatus.ACTIVE);
         project.setStartDate(Instant.now());
         Project saved = projectRepository.save(project);
-        workspaceService.initDefaultMilestonesForProject(saved, bid.getProposedCost());
         milestonePlanService.initPlanForProject(saved, bid.getProposedCost());
 
         notifications.notify(bid.getFreelancerId(), "PROJECT_AWARDED",
