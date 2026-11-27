@@ -14,6 +14,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,8 +38,24 @@ public class WorkspaceService {
     private final NotificationPublisher notifications;
     private final com.theunoia.common.internal.InternalClient internalClient;
     private final com.theunoia.common.internal.PlatformSettingsClient settings;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
-    @Transactional(readOnly = true)
+    public record MilestoneTaskItem(
+            String id,
+            String title,
+            String description,
+            String status, // "TODO", "IN_PROGRESS", "DONE"
+            String createdAt,
+            String completedAt
+    ) {}
+
+    public record MilestoneTaskRequest(
+            String title,
+            String description,
+            String status
+    ) {}
+
+    @Transactional
     public WorkspaceViewDto getWorkspace(UUID projectId, AuthUser user) {
         Project project = access.requireParticipant(projectId, user);
         enricher.project(project, user.id());
@@ -44,9 +64,18 @@ public class WorkspaceService {
                 : access.isAwardedFreelancer(project, user.id()) ? "OWNER"
                 : access.isCollaborator(project, user.id()) ? "COLLABORATOR" : "ADMIN";
 
+        Bid winning = project.getAwardedFreelancerId() == null ? null
+                : bidRepository.findByProjectIdAndFreelancerId(projectId, project.getAwardedFreelancerId()).orElse(null);
+
+        List<Milestone> existingMilestones = milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        if (existingMilestones.isEmpty() && project.getStatus() == ProjectStatus.ACTIVE) {
+            initDefaultMilestonesForProject(project, winning != null ? winning.getProposedCost() : project.getBudget());
+            existingMilestones = milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId);
+        }
+
         Map<UUID, List<Deliverable>> deliverables = deliverableRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
                 .stream().collect(Collectors.groupingBy(Deliverable::getMilestoneId));
-        List<WorkspaceViewDto.MilestoneView> milestones = milestoneRepository.findByProjectIdOrderByCreatedAtAsc(projectId)
+        List<WorkspaceViewDto.MilestoneView> milestones = existingMilestones
                 .stream()
                 .map(m -> WorkspaceViewDto.MilestoneView.builder()
                         .milestone(m)
@@ -54,15 +83,16 @@ public class WorkspaceService {
                         .build())
                 .collect(Collectors.toList());
 
-        Bid winning = project.getAwardedFreelancerId() == null ? null
-                : bidRepository.findByProjectIdAndFreelancerId(projectId, project.getAwardedFreelancerId()).orElse(null);
-
         return WorkspaceViewDto.builder()
                 .project(project)
                 .myRole(role)
                 .agreedAmount(winning != null ? winning.getProposedCost() : project.getBudget())
                 .agreedTimelineDays(winning != null ? winning.getDeliveryTimelineDays() : project.getTimelineDays())
                 .milestones(milestones)
+                .files(enricher.files(storedFileRepository.findByProjectIdOrderByCreatedAtDesc(projectId)))
+                .team(enricher.team(collaboratorRepository.findByProjectId(projectId)))
+                .build();
+    }
                 .files(enricher.files(storedFileRepository.findByProjectIdOrderByCreatedAtDesc(projectId)))
                 .team(enricher.team(collaboratorRepository.findByProjectId(projectId)))
                 .build();
@@ -273,5 +303,158 @@ public class WorkspaceService {
         }
         project.setProgressPercentage(Math.min(99, Math.max(0, progressPercentage)));
         return projectRepository.save(project);
+    }
+
+    // ------------------------------------------------------------------ milestone tasks / card board
+
+    private List<MilestoneTaskItem> parseTasks(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<MilestoneTaskItem>>() {});
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private String writeTasks(List<MilestoneTaskItem> tasks) {
+        try {
+            return objectMapper.writeValueAsString(tasks);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
+    @Transactional
+    public List<MilestoneTaskItem> addMilestoneTask(UUID milestoneId, MilestoneTaskRequest req, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        Project p = access.requireParticipant(m.getProjectId(), user);
+        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
+            throw new ForbiddenException("Only project participants can manage tasks");
+        }
+        if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
+            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
+        }
+        String title = req.title() != null ? req.title().trim() : "";
+        if (title.isEmpty()) throw new BadRequestException("Task title is required");
+
+        List<MilestoneTaskItem> list = new ArrayList<>(parseTasks(m.getTasksJson()));
+        list.add(new MilestoneTaskItem(
+                UUID.randomUUID().toString(),
+                title,
+                req.description() != null ? req.description().trim() : null,
+                req.status() != null && !req.status().isBlank() ? req.status().toUpperCase() : "TODO",
+                Instant.now().toString(),
+                "DONE".equalsIgnoreCase(req.status()) ? Instant.now().toString() : null
+        ));
+        m.setTasksJson(writeTasks(list));
+        milestoneRepository.save(m);
+        return list;
+    }
+
+    @Transactional
+    public List<MilestoneTaskItem> updateMilestoneTask(UUID milestoneId, String taskId, MilestoneTaskRequest req, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        Project p = access.requireParticipant(m.getProjectId(), user);
+        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
+            throw new ForbiddenException("Only project participants can manage tasks");
+        }
+        if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
+            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
+        }
+        List<MilestoneTaskItem> list = new ArrayList<>(parseTasks(m.getTasksJson()));
+        boolean found = false;
+        for (int i = 0; i < list.size(); i++) {
+            MilestoneTaskItem it = list.get(i);
+            if (it.id().equals(taskId)) {
+                String newStatus = req.status() != null && !req.status().isBlank() ? req.status().toUpperCase() : it.status();
+                String completedAt = "DONE".equals(newStatus) ? (it.completedAt() != null ? it.completedAt() : Instant.now().toString()) : null;
+                list.set(i, new MilestoneTaskItem(
+                        it.id(),
+                        req.title() != null && !req.title().isBlank() ? req.title().trim() : it.title(),
+                        req.description() != null ? req.description().trim() : it.description(),
+                        newStatus,
+                        it.createdAt(),
+                        completedAt
+                ));
+                found = true;
+                break;
+            }
+        }
+        if (!found) throw new ResourceNotFoundException("Task not found");
+        m.setTasksJson(writeTasks(list));
+        milestoneRepository.save(m);
+        return list;
+    }
+
+    @Transactional
+    public List<MilestoneTaskItem> deleteMilestoneTask(UUID milestoneId, String taskId, AuthUser user) {
+        Milestone m = milestoneRepository.findById(milestoneId)
+                .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        Project p = access.requireParticipant(m.getProjectId(), user);
+        if (!access.isAwardedFreelancer(p, user.id()) && !access.isCollaborator(p, user.id()) && !access.isClient(p, user.id())) {
+            throw new ForbiddenException("Only project participants can manage tasks");
+        }
+        if (m.getStatus() == MilestoneStatus.APPROVED || m.getStatus() == MilestoneStatus.PAID) {
+            throw new BadRequestException("This milestone has already been accepted and completed. No further changes can be made.");
+        }
+        List<MilestoneTaskItem> list = new ArrayList<>(parseTasks(m.getTasksJson()));
+        list.removeIf(t -> t.id().equals(taskId));
+        m.setTasksJson(writeTasks(list));
+        milestoneRepository.save(m);
+        return list;
+    }
+
+    // ------------------------------------------------------------------ auto milestone generation
+
+    @Transactional
+    public void initDefaultMilestonesForProject(Project p, BigDecimal agreedAmount) {
+        if (p.getStatus() != ProjectStatus.ACTIVE) return;
+        if (!milestoneRepository.findByProjectId(p.getId()).isEmpty()) return;
+
+        if (agreedAmount == null || agreedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            agreedAmount = p.getBudget() != null ? p.getBudget() : BigDecimal.valueOf(1000);
+        }
+
+        List<String> phaseList = new ArrayList<>();
+        if (p.getPhases() != null && !p.getPhases().isBlank()) {
+            for (String s : p.getPhases().split("\\|\\|")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) phaseList.add(trimmed);
+            }
+        }
+        if (phaseList.isEmpty()) {
+            phaseList.addAll(SkillPhasesCatalogue.getPhasesForSkill(p.getSubCategory(), p.getCategory(), p.getTitle()));
+        }
+
+        int count = Math.max(1, phaseList.size());
+        BigDecimal total = agreedAmount;
+        BigDecimal perPhase = total.divide(BigDecimal.valueOf(count), 0, RoundingMode.HALF_UP);
+        BigDecimal accumulated = BigDecimal.ZERO;
+
+        for (int i = 0; i < count; i++) {
+            BigDecimal amt;
+            if (i == count - 1) {
+                amt = total.subtract(accumulated);
+                if (amt.compareTo(BigDecimal.ZERO) < 0) amt = BigDecimal.ZERO;
+            } else {
+                amt = perPhase;
+                accumulated = accumulated.add(amt);
+            }
+            milestoneRepository.save(Milestone.builder()
+                    .projectId(p.getId())
+                    .title(phaseList.get(i))
+                    .description("Phase " + (i + 1) + " deliverable checkpoint")
+                    .amount(amt)
+                    .status(MilestoneStatus.PENDING)
+                    .funded(false)
+                    .tasksJson("[]")
+                    .build());
+        }
+    }
+
+    private List<String> defaultPhasesForCategory(String category) {
+        return SkillPhasesCatalogue.getPhasesForSkill(null, category, null);
     }
 }

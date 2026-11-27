@@ -7,6 +7,7 @@ import com.theunoia.common.security.CurrentUser;
 import com.theunoia.project.domain.Project;
 import com.theunoia.project.dto.CreateProjectDto;
 import com.theunoia.project.service.ProjectService;
+import com.theunoia.project.service.SkillPhasesCatalogue;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -119,6 +120,20 @@ public class ProjectController {
 
     private static void requireAdmin(AuthUser user) {
         if (!requireUser(user).hasRole("ADMIN")) throw new com.theunoia.common.exception.ForbiddenException("Admin access required");
+    }
+
+    @GetMapping("/skills/catalogue")
+    public ResponseEntity<ApiResponse<List<SkillPhasesCatalogue.SkillDef>>> getSkillsCatalogue() {
+        return ResponseEntity.ok(ApiResponse.ok("Hunhar 93 skills launch catalogue", SkillPhasesCatalogue.getAllSkills()));
+    }
+
+    @GetMapping("/skills/phases")
+    public ResponseEntity<ApiResponse<List<String>>> getSkillPhases(
+            @RequestParam(required = false) String skill,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String title
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(SkillPhasesCatalogue.getPhasesForSkill(skill, category, title)));
     }
 
     @PostMapping("/{id}/complete")

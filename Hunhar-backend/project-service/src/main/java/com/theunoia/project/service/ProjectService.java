@@ -43,6 +43,7 @@ public class ProjectService {
     private final InternalClient internalClient;
     private final com.theunoia.project.repository.MilestoneRepository milestoneRepository;
     private final com.theunoia.project.repository.DisputeRepository disputeRepository;
+    private final MilestonePlanService milestonePlanService;
 
     public record SearchFilters(
             List<String> categories,
@@ -58,12 +59,22 @@ public class ProjectService {
     public Project createProject(UUID clientId, CreateProjectDto dto) {
         String skillsStr = dto.getSkills() != null ? String.join(",", dto.getSkills()) : "";
         String attachmentsStr = dto.getAttachmentUrls() != null ? String.join(",", dto.getAttachmentUrls()) : "";
+        String phasesStr = dto.getPhases() != null && !dto.getPhases().isEmpty() ? String.join("||", dto.getPhases()) : null;
+
+        if (phasesStr == null || phasesStr.isBlank()) {
+            List<String> defaultPhases = SkillPhasesCatalogue.getPhasesForSkill(dto.getSubCategory(), dto.getCategory(), dto.getTitle());
+            if (defaultPhases != null && !defaultPhases.isEmpty()) {
+                phasesStr = String.join("||", defaultPhases);
+            }
+        }
 
         Project project = Project.builder()
                 .clientId(clientId)
                 .title(dto.getTitle())
                 .description(dto.getDescription())
                 .category(dto.getCategory())
+                .subCategory(dto.getSubCategory())
+                .phases(phasesStr)
                 .budget(dto.getBudget())
                 .timelineDays(dto.getTimelineDays())
                 .skills(skillsStr)
@@ -73,7 +84,11 @@ public class ProjectService {
                 .bidCount(0)
                 .build();
 
-        return projectRepository.save(project);
+        Project saved = projectRepository.save(project);
+        try {
+            milestonePlanService.initPlanForProject(saved, saved.getBudget());
+        } catch (Exception ignored) {}
+        return saved;
     }
 
     /** Client edits a draft, or an open project that has not received proposals yet. */
@@ -85,12 +100,25 @@ public class ProjectService {
         p.setTitle(dto.getTitle().trim());
         p.setDescription(dto.getDescription().trim());
         p.setCategory(dto.getCategory());
+        p.setSubCategory(dto.getSubCategory());
+        if (dto.getPhases() != null && !dto.getPhases().isEmpty()) {
+            p.setPhases(String.join("||", dto.getPhases()));
+        } else if (p.getPhases() == null || p.getPhases().isBlank()) {
+            List<String> defaultPhases = SkillPhasesCatalogue.getPhasesForSkill(dto.getSubCategory(), dto.getCategory(), dto.getTitle());
+            if (defaultPhases != null && !defaultPhases.isEmpty()) {
+                p.setPhases(String.join("||", defaultPhases));
+            }
+        }
         p.setBudget(dto.getBudget());
         p.setTimelineDays(dto.getTimelineDays());
         p.setSkills(dto.getSkills() != null ? String.join(",", dto.getSkills()) : "");
         if (dto.getAttachmentUrls() != null) p.setAttachmentUrls(String.join(",", dto.getAttachmentUrls()));
         if (Boolean.TRUE.equals(dto.getPublish()) && p.getStatus() == ProjectStatus.DRAFT) p.setStatus(ProjectStatus.OPEN);
-        return enricher.project(projectRepository.save(p), user.id());
+        Project saved = projectRepository.save(p);
+        try {
+            milestonePlanService.initPlanForProject(saved, saved.getBudget());
+        } catch (Exception ignored) {}
+        return enricher.project(saved, user.id());
     }
 
     @Transactional

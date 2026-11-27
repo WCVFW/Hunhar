@@ -22,6 +22,10 @@ public class CreateProjectDto {
     @NotBlank(message = "Category is required")
     private String category;
 
+    private String subCategory;
+
+    private List<String> phases;
+
     @NotNull(message = "Budget is required")
     @DecimalMin(value = "100.0", message = "Budget must be at least ₹100")
     private BigDecimal budget;

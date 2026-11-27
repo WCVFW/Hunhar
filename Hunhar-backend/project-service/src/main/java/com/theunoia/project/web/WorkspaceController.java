@@ -129,4 +129,35 @@ public class WorkspaceController {
         return ResponseEntity.ok(ApiResponse.ok("Progress updated",
                 workspaceService.updateProgress(projectId, progressPercentage, user)));
     }
+
+    @PostMapping("/milestones/{milestoneId}/tasks")
+    public ResponseEntity<ApiResponse<List<WorkspaceService.MilestoneTaskItem>>> addMilestoneTask(
+            @CurrentUser AuthUser user,
+            @PathVariable UUID milestoneId,
+            @RequestBody WorkspaceService.MilestoneTaskRequest req
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("Task added",
+                workspaceService.addMilestoneTask(milestoneId, req, requireUser(user))));
+    }
+
+    @PutMapping("/milestones/{milestoneId}/tasks/{taskId}")
+    public ResponseEntity<ApiResponse<List<WorkspaceService.MilestoneTaskItem>>> updateMilestoneTask(
+            @CurrentUser AuthUser user,
+            @PathVariable UUID milestoneId,
+            @PathVariable String taskId,
+            @RequestBody WorkspaceService.MilestoneTaskRequest req
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("Task updated",
+                workspaceService.updateMilestoneTask(milestoneId, taskId, req, requireUser(user))));
+    }
+
+    @DeleteMapping("/milestones/{milestoneId}/tasks/{taskId}")
+    public ResponseEntity<ApiResponse<List<WorkspaceService.MilestoneTaskItem>>> deleteMilestoneTask(
+            @CurrentUser AuthUser user,
+            @PathVariable UUID milestoneId,
+            @PathVariable String taskId
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("Task deleted",
+                workspaceService.deleteMilestoneTask(milestoneId, taskId, requireUser(user))));
+    }
 }

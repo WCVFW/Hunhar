@@ -52,4 +52,7 @@ public class Milestone extends BaseEntity {
 
     @Column(length = 40)
     private String invoiceNumber;
+
+    @Column(columnDefinition = "TEXT")
+    private String tasksJson;
 }

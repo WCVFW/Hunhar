@@ -89,9 +89,11 @@ export default function FreelancerTopNavbar(): React.JSX.Element {
     window.addEventListener('hunhar:profile-updated', onProfile)
     window.addEventListener('hunhar:notifications-changed', onNotifications)
     window.addEventListener('focus', loadBalances)
+    window.addEventListener('storage', loadBalances)
     window.addEventListener('hunhar:balances-changed', loadBalances)
     return () => {
       window.removeEventListener('hunhar:balances-changed', loadBalances)
+      window.removeEventListener('storage', loadBalances)
       window.clearInterval(t)
       window.removeEventListener('hunhar:profile-updated', onProfile)
       window.removeEventListener('hunhar:notifications-changed', onNotifications)

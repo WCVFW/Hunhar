@@ -35,6 +35,12 @@ public class Project extends BaseEntity {
     @Column(nullable = false, length = 80)
     private String category;
 
+    @Column(length = 150)
+    private String subCategory;
+
+    @Column(columnDefinition = "TEXT")
+    private String phases;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal budget;
 

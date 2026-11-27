@@ -38,6 +38,8 @@ public class BidService {
     private final NotificationPublisher notifications;
     private final InternalClient internalClient;
     private final com.theunoia.common.internal.PlatformSettingsClient settings;
+    private final MilestonePlanService milestonePlanService;
+    private final WorkspaceService workspaceService;
 
     @Transactional
     public Bid submitBid(AuthUser freelancer, UUID projectId, SubmitBidDto dto) {
@@ -196,6 +198,8 @@ public class BidService {
         project.setStatus(ProjectStatus.ACTIVE);
         project.setStartDate(Instant.now());
         Project saved = projectRepository.save(project);
+        workspaceService.initDefaultMilestonesForProject(saved, bid.getProposedCost());
+        milestonePlanService.initPlanForProject(saved, bid.getProposedCost());
 
         notifications.notify(bid.getFreelancerId(), "PROJECT_AWARDED",
                 "You won the project! 🎉",

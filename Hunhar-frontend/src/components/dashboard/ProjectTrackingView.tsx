@@ -1,4 +1,7 @@
 import MilestonePlanPanel from './MilestonePlanPanel'
+import MilestoneCardBoard from './MilestoneCardBoard'
+import { getDefaultPhases } from '../../data/skillsCatalogue'
+import { phaseSync, type ProjectPhaseSync } from '../../services/phaseSync'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Lock, Unlock, ChevronLeft, ChevronRight, TrendingUp, Clock, Send, Plus, X, CreditCard, ShieldCheck, AlertCircle, FileText, Paperclip, Upload } from 'lucide-react'
@@ -72,6 +75,8 @@ export default function ProjectTrackingView({ role }: ProjectTrackingViewProps):
   return <TrackingBoard role={role} projectId={fromRouteId(token)} />
 }
 
+const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+
 function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; projectId: string }) {
   const [ws, setWs] = useState<Workspace | null>(null)
   const [loading, setLoading] = useState(true)
@@ -107,9 +112,37 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     }
   }, [projectId])
 
+  const [remoteSync, setRemoteSync] = useState<ProjectPhaseSync | null>(null)
+
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    let active = true
+    const syncData = async () => {
+      const pId = ws?.project?.id || projectId
+      if (!pId) return
+      const s = await phaseSync.get(pId, projectId)
+      if (active && s) setRemoteSync(s)
+    }
+    syncData()
+    const timer = setInterval(syncData, 2000)
+    return () => {
+      active = false
+      clearInterval(timer)
+    }
+  }, [projectId, ws?.project?.id])
+
+  useEffect(() => {
+    const onStorage = () => {
+      load()
+      const pId = ws?.project?.id || projectId
+      if (pId) phaseSync.get(pId, projectId).then(setRemoteSync)
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [load, projectId, ws?.project?.id])
 
   const act = async (key: string, fn: () => Promise<unknown>, success: string) => {
     setBusy(key)
@@ -124,7 +157,69 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     }
   }
 
-  const rows: Row[] = useMemo(() => ws?.milestones || [], [ws])
+  const rows: Row[] = useMemo(() => {
+    if (ws?.milestones && ws.milestones.length > 0) return ws.milestones
+    if (!ws?.project) return []
+    const project = ws.project
+    let phaseList: string[] = []
+    if (project.phases && project.phases.trim()) {
+      phaseList = project.phases.split('||').map((p) => p.trim()).filter(Boolean)
+    }
+    if (phaseList.length === 0) {
+      phaseList = getDefaultPhases(project.subCategory || project.title, project.category)
+    }
+    const total = ws.agreedAmount || project.budget || 1000
+    const count = Math.max(1, phaseList.length)
+    const perPhase = Math.round(total / count)
+    return phaseList.map((phaseTitle, idx) => {
+      const phaseId = `phase-${idx + 1}`
+      const statusKeys = [
+        remoteSync?.status?.[phaseId],
+        localStorage.getItem(`hunhar_milestone_status_${project.id}_${phaseId}`),
+        projectId ? localStorage.getItem(`hunhar_milestone_status_${projectId}_${phaseId}`) : null,
+      ]
+      const savedStatus =
+        (statusKeys.find((s) => s && s !== 'PENDING') as any) ||
+        (statusKeys.find(Boolean) as any) ||
+        (idx === 0 ? 'IN_PROGRESS' : 'PENDING')
+
+      const isFunded =
+        remoteSync?.funded?.[phaseId] ??
+        ((idx === 0 && (project.status === 'ACTIVE' || project.status === 'COMPLETED')) ||
+          localStorage.getItem(`hunhar_milestone_funded_${project.id}_${phaseId}`) === 'true' ||
+          (projectId ? localStorage.getItem(`hunhar_milestone_funded_${projectId}_${phaseId}`) === 'true' : false))
+
+      let phaseDeliverables: Deliverable[] = remoteSync?.deliverables?.[phaseId] || []
+      if (phaseDeliverables.length === 0) {
+        try {
+          const rawDel =
+            localStorage.getItem(`hunhar_deliverables_${project.id}_${phaseId}`) ||
+            (projectId ? localStorage.getItem(`hunhar_deliverables_${projectId}_${phaseId}`) : null)
+          if (rawDel) phaseDeliverables = JSON.parse(rawDel)
+        } catch {}
+      }
+
+      return {
+        milestone: {
+          id: phaseId,
+          projectId: project.id,
+          title: phaseTitle,
+          description: `Phase ${idx + 1} deliverable checkpoint`,
+          amount: idx === count - 1 ? Math.max(0, total - perPhase * (count - 1)) : perPhase,
+          status: savedStatus,
+          dueDate: null,
+          funded: isFunded,
+          fundedAt: isFunded ? project.createdAt : null,
+          paidAt: savedStatus === 'PAID' ? new Date().toISOString() : null,
+          submittedAt: phaseDeliverables[0]?.createdAt || null,
+          invoiceNumber: null,
+          tasksJson: null,
+          createdAt: project.createdAt || new Date().toISOString(),
+        },
+        deliverables: phaseDeliverables,
+      }
+    })
+  }, [ws, remoteSync, projectId])
 
   // Latest activity from real timestamps
   const activity = useMemo(() => {
@@ -137,6 +232,20 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     })
     return items.filter((i) => i.at).sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 8)
   }, [rows])
+
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null)
+
+  const activeMilestone = useMemo(() => {
+    if (selectedMilestoneId) {
+      const found = rows.find((r) => r.milestone.id === selectedMilestoneId)
+      if (found) return found.milestone
+    }
+    const inProg = rows.find((r) => isFunded(r.milestone) && !isDone(r.milestone))
+    if (inProg) return inProg.milestone
+    const firstUnpaid = rows.find((r) => !isDone(r.milestone))
+    if (firstUnpaid) return firstUnpaid.milestone
+    return rows[0]?.milestone
+  }, [rows, selectedMilestoneId])
 
   if (loading) {
     return <div className="flex min-h-[400px] items-center justify-center rounded-[24px] bg-white font-manrope text-[14px] font-semibold text-[#8E8376]">Loading project tracking…</div>
@@ -184,9 +293,119 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
     if (!workNotes.trim()) return flash('error', 'Describe what you are submitting.')
     const m = submitFor
     setSubmitFor(null)
+
+    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
+      const pId = ws?.project?.id || projectId
+      const newDeliverable: Deliverable = {
+        id: 'del-' + Date.now(),
+        milestoneId: m.id,
+        projectId: pId,
+        freelancerId: ws?.project?.awardedFreelancerId || '',
+        notes: workNotes.trim(),
+        fileUrls: workFiles.map((f) => f.url).join(','),
+        approved: false,
+        createdAt: new Date().toISOString(),
+      }
+      const key1 = `hunhar_deliverables_${projectId}_${m.id}`
+      const key2 = ws?.project?.id ? `hunhar_deliverables_${ws.project.id}_${m.id}` : null
+      const existingRaw = localStorage.getItem(key1) || (key2 ? localStorage.getItem(key2) : null)
+      const existingList: Deliverable[] = existingRaw ? JSON.parse(existingRaw) : []
+      const updatedList = [newDeliverable, ...existingList]
+      localStorage.setItem(key1, JSON.stringify(updatedList))
+      if (key2) localStorage.setItem(key2, JSON.stringify(updatedList))
+      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'SUBMITTED')
+      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'SUBMITTED')
+
+      await phaseSync.update(pId, (prev) => ({
+        ...prev,
+        deliverables: { ...prev.deliverables, [m.id]: updatedList },
+        status: { ...prev.status, [m.id]: 'SUBMITTED' },
+      }), projectId)
+
+      window.dispatchEvent(new Event('storage'))
+      flash('success', 'Work submitted. The client will review it.')
+      setWorkNotes('')
+      setWorkFiles([])
+      await load()
+      return
+    }
+
     await act('sub-' + m.id, () => workspaceApi.submitDeliverable(m.id, { notes: workNotes.trim(), fileUrls: workFiles.map((f) => f.url) }), 'Work submitted. The client will review it.')
     setWorkNotes('')
     setWorkFiles([])
+  }
+
+  const handleReview = async (mId: string, deliverableId: string, approve: boolean) => {
+    if (mId.startsWith('phase-') || deliverableId.startsWith('del-') || !isUuid(mId)) {
+      const pId = ws?.project?.id || projectId
+      const raw =
+        (ws?.project?.id ? localStorage.getItem(`hunhar_deliverables_${ws.project.id}_${mId}`) : null) ||
+        localStorage.getItem(`hunhar_deliverables_${projectId}_${mId}`)
+      let updated: Deliverable[] = []
+      if (raw) {
+        try {
+          const list: Deliverable[] = JSON.parse(raw)
+          updated = list.map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
+        } catch {}
+      } else if (remoteSync?.deliverables?.[mId]) {
+        updated = remoteSync.deliverables[mId].map((d) => (d.id === deliverableId ? { ...d, approved: approve } : d))
+      }
+      const statusToSet = approve ? 'APPROVED' : 'IN_PROGRESS'
+      localStorage.setItem(`hunhar_milestone_status_${projectId}_${mId}`, statusToSet)
+      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${mId}`, statusToSet)
+      if (updated.length > 0) {
+        localStorage.setItem(`hunhar_deliverables_${projectId}_${mId}`, JSON.stringify(updated))
+        if (ws?.project?.id) localStorage.setItem(`hunhar_deliverables_${ws.project.id}_${mId}`, JSON.stringify(updated))
+      }
+      await phaseSync.update(pId, (prev) => ({
+        ...prev,
+        deliverables: { ...prev.deliverables, [mId]: updated.length > 0 ? updated : prev.deliverables[mId] || [] },
+        status: { ...prev.status, [mId]: statusToSet },
+      }), projectId)
+      window.dispatchEvent(new Event('storage'))
+      flash('success', approve ? 'Work approved — release the payment when ready' : 'Changes requested — the freelancer has been notified')
+      await load()
+      return
+    }
+    act(approve ? 'ap-' + mId : 'ch-' + mId, () => clientApi.reviewDeliverable(deliverableId, approve), approve ? 'Work approved — release the payment when ready' : 'Changes requested — the freelancer has been notified')
+  }
+
+  const handleFund = async (m: Milestone) => {
+    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
+      const pId = ws?.project?.id || projectId
+      localStorage.setItem(`hunhar_milestone_funded_${projectId}_${m.id}`, 'true')
+      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_funded_${ws.project.id}_${m.id}`, 'true')
+      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'IN_PROGRESS')
+      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'IN_PROGRESS')
+      await phaseSync.update(pId, (prev) => ({
+        ...prev,
+        funded: { ...prev.funded, [m.id]: true },
+        status: { ...prev.status, [m.id]: 'IN_PROGRESS' },
+      }), projectId)
+      window.dispatchEvent(new Event('storage'))
+      flash('success', `${formatINR(m.amount)} moved to escrow`)
+      await load()
+      return
+    }
+    act('fund-' + m.id, () => clientApi.fundMilestone(m.id), `${formatINR(m.amount)} moved to escrow`)
+  }
+
+  const handleRelease = async (m: Milestone) => {
+    if (m.id.startsWith('phase-') || !isUuid(m.id)) {
+      const pId = ws?.project?.id || projectId
+      localStorage.setItem(`hunhar_milestone_status_${projectId}_${m.id}`, 'PAID')
+      if (ws?.project?.id) localStorage.setItem(`hunhar_milestone_status_${ws.project.id}_${m.id}`, 'PAID')
+      await phaseSync.update(pId, (prev) => ({
+        ...prev,
+        status: { ...prev.status, [m.id]: 'PAID' },
+      }), projectId)
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new Event('hunhar:balances-changed'))
+      flash('success', 'Payment released')
+      await load()
+      return
+    }
+    act('rel-' + m.id, () => clientApi.releaseMilestone(m.id), 'Payment released')
   }
 
   const stats = [
@@ -286,10 +505,14 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                   const percent = Math.round((step / 4) * 100)
                   const green = m.status === 'PAID'
                   const amber = !green && isFunded(m)
+                  const isSelected = activeMilestone?.id === m.id
                   return (
                     <div
                       key={m.id}
-                      className={`flex w-[220px] shrink-0 flex-col justify-between rounded-[20px] bg-white p-4 transition-all sm:w-[235px] ${
+                      onClick={() => setSelectedMilestoneId(m.id)}
+                      className={`flex w-[220px] shrink-0 flex-col justify-between rounded-[20px] bg-white p-4 transition-all sm:w-[235px] cursor-pointer ${
+                        isSelected ? 'ring-2 ring-[#C06B3E] ring-offset-2' : ''
+                      } ${
                         green ? 'border-2 border-[#86EFAC] shadow-xs' : amber ? 'border-2 border-[#E7A67D] shadow-xs' : 'border border-[#E5E5E5]'
                       }`}
                     >
@@ -321,8 +544,11 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                           <button
                             type="button"
                             disabled={busy !== null}
-                            onClick={() => setPayingFor(m)}
-                            className="flex h-10 w-full items-center justify-center rounded-[12px] bg-[#C06B3E] text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-60"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setPayingFor(m)
+                            }}
+                            className="flex h-10 w-full items-center justify-center rounded-[12px] bg-[#C06B3E] text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#AA572D] disabled:opacity-60 cursor-pointer"
                           >
                             Fund {formatINR(m.amount)}
                           </button>
@@ -330,8 +556,11 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                           <button
                             type="button"
                             disabled={busy !== null}
-                            onClick={() => setReleasingFor(m)}
-                            className="flex h-10 w-full items-center justify-center rounded-[12px] bg-[#16A34A] text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#15803D] disabled:opacity-60"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setReleasingFor(m)
+                            }}
+                            className="flex h-10 w-full items-center justify-center rounded-[12px] bg-[#16A34A] text-[13px] font-bold text-white shadow-xs transition-all hover:bg-[#15803D] disabled:opacity-60 cursor-pointer"
                           >
                             Release payment
                           </button>
@@ -351,6 +580,66 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                 })}
               </div>
             </div>
+
+            {/* Active Phase Task Board */}
+            {activeMilestone && (
+              <div className="mt-8 rounded-[24px] border border-[#EBE3D7] bg-white p-5 sm:p-6 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F0ECE6] pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[#FAF0E6] px-2.5 py-0.5 font-manrope text-[11px] font-extrabold uppercase tracking-wider text-[#C06B3E]">
+                        {rows.findIndex((r) => r.milestone.id === activeMilestone.id) >= 0
+                          ? `Milestone ${rows.findIndex((r) => r.milestone.id === activeMilestone.id) + 1} of ${rows.length}`
+                          : 'Milestone Tasks'}
+                      </span>
+                      {activeMilestone.status === 'PAID' ? (
+                        <span className="rounded-full bg-[#E9F9EE] px-2 py-0.5 text-[10.5px] font-bold text-[#1F874C]">✓ Completed & Paid</span>
+                      ) : isFunded(activeMilestone) ? (
+                        <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[10.5px] font-bold text-[#D97706]">● In Progress · Funded</span>
+                      ) : (
+                        <span className="rounded-full bg-[#F1F5F9] px-2 py-0.5 text-[10.5px] font-bold text-[#64748B]">Waiting for funding</span>
+                      )}
+                    </div>
+                    <h3 className="mt-1 font-manrope text-[18px] font-bold text-[#08182B]">
+                      {activeMilestone.title} — Task Breakdown
+                    </h3>
+                    <p className="mt-0.5 text-[12.5px] text-[#7A7065]">
+                      {canDeliver
+                        ? 'Freelancer sub-phases & task breakdown for this milestone. Add tasks to To Do, In Progress, and Done.'
+                        : 'Live task progress view for this milestone.'}
+                    </p>
+                  </div>
+
+                  {/* Switch between milestones */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {rows.map(({ milestone: m }, idx) => {
+                      const isSel = activeMilestone.id === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSelectedMilestoneId(m.id)}
+                          className={`rounded-full px-3 py-1 text-[12px] font-bold transition-all cursor-pointer ${
+                            isSel
+                              ? 'bg-[#08182B] text-white shadow-xs'
+                              : 'border border-[#E5DACD] bg-[#FAF8F5] text-[#64748B] hover:text-[#08182B] hover:bg-white'
+                          }`}
+                        >
+                          Phase {idx + 1}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <MilestoneCardBoard
+                  milestone={activeMilestone}
+                  canManage={canDeliver && active && !isDone(activeMilestone)}
+                  onChanged={load}
+                  altProjectId={projectId}
+                />
+              </div>
+            )}
 
             {/* Submissions board */}
             <div className="mt-10">
@@ -404,16 +693,16 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                             <button
                               type="button"
                               disabled={busy !== null}
-                              onClick={() => act('ap-' + m.id, () => clientApi.reviewDeliverable(latest.id, true), 'Work approved — release the payment when ready')}
-                              className="h-9 flex-1 rounded-[10px] bg-[#16A34A] text-[12.5px] font-bold text-white hover:bg-[#15803D] disabled:opacity-60"
+                              onClick={() => handleReview(m.id, latest.id, true)}
+                              className="h-9 flex-1 rounded-[10px] bg-[#16A34A] text-[12.5px] font-bold text-white hover:bg-[#15803D] disabled:opacity-60 cursor-pointer"
                             >
                               Approve
                             </button>
                             <button
                               type="button"
                               disabled={busy !== null}
-                              onClick={() => act('ch-' + m.id, () => clientApi.reviewDeliverable(latest.id, false), 'Changes requested — the freelancer has been notified')}
-                              className="h-9 flex-1 rounded-[10px] border border-[#E5DACD] bg-white text-[12.5px] font-bold text-[#524B42] hover:bg-[#FAF8F5] disabled:opacity-60"
+                              onClick={() => handleReview(m.id, latest.id, false)}
+                              className="h-9 flex-1 rounded-[10px] border border-[#E5DACD] bg-white text-[12.5px] font-bold text-[#524B42] hover:bg-[#FAF8F5] disabled:opacity-60 cursor-pointer"
                             >
                               Request changes
                             </button>
@@ -525,9 +814,9 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                 onClick={() => {
                   const m = payingFor
                   setPayingFor(null)
-                  act('fund-' + m.id, () => clientApi.fundMilestone(m.id), `${formatINR(m.amount)} moved to escrow`)
+                  handleFund(m)
                 }}
-                className="flex-1 rounded-[12px] bg-[#C06B3E] py-2.5 text-[13px] font-bold text-white hover:bg-[#AA572D]"
+                className="flex-1 rounded-[12px] bg-[#C06B3E] py-2.5 text-[13px] font-bold text-white hover:bg-[#AA572D] cursor-pointer"
               >
                 Fund from wallet
               </button>
@@ -559,9 +848,9 @@ function TrackingBoard({ role, projectId }: { role: 'client' | 'freelancer'; pro
                 onClick={() => {
                   const m = releasingFor
                   setReleasingFor(null)
-                  act('rel-' + m.id, () => clientApi.releaseMilestone(m.id), 'Payment released')
+                  handleRelease(m)
                 }}
-                className="flex-1 rounded-[12px] bg-[#16A34A] py-2.5 text-[13px] font-bold text-white hover:bg-[#15803D]"
+                className="flex-1 rounded-[12px] bg-[#16A34A] py-2.5 text-[13px] font-bold text-white hover:bg-[#15803D] cursor-pointer"
               >
                 Release payment
               </button>

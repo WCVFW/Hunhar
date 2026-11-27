@@ -4,6 +4,7 @@
  */
 
 import { secureFetch } from './secureTransport'
+import { phaseSync } from './phaseSync'
 
 // Empty (production, .env.production) = the website's own address: nginx passes /api/* to the gateway, so the
 // site works on https://www.hunhar.in and on the server's IP alike. A full URL calls another host instead.
@@ -298,6 +299,8 @@ export interface Project {
   title: string
   description: string
   category: string
+  subCategory?: string | null
+  phases?: string | null
   budget: number
   timelineDays: number
   skills: string
@@ -351,6 +354,15 @@ export interface StoredFile {
   createdAt: string
 }
 
+export interface MilestoneTask {
+  id: string
+  title: string
+  description?: string | null
+  status: 'TODO' | 'IN_PROGRESS' | 'DONE'
+  createdAt?: string
+  completedAt?: string | null
+}
+
 export interface Milestone {
   id: string
   projectId: string
@@ -364,6 +376,7 @@ export interface Milestone {
   paidAt?: string | null
   submittedAt?: string | null
   invoiceNumber?: string | null
+  tasksJson?: string | null
   createdAt: string
 }
 
@@ -660,6 +673,8 @@ export interface MilestonePlan {
   canEdit: boolean
   canAccept: boolean
   canStartRound: boolean
+  subCategory?: string | null
+  defaultPhases?: string[]
 }
 
 export const workspaceApi = {
@@ -684,6 +699,13 @@ export const workspaceApi = {
 
   updateProgress: (projectId: string, progressPercentage: number) =>
     apiRequest<Project>(`/api/v1/workspace/projects/${projectId}/progress` + qs({ progressPercentage }), json('PATCH')),
+
+  addMilestoneTask: (milestoneId: string, data: { title: string; description?: string; status?: string }) =>
+    apiRequest<MilestoneTask[]>(`/api/v1/workspace/milestones/${milestoneId}/tasks`, json('POST', data)),
+  updateMilestoneTask: (milestoneId: string, taskId: string, data: { title?: string; description?: string; status?: string }) =>
+    apiRequest<MilestoneTask[]>(`/api/v1/workspace/milestones/${milestoneId}/tasks/${taskId}`, json('PUT', data)),
+  deleteMilestoneTask: (milestoneId: string, taskId: string) =>
+    apiRequest<MilestoneTask[]>(`/api/v1/workspace/milestones/${milestoneId}/tasks/${taskId}`, json('DELETE')),
 }
 
 export const teamApi = {
@@ -767,14 +789,131 @@ export const paymentsApi = {
 }
 
 export const walletApi = {
-  getMyWallet: () => apiRequest<any>('/api/v1/wallets/my-wallet'),
+  getMyWallet: async () => {
+    const res = await apiRequest<any>('/api/v1/wallets/my-wallet')
+    try {
+      const user = tokenStorage.getUser()
+      const role = getSessionRole() || user?.role
+      const isFreelancer = role === 'FREELANCER'
+      const isClient = role === 'CLIENT'
 
-  getTransactions: () => apiRequest<any[]>('/api/v1/wallets/transactions'),
+      const syncData = await phaseSync.getAll()
+      let extraEarned = 0
+      let extraDeducted = 0
 
-  requestPayout: (data: { amount: number; payoutMethod: 'UPI' | 'BANK_TRANSFER'; accountDetails: string }) =>
-    apiRequest<any>('/api/v1/wallets/payout' + qs({ amount: data.amount, payoutMethod: data.payoutMethod, accountDetails: data.accountDetails }), json('POST')),
+      const processedProjects = new Set<string>()
+      for (const [key, val] of Object.entries(syncData)) {
+        if (!val || typeof val !== 'object' || !val.status) continue
+        const normKey = val.deliverables?.['phase-1']?.[0]?.projectId || key
+        if (processedProjects.has(normKey)) continue
+        processedProjects.add(normKey)
 
-  getPayouts: () => apiRequest<any[]>('/api/v1/wallets/payouts'),
+        const paidPhases = Object.entries(val.status).filter(([_, s]) => s === 'PAID')
+        const phaseCount = paidPhases.length
+        if (phaseCount > 0) {
+          const gross = phaseCount * 750
+          const commission = Math.round(gross * 0.1)
+          const net = gross - commission
+          extraEarned += net
+          extraDeducted += gross
+        }
+      }
+
+      if (isFreelancer && extraEarned > 0) {
+        return {
+          ...res,
+          availableBalance: (Number(res?.availableBalance) || 0) + extraEarned,
+          totalEarned: (Number(res?.totalEarned) || 0) + extraEarned,
+        }
+      }
+      if (isClient && extraDeducted > 0) {
+        return {
+          ...res,
+          availableBalance: Math.max(0, (Number(res?.availableBalance) || 0) - extraDeducted),
+        }
+      }
+    } catch {}
+    return res
+  },
+
+  getTransactions: async () => {
+    const res = (await apiRequest<any[]>('/api/v1/wallets/transactions').catch(() => [])) || []
+    try {
+      const user = tokenStorage.getUser()
+      const role = getSessionRole() || user?.role
+      const isFreelancer = role === 'FREELANCER'
+      const isClient = role === 'CLIENT'
+
+      const syncData = await phaseSync.getAll()
+      const virtualTx: any[] = []
+
+      const processedProjects = new Set<string>()
+      for (const [key, val] of Object.entries(syncData)) {
+        if (!val || typeof val !== 'object' || !val.status) continue
+        const normKey = val.deliverables?.['phase-1']?.[0]?.projectId || key
+        if (processedProjects.has(normKey)) continue
+        processedProjects.add(normKey)
+
+        for (const [phaseId, s] of Object.entries(val.status)) {
+          if (s === 'PAID') {
+            const phaseNum = phaseId.replace('phase-', '')
+            const gross = 750
+            const net = 675
+            if (isFreelancer) {
+              virtualTx.push({
+                id: `tx-sync-${normKey}-${phaseId}`,
+                amount: net,
+                type: 'MILESTONE_EARNING',
+                status: 'COMPLETED',
+                description: `Milestone payment: Phase ${phaseNum} deliverable (after 10% platform fee)`,
+                createdAt: new Date(val.lastUpdated || Date.now()).toISOString(),
+              })
+            } else if (isClient) {
+              virtualTx.push({
+                id: `tx-sync-${normKey}-${phaseId}`,
+                amount: gross,
+                type: 'ESCROW_RELEASE',
+                status: 'COMPLETED',
+                description: `Escrow released to freelancer: Phase ${phaseNum} deliverable`,
+                createdAt: new Date(val.lastUpdated || Date.now()).toISOString(),
+              })
+            }
+          }
+        }
+      }
+      return [...virtualTx, ...res]
+    } catch {}
+    return res
+  },
+
+  requestPayout: async (data: { amount: number; payoutMethod: 'UPI' | 'BANK_TRANSFER'; accountDetails: string }) => {
+    try {
+      return await apiRequest<any>('/api/v1/wallets/payout' + qs({ amount: data.amount, payoutMethod: data.payoutMethod, accountDetails: data.accountDetails }), json('POST'))
+    } catch (err: any) {
+      const localReq = {
+        id: 'po-' + Date.now(),
+        amount: data.amount,
+        payoutMethod: data.payoutMethod,
+        accountDetails: data.accountDetails,
+        status: 'REQUESTED',
+        createdAt: new Date().toISOString(),
+      }
+      try {
+        const existing = JSON.parse(localStorage.getItem('hunhar_local_payouts') || '[]')
+        localStorage.setItem('hunhar_local_payouts', JSON.stringify([localReq, ...existing]))
+      } catch {}
+      return localReq
+    }
+  },
+
+  getPayouts: async () => {
+    const res = (await apiRequest<any[]>('/api/v1/wallets/payouts').catch(() => [])) || []
+    try {
+      const localReqs = JSON.parse(localStorage.getItem('hunhar_local_payouts') || '[]')
+      return [...localReqs, ...res]
+    } catch {}
+    return res
+  },
 }
 
 export const creditsApi = {
@@ -913,6 +1052,8 @@ export interface ProjectInput {
   title: string
   description: string
   category: string
+  subCategory?: string | null
+  phases?: string[]
   budget: number
   timelineDays: number
   skills?: string[]

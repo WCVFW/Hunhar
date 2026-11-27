@@ -71,6 +71,12 @@ export default function WalletPage(): React.JSX.Element {
 
   useEffect(() => {
     load()
+    window.addEventListener('storage', load)
+    window.addEventListener('hunhar:balances-changed', load)
+    return () => {
+      window.removeEventListener('storage', load)
+      window.removeEventListener('hunhar:balances-changed', load)
+    }
   }, [])
 
   const openWithdraw = () => {

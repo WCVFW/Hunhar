@@ -7,19 +7,41 @@
 export const DEFAULT_SITE_TITLE = 'hunhar.in — Creative Freelance Marketplace & Collaboration Platform'
 export const DEFAULT_SITE_DESCRIPTION =
   'hunhar.in connects skilled creative freelancers with businesses through transparent bidding, secure escrow payments, and dedicated workspace collaboration.'
-export const BASE_SITE_URL = 'https://www.hunhar.in'
+export const BASE_SITE_URL =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.endsWith('.local') ||
+    window.location.hostname.includes('192.168.'))
+    ? window.location.origin
+    : 'https://www.hunhar.in'
 
 /**
  * Updates or creates the single <link rel="canonical"> tag on the page.
  * Removes any duplicate canonical tags to strictly follow Google & SEO standards.
+ * Dynamically resolves to the current origin on local/preview environments to ensure
+ * Detailed SEO and search engines always find a valid self-referencing canonical tag.
  */
 export function setPageCanonical(url: string): void {
+  let finalUrl = url
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local') || host.includes('192.168.')) {
+      try {
+        const u = new URL(url, window.location.origin)
+        finalUrl = `${window.location.origin}${u.pathname}${u.search ? u.search : ''}`
+      } catch {
+        finalUrl = `${window.location.origin}${url.startsWith('/') ? url : '/' + url}`
+      }
+    }
+  }
+
   const allCanonicals = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="canonical"]'))
 
   if (allCanonicals.length > 0) {
     // Keep the first one and set its href
     const primary = allCanonicals[0]
-    primary.href = url
+    primary.href = finalUrl
 
     // Remove any accidental duplicate canonical tags
     for (let i = 1; i < allCanonicals.length; i++) {
@@ -28,7 +50,7 @@ export function setPageCanonical(url: string): void {
   } else {
     const link = document.createElement('link')
     link.rel = 'canonical'
-    link.href = url
+    link.href = finalUrl
     document.head.appendChild(link)
   }
 }

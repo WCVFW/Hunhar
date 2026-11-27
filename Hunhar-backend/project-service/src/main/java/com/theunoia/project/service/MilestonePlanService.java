@@ -48,11 +48,14 @@ public class MilestonePlanService {
 
     // ------------------------------------------------------------------ read
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> view(UUID projectId, AuthUser user) {
         Project p = access.requireParticipant(projectId, user);
         String me = side(p, user);
         MilestonePlan plan = planRepository.findByProjectId(projectId).orElse(null);
+        if (plan == null || (plan.getStatus() != Status.ACCEPTED && (plan.getItemsJson() == null || plan.getItemsJson().isBlank() || "[]".equals(plan.getItemsJson().trim())))) {
+            plan = initPlanForProject(p, agreedAmount(p));
+        }
         // A draft is private to whoever is writing it
         boolean hiddenDraft = plan != null && plan.getStatus() == Status.DRAFT && !plan.getDraftBy().equals(me);
         Map<String, Object> m = new LinkedHashMap<>();
@@ -72,9 +75,84 @@ public class MilestonePlanService {
                 .map(Milestone::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
         m.put("canEdit", canEdit(p, plan, me));
         m.put("canAccept", canAccept(p, plan, me));
+        m.put("subCategory", p.getSubCategory());
+        List<String> defaultPhases = p.getPhases() != null && !p.getPhases().isBlank()
+                ? List.of(p.getPhases().split("\\|\\|"))
+                : SkillPhasesCatalogue.getPhasesForSkill(p.getSubCategory(), p.getCategory(), p.getTitle());
+        m.put("defaultPhases", defaultPhases);
         m.put("canStartRound", p.getStatus() == ProjectStatus.ACTIVE && !"ADMIN".equals(me)
                 && (plan == null ? "FREELANCER".equals(me) : plan.getStatus() == Status.ACCEPTED));
         return m;
+    }
+
+    @Transactional
+    public MilestonePlan initPlanForProject(Project p, BigDecimal agreedAmount) {
+        if (agreedAmount == null || agreedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            agreedAmount = p.getBudget() != null ? p.getBudget() : BigDecimal.valueOf(1000);
+        }
+        List<String> phaseList = new ArrayList<>();
+        if (p.getPhases() != null && !p.getPhases().isBlank()) {
+            for (String s : p.getPhases().split("\\|\\|")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) phaseList.add(trimmed);
+            }
+        }
+        if (phaseList.isEmpty()) {
+            phaseList.addAll(SkillPhasesCatalogue.getPhasesForSkill(p.getSubCategory(), p.getCategory(), p.getTitle()));
+        }
+
+        int count = Math.max(1, phaseList.size());
+        BigDecimal total = agreedAmount;
+        BigDecimal perPhase = total.divide(BigDecimal.valueOf(count), 0, RoundingMode.HALF_UP);
+        List<Item> items = new ArrayList<>();
+        BigDecimal accumulated = BigDecimal.ZERO;
+        for (int i = 0; i < count; i++) {
+            BigDecimal amt;
+            if (i == count - 1) {
+                amt = total.subtract(accumulated);
+                if (amt.compareTo(BigDecimal.ZERO) < 0) amt = BigDecimal.ZERO;
+            } else {
+                amt = perPhase;
+                accumulated = accumulated.add(amt);
+            }
+            items.add(new Item(
+                    phaseList.get(i),
+                    "Phase " + (i + 1) + " deliverable checkpoint",
+                    amt,
+                    null
+            ));
+        }
+
+        String itemsJson = "[]";
+        try {
+            itemsJson = objectMapper.writeValueAsString(items);
+        } catch (Exception ignored) {}
+
+        MilestonePlan plan = planRepository.findByProjectId(p.getId()).orElse(null);
+        if (plan == null) {
+            plan = MilestonePlan.builder()
+                    .projectId(p.getId())
+                    .status(Status.WITH_FREELANCER)
+                    .draftBy("CLIENT")
+                    .itemsJson(itemsJson)
+                    .note("Default milestone plan proposed by client based on project checkpoint phases")
+                    .round(1)
+                    .revisions(0)
+                    .lastEditedBy("CLIENT")
+                    .lastEditedAt(Instant.now())
+                    .build();
+        } else if (plan.getStatus() != Status.ACCEPTED && plan.getRound() <= 1) {
+            plan.setItemsJson(itemsJson);
+            plan.setStatus(Status.WITH_FREELANCER);
+            plan.setDraftBy("CLIENT");
+            plan.setLastEditedBy("CLIENT");
+            plan.setLastEditedAt(Instant.now());
+        }
+        return planRepository.save(plan);
+    }
+
+    private List<String> defaultPhasesForCategory(String category) {
+        return SkillPhasesCatalogue.getPhasesForSkill(null, category, null);
     }
 
     // ------------------------------------------------------------------ write
@@ -86,8 +164,7 @@ public class MilestonePlanService {
         String me = side(p, user);
         MilestonePlan plan = planRepository.findByProjectId(projectId).orElse(null);
         if (plan == null) {
-            if (!"FREELANCER".equals(me)) throw new BadRequestException("The freelancer proposes the first milestone plan");
-            plan = MilestonePlan.builder().projectId(projectId).status(Status.DRAFT).draftBy("FREELANCER").round(1).build();
+            plan = initPlanForProject(p, agreedAmount(p));
         }
         if (!canEdit(p, plan, me)) throw new BadRequestException(waitMessage(plan, me));
         write(plan, items, note, me);
@@ -102,8 +179,7 @@ public class MilestonePlanService {
         String me = side(p, user);
         MilestonePlan plan = planRepository.findByProjectId(projectId).orElse(null);
         if (plan == null) {
-            if (!"FREELANCER".equals(me)) throw new BadRequestException("The freelancer proposes the first milestone plan");
-            plan = MilestonePlan.builder().projectId(projectId).status(Status.DRAFT).draftBy("FREELANCER").round(1).build();
+            plan = initPlanForProject(p, agreedAmount(p));
         }
         if (!canEdit(p, plan, me)) throw new BadRequestException(waitMessage(plan, me));
         if (items != null) write(plan, items, note, me);
@@ -122,8 +198,8 @@ public class MilestonePlanService {
                             + total.toPlainString() + " for \"" + p.getTitle() + "\". Review and accept or edit it.",
                     "/client/projects/" + p.getId());
         } else {
-            notifications.notify(p.getAwardedFreelancerId(), "MILESTONE_PLAN", "Client edited the milestone plan",
-                    "The client changed the milestone plan for \"" + p.getTitle() + "\" (total ₹" + total.toPlainString()
+            notifications.notify(p.getAwardedFreelancerId(), "MILESTONE_PLAN", "Client proposed the milestone plan",
+                    "The client proposed the milestone plan for \"" + p.getTitle() + "\" (total ₹" + total.toPlainString()
                             + "). Review and accept or edit it.",
                     "/freelancer/projects/" + p.getId());
         }
@@ -142,12 +218,20 @@ public class MilestonePlanService {
         if (list.isEmpty()) throw new BadRequestException("The plan has no milestones");
 
         for (Item it : list) {
+            Instant dueDate = null;
+            if (it.dueDate() != null && !it.dueDate().isBlank()) {
+                try {
+                    String d = it.dueDate().trim();
+                    if (d.length() > 10) d = d.substring(0, 10);
+                    dueDate = LocalDate.parse(d).atTime(18, 0).atZone(IST).toInstant();
+                } catch (Exception ignored) {}
+            }
             milestoneRepository.save(Milestone.builder()
                     .projectId(projectId)
                     .title(it.title())
                     .description(it.description())
                     .amount(it.amount())
-                    .dueDate(it.dueDate() == null ? null : LocalDate.parse(it.dueDate()).atTime(18, 0).atZone(IST).toInstant())
+                    .dueDate(dueDate)
                     .status(MilestoneStatus.PENDING)
                     .build());
         }
@@ -175,8 +259,7 @@ public class MilestonePlanService {
         if ("ADMIN".equals(me)) throw new ForbiddenException("Only the client or the freelancer can change the plan");
         MilestonePlan plan = planRepository.findByProjectId(projectId).orElse(null);
         if (plan == null) {
-            if (!"FREELANCER".equals(me)) throw new BadRequestException("The freelancer proposes the first milestone plan");
-            plan = MilestonePlan.builder().projectId(projectId).round(1).build();
+            plan = initPlanForProject(p, agreedAmount(p));
         } else if (plan.getStatus() != Status.ACCEPTED) {
             throw new BadRequestException("Finish agreeing the current plan first");
         } else {
@@ -196,7 +279,7 @@ public class MilestonePlanService {
 
     private boolean canEdit(Project p, MilestonePlan plan, String me) {
         if (p.getStatus() != ProjectStatus.ACTIVE || "ADMIN".equals(me)) return false;
-        if (plan == null) return "FREELANCER".equals(me);
+        if (plan == null) return true;
         return switch (plan.getStatus()) {
             case DRAFT -> me.equals(plan.getDraftBy());
             case WITH_CLIENT -> "CLIENT".equals(me);
@@ -212,11 +295,11 @@ public class MilestonePlanService {
     }
 
     private static String waitMessage(MilestonePlan plan, String me) {
-        if (plan == null) return "The freelancer has not proposed a milestone plan yet";
+        if (plan == null) return "The milestone plan is being prepared";
         return switch (plan.getStatus()) {
             case DRAFT -> "The " + plan.getDraftBy().toLowerCase() + " is still preparing the plan";
             case WITH_CLIENT -> "CLIENT".equals(me) ? "Review the plan" : "The plan is with the client for review";
-            case WITH_FREELANCER -> "FREELANCER".equals(me) ? "Review the plan" : "The plan is with the freelancer for review";
+            case WITH_FREELANCER -> "FREELANCER".equals(me) ? "Review the plan" : "The plan is with the freelancer for review & acceptance";
             case ACCEPTED -> "This plan is already accepted. Start a new round to add milestones.";
         };
     }

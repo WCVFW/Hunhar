@@ -7,10 +7,24 @@ import {
   X,
   Sparkles,
   AlertCircle,
+  ListOrdered,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Shield,
+  Layers,
 } from 'lucide-react'
 import { clientApi, filesApi, projectsApi, type Project, type StoredFile } from '../../services/api'
 import { splitList } from '../../services/format'
 import { toRouteId, fromRouteId } from '../../services/routeIds'
+import {
+  CATEGORIES_LIST,
+  SKILLS_CATALOGUE,
+  getSkillsByCategory,
+  getSkillByName,
+  getDefaultPhases,
+  type SkillItem,
+} from '../../data/skillsCatalogue'
 
 const TIMELINE_OPTIONS: { label: string; days: number }[] = [
   { label: 'Less than 1 week', days: 7 },
@@ -20,117 +34,7 @@ const TIMELINE_OPTIONS: { label: string; days: number }[] = [
   { label: '3+ months', days: 90 },
 ]
 
-const categories = [
-  'Branding',
-  'Web Design',
-  'UI/UX',
-  'Motion Design',
-  'Illustration',
-  'Marketing',
-  'Development',
-  'Photography',
-  'Copywriting',
-]
-
-interface CategoryRule {
-  name: string
-  keywords: string[]
-  suggestedSkills: string[]
-}
-
-const CATEGORY_RULES: CategoryRule[] = [
-  {
-    name: 'UI/UX',
-    keywords: [
-      'ui/ux', 'uiux', 'ui designer', 'ux designer', 'ui/ux designer', 'ui', 'ux',
-      'product designer', 'product design', 'designer', 'design', 'figma', 'figma designer',
-      'wireframe', 'wireframing', 'prototype', 'prototyping', 'user interface', 'user experience',
-      'mobile app design', 'app design', 'app designer', 'dashboard design', 'dashboard',
-      'landing page design', 'redesign', 'usability', 'design system', 'xd', 'sketch', 'mobile ui'
-    ],
-    suggestedSkills: ['Figma', 'UI/UX Design', 'Wireframing', 'Prototyping', 'Mobile App Design', 'Design Systems']
-  },
-  {
-    name: 'Web Design',
-    keywords: [
-      'web designer', 'website designer', 'web design', 'website design', 'web', 'website',
-      'landing page', 'homepage', 'responsive design', 'wordpress', 'webflow', 'wix',
-      'shopify', 'elementor', 'squarespace', 'frontend design', 'html', 'css', 'tailwind'
-    ],
-    suggestedSkills: ['Web Design', 'WordPress', 'HTML/CSS', 'Responsive Design', 'Webflow', 'Tailwind CSS']
-  },
-  {
-    name: 'Branding',
-    keywords: [
-      'graphic designer', 'graphic design', 'graphics', 'brand designer', 'brand design',
-      'branding', 'brand', 'logo', 'logo design', 'logo designer', 'identity', 'stationery',
-      'packaging', 'packaging design', 'business card', 'letterhead', 'rebrand', 'rebranding',
-      'visual identity', 'brand guideline', 'label', 'typography', 'brochure', 'catalog', 'flyer', 'poster', 'banner'
-    ],
-    suggestedSkills: ['Logo Design', 'Adobe Illustrator', 'Brand Identity', 'Photoshop', 'Packaging Design']
-  },
-  {
-    name: 'Development',
-    keywords: [
-      'developer', 'development', 'develop', 'programmer', 'programming', 'software',
-      'software engineer', 'coder', 'coding', 'code', 'backend', 'frontend', 'fullstack',
-      'full stack', 'full-stack', 'api', 'database', 'react', 'next.js', 'nextjs', 'node',
-      'nodejs', 'express', 'python', 'django', 'flask', 'java', 'spring', 'springboot',
-      'spring boot', 'php', 'laravel', 'flutter', 'react native', 'swift', 'kotlin',
-      'sql', 'postgres', 'mongodb', 'aws', 'docker', 'bug fix', 'devops', 'ai', 'ml',
-      'machine learning', 'chatgpt', 'automation', 'bot', 'script', 'scraping', 'saas'
-    ],
-    suggestedSkills: ['React.js', 'Node.js', 'Full Stack Development', 'Python', 'API Integration', 'Database Design']
-  },
-  {
-    name: 'Motion Design',
-    keywords: [
-      'motion designer', 'motion design', 'motion graphics', 'animator', 'animation',
-      '2d animation', '3d animation', 'after effects', 'video editor', 'video editing',
-      'video edit', 'video', 'reel', 'reels', 'shorts', 'tiktok', 'youtube video',
-      'premiere', 'premiere pro', 'davinci', 'vfx', 'cgi', 'explainer video', 'blender'
-    ],
-    suggestedSkills: ['After Effects', 'Video Editing', 'Premiere Pro', '2D Animation', 'Motion Graphics', 'Blender']
-  },
-  {
-    name: 'Illustration',
-    keywords: [
-      'illustrator', 'illustration', 'illustrate', 'digital artist', 'drawing', 'sketch',
-      'digital art', 'character designer', 'character design', 'mascot', 'vector art',
-      'cartoon', 'comic', 'doodle', 'children book', 'concept art', 'anime', 'portrait art'
-    ],
-    suggestedSkills: ['Digital Illustration', 'Adobe Illustrator', 'Character Design', 'Procreate', 'Vector Art']
-  },
-  {
-    name: 'Marketing',
-    keywords: [
-      'marketer', 'marketing', 'market', 'digital marketing', 'social media marketing',
-      'social media manager', 'smm', 'growth marketer', 'growth', 'seo', 'sem', 'google ads',
-      'facebook ads', 'meta ads', 'ad campaign', 'ppc', 'email marketing', 'newsletter',
-      'lead generation', 'leads', 'influencer', 'sales funnel'
-    ],
-    suggestedSkills: ['Digital Marketing', 'Social Media Marketing', 'SEO', 'Meta Ads', 'Google Ads', 'Content Strategy']
-  },
-  {
-    name: 'Copywriting',
-    keywords: [
-      'copywriter', 'copywriting', 'copy', 'content writer', 'content writing', 'content',
-      'writer', 'writing', 'blog writer', 'blog', 'article writer', 'article', 'ghostwriter',
-      'technical writing', 'documentation', 'scriptwriter', 'scriptwriting', 'ad copy',
-      'website copy', 'proofreading', 'proofread', 'resume', 'cv', 'translator', 'translation'
-    ],
-    suggestedSkills: ['Copywriting', 'Content Writing', 'Blog Writing', 'SEO Copywriting', 'Proofreading', 'Creative Writing']
-  },
-  {
-    name: 'Photography',
-    keywords: [
-      'photographer', 'photography', 'photo', 'photoshoot', 'camera', 'product photography',
-      'product photo', 'portrait photography', 'model shoot', 'fashion photography',
-      'food photography', 'photo retouching', 'photo editing', 'lightroom', 'headshot'
-    ],
-    suggestedSkills: ['Product Photography', 'Adobe Lightroom', 'Photo Editing', 'Studio Lighting', 'Commercial Photography']
-  },
-]
+const categories = CATEGORIES_LIST
 
 function scoreKeywordMatch(text: string, kw: string): number {
   if (!text || !kw) return 0
@@ -170,6 +74,8 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [budget, setBudget] = useState('')
   const [timeline, setTimeline] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('')
+  const [phases, setPhases] = useState<string[]>([])
   const [userManuallySelectedCategory, setUserManuallySelectedCategory] = useState(false)
   const [customDays, setCustomDays] = useState('')
   const [skillsRequired, setSkillsRequired] = useState('')
@@ -183,8 +89,8 @@ export default function CreateProjectPage(): React.JSX.Element {
   const [searchParams] = useSearchParams()
   const editId = fromRouteId(searchParams.get('edit')) || null
 
-  // Dynamic category matching based on project title and description
-  const { matchedCategory, rankedCategories, suggestedSkills } = useMemo(() => {
+  // Dynamic category matching based on project title and description across all 93 skills
+  const { matchedCategory, rankedCategories } = useMemo(() => {
     const titleLower = projectTitle.trim().toLowerCase()
     const descLower = projectDescription.trim().toLowerCase()
 
@@ -192,46 +98,70 @@ export default function CreateProjectPage(): React.JSX.Element {
       return {
         matchedCategory: null,
         rankedCategories: categories.map((cat) => ({ name: cat, score: 0, isMatch: false })),
-        suggestedSkills: [] as string[]
       }
     }
 
-    const scored = CATEGORY_RULES.map((rule) => {
+    const scored = categories.map((cat) => {
+      const skillsInCat = getSkillsByCategory(cat)
       let score = 0
-      for (const kw of rule.keywords) {
-        // Keyword match in title is prioritized (3x)
-        const titleScore = scoreKeywordMatch(titleLower, kw)
-        if (titleScore > 0) {
-          score += titleScore * 3
-        } else if (descLower) {
-          const descScore = scoreKeywordMatch(descLower, kw)
-          score += descScore
+
+      // Match category name itself
+      const catScoreTitle = scoreKeywordMatch(titleLower, cat)
+      const catScoreDesc = scoreKeywordMatch(descLower, cat)
+      score += catScoreTitle * 3 + catScoreDesc
+
+      // Match skills and keywords inside this category
+      for (const skill of skillsInCat) {
+        const sTitleScore = scoreKeywordMatch(titleLower, skill.name)
+        const sDescScore = descLower ? scoreKeywordMatch(descLower, skill.name) : 0
+        score += sTitleScore * 3 + sDescScore
+
+        if (skill.suggestedSkills) {
+          for (const kw of skill.suggestedSkills) {
+            const kwTitle = scoreKeywordMatch(titleLower, kw)
+            const kwDesc = descLower ? scoreKeywordMatch(descLower, kw) : 0
+            score += kwTitle * 2 + kwDesc
+          }
         }
       }
+
       return {
-        name: rule.name,
+        name: cat,
         score,
         isMatch: score > 0,
-        suggestedSkills: rule.suggestedSkills
       }
     })
 
-    // Sort categories: matched categories first by score descending, then default order
     const sorted = [...scored].sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return categories.indexOf(a.name) - categories.indexOf(b.name)
     })
 
     const top = sorted[0].score > 0 ? sorted[0].name : null
-    const activeCategory = selectedCategories[0] || top
-    const activeRule = CATEGORY_RULES.find((r) => r.name === activeCategory)
 
     return {
       matchedCategory: top,
       rankedCategories: sorted,
-      suggestedSkills: activeRule ? activeRule.suggestedSkills : []
     }
-  }, [projectTitle, projectDescription, selectedCategories])
+  }, [projectTitle, projectDescription])
+
+  // Current category skills
+  const currentCategory = selectedCategories[0] || ''
+  const availableSkills = useMemo(() => {
+    return currentCategory ? getSkillsByCategory(currentCategory) : []
+  }, [currentCategory])
+
+  const activeSkillObj: SkillItem | undefined = useMemo(() => {
+    return selectedSubCategory ? getSkillByName(selectedSubCategory) : availableSkills[0]
+  }, [selectedSubCategory, availableSkills])
+
+  // Suggested skills from active skill
+  const suggestedSkills = useMemo(() => {
+    if (activeSkillObj?.suggestedSkills && activeSkillObj.suggestedSkills.length > 0) {
+      return activeSkillObj.suggestedSkills
+    }
+    return []
+  }, [activeSkillObj])
 
   // Automatically select the best matching category if user hasn't chosen one manually
   useEffect(() => {
@@ -245,6 +175,23 @@ export default function CreateProjectPage(): React.JSX.Element {
     }
   }, [matchedCategory, userManuallySelectedCategory, editId, projectTitle, projectDescription])
 
+  // When category changes, auto-select first subcategory and load default phases if not set
+  useEffect(() => {
+    if (editId) return
+    if (currentCategory) {
+      const skills = getSkillsByCategory(currentCategory)
+      const currentExists = skills.some((s) => s.name === selectedSubCategory)
+      if (!currentExists && skills.length > 0) {
+        const firstSkill = skills[0]
+        setSelectedSubCategory(firstSkill.name)
+        setPhases([...firstSkill.phases])
+      }
+    } else {
+      setSelectedSubCategory('')
+      setPhases([])
+    }
+  }, [currentCategory, editId])
+
   // Edit mode: load the draft / unbid project
   useEffect(() => {
     if (!editId) return
@@ -257,6 +204,12 @@ export default function CreateProjectPage(): React.JSX.Element {
         setTimeline(TIMELINE_OPTIONS.find((o) => o.days === p.timelineDays)?.label || '')
         setCustomDays(TIMELINE_OPTIONS.some((o) => o.days === p.timelineDays) ? '' : String(p.timelineDays))
         setSelectedCategories(p.category ? [p.category] : [])
+        setSelectedSubCategory(p.subCategory || '')
+        if (p.phases) {
+          setPhases(p.phases.split('||').map((s) => s.trim()).filter(Boolean))
+        } else if (p.subCategory) {
+          setPhases(getDefaultPhases(p.subCategory))
+        }
         setUserManuallySelectedCategory(true)
         setSkillsRequired(splitList(p.skills).join(', '))
         setExistingAttachments(splitList(p.attachmentUrls))
@@ -265,10 +218,45 @@ export default function CreateProjectPage(): React.JSX.Element {
   }, [editId])
 
   const toggleCategory = (cat: string) => {
-    // User explicitly chose a category
     setUserManuallySelectedCategory(true)
-    // A project has one category; clicking another one switches to it
-    setSelectedCategories((prev) => (prev.includes(cat) ? [] : [cat]))
+    if (selectedCategories.includes(cat)) {
+      setSelectedCategories([])
+      setSelectedSubCategory('')
+      setPhases([])
+    } else {
+      setSelectedCategories([cat])
+      const skills = getSkillsByCategory(cat)
+      if (skills.length > 0) {
+        setSelectedSubCategory(skills[0].name)
+        setPhases([...skills[0].phases])
+      } else {
+        setSelectedSubCategory('')
+        setPhases([])
+      }
+    }
+  }
+
+  const handleSelectSkill = (skillName: string) => {
+    setSelectedSubCategory(skillName)
+    setPhases(getDefaultPhases(skillName))
+  }
+
+  const handleUpdatePhase = (index: number, val: string) => {
+    setPhases((prev) => prev.map((p, i) => (i === index ? val : p)))
+  }
+
+  const handleRemovePhase = (index: number) => {
+    setPhases((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleAddPhase = () => {
+    setPhases((prev) => [...prev, `Phase ${prev.length + 1} milestone`])
+  }
+
+  const handleResetPhases = () => {
+    if (selectedSubCategory) {
+      setPhases(getDefaultPhases(selectedSubCategory))
+    }
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,12 +303,16 @@ export default function CreateProjectPage(): React.JSX.Element {
     if (days === null) return setErrorMessage('Please choose a timeline (or enter 1–365 days).')
     if (!selectedCategories[0]) return setErrorMessage('Please choose a category.')
 
+    const cleanedPhases = phases.map((p) => p.trim()).filter(Boolean)
+
     setIsSubmitting(publish ? 'publish' : 'draft')
     try {
       const payload = {
         title: projectTitle.trim(),
         description: projectDescription.trim(),
         category: selectedCategories[0],
+        subCategory: selectedSubCategory || null,
+        phases: cleanedPhases,
         budget: numericBudget,
         timelineDays: days,
         skills: skillsRequired.split(',').map((s) => s.trim()).filter(Boolean),
@@ -529,9 +521,9 @@ export default function CreateProjectPage(): React.JSX.Element {
                 )}
               </div>
               <p className="mt-1 font-manrope text-[11.5px] text-[#64748B]">
-                Categories dynamically rank and update based on your project title.
+                Choose the main category for your project (auto-matched from title & description).
               </p>
-              <div className="mt-2.5 flex flex-wrap gap-2.5">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 {rankedCategories.map(({ name: cat, isMatch }) => {
                   const isSelected = selectedCategories.includes(cat)
                   const isTopMatched = matchedCategory === cat
@@ -540,7 +532,7 @@ export default function CreateProjectPage(): React.JSX.Element {
                       key={cat}
                       type="button"
                       onClick={() => toggleCategory(cat)}
-                      className={`relative inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-manrope text-[12.5px] font-medium transition-all ${
+                      className={`relative inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-manrope text-[12px] font-medium transition-all cursor-pointer ${
                         isSelected
                           ? 'border border-[#C06B3E] bg-[#C06B3E] text-white shadow-xs'
                           : isMatch
@@ -551,7 +543,7 @@ export default function CreateProjectPage(): React.JSX.Element {
                       {isTopMatched && !isSelected && <Sparkles size={11} className="text-[#C06B3E]" />}
                       <span>{cat}</span>
                       {isMatch && !isSelected && (
-                        <span className="rounded-full bg-[#EFE5DB] px-1.5 py-0.5 text-[9.5px] font-bold text-[#C06B3E]">
+                        <span className="rounded-full bg-[#EFE5DB] px-1.5 py-0.2 text-[9px] font-bold text-[#C06B3E]">
                           Suggested
                         </span>
                       )}
@@ -560,6 +552,148 @@ export default function CreateProjectPage(): React.JSX.Element {
                 })}
               </div>
             </div>
+
+            {/* Field 4B: Subcategory / Skill selection */}
+            {availableSkills.length > 0 && (
+              <div className="rounded-[18px] border border-[#F0ECE6] bg-[#FAF8F5]/80 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Layers size={16} className="text-[#C06B3E]" />
+                    <label className="block font-manrope text-[13px] font-bold text-[#08182B]">
+                      Sub-category / Skill <span className="text-[#E11D48]">*</span>
+                    </label>
+                  </div>
+                  <span className="font-manrope text-[11.5px] font-semibold text-[#8E8376]">
+                    {availableSkills.length} skills in {currentCategory}
+                  </span>
+                </div>
+                <p className="mt-1 font-manrope text-[12px] text-[#64748B]">
+                  Select the specific skill. Each skill comes with verified checkpoint phases from the Hunhar catalogue.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {availableSkills.map((sk) => {
+                    const isSelected = selectedSubCategory === sk.name
+                    const riskBadgeBg =
+                      sk.risk === 'Green' ? 'bg-[#DCFCE7] text-[#15803D]' :
+                      sk.risk === 'Yellow' ? 'bg-[#FEF3C7] text-[#B45309]' :
+                      sk.risk === 'Orange' ? 'bg-[#FFEDD5] text-[#C2410C]' : 'bg-[#FEE2E2] text-[#B91C1C]'
+                    return (
+                      <button
+                        key={sk.id}
+                        type="button"
+                        onClick={() => handleSelectSkill(sk.name)}
+                        className={`group inline-flex items-center gap-2 rounded-[14px] border px-3.5 py-2 text-left font-manrope transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-[#C06B3E] bg-white text-[#08182B] shadow-xs ring-2 ring-[#C06B3E]/20'
+                            : 'border-[#E2E8F0] bg-white/90 text-[#475569] hover:border-[#CBD5E1] hover:bg-white'
+                        }`}
+                      >
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                          isSelected ? 'bg-[#C06B3E] text-white' : 'bg-[#F1F5F9] text-[#64748B]'
+                        }`}>
+                          {sk.id}
+                        </span>
+                        <span className={`text-[12.5px] ${isSelected ? 'font-bold text-[#08182B]' : 'font-medium'}`}>
+                          {sk.name}
+                        </span>
+                        <span className="rounded-full bg-[#F1F5F9] px-1.5 py-0.5 text-[10px] font-bold text-[#64748B]">
+                          {sk.count} phases
+                        </span>
+                        {sk.isMonthly && (
+                          <span className="rounded-full bg-[#E0E7FF] px-1.5 py-0.5 text-[9.5px] font-bold text-[#4338CA]">
+                            Monthly
+                          </span>
+                        )}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${riskBadgeBg}`}>
+                          {sk.risk}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Field 4C: Default Project Phases (Checkpoints) */}
+            {selectedSubCategory && phases.length > 0 && (
+              <div className="rounded-[18px] border border-[#DECFBE] bg-[#FDFBF7] p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EFE5DB] pb-3">
+                  <div className="flex items-center gap-2">
+                    <ListOrdered size={18} className="text-[#C06B3E]" />
+                    <div>
+                      <h3 className="font-manrope text-[14px] font-extrabold text-[#08182B]">
+                        Default Phases for {selectedSubCategory}
+                      </h3>
+                      <p className="text-[11.5px] text-[#7A7065]">
+                        {phases.length} checkpoints approved by you before the next phase starts.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {activeSkillObj && (
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                        activeSkillObj.risk === 'Green' ? 'bg-[#DCFCE7] text-[#15803D]' :
+                        activeSkillObj.risk === 'Yellow' ? 'bg-[#FEF3C7] text-[#B45309]' :
+                        activeSkillObj.risk === 'Orange' ? 'bg-[#FFEDD5] text-[#C2410C]' : 'bg-[#FEE2E2] text-[#B91C1C]'
+                      }`}>
+                        {activeSkillObj.risk} Risk Profile
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleResetPhases}
+                      title="Reset to default phases from Hunhar catalogue"
+                      className="inline-flex items-center gap-1 rounded-full border border-[#DECFBE] bg-white px-2.5 py-1 text-[11px] font-bold text-[#64748B] hover:bg-[#FAF4EE] hover:text-[#08182B] cursor-pointer"
+                    >
+                      <RotateCcw size={11} /> Reset
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3.5 space-y-2">
+                  {phases.map((ph, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2.5 rounded-[12px] border border-[#EBE3D8] bg-white p-2.5 shadow-2xs"
+                    >
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#08182B] text-[11px] font-bold text-white">
+                        {idx + 1}
+                      </div>
+                      <input
+                        type="text"
+                        value={ph}
+                        onChange={(e) => handleUpdatePhase(idx, e.target.value)}
+                        placeholder={`Phase ${idx + 1} description`}
+                        className="h-8 flex-1 rounded-[8px] px-2 font-manrope text-[13px] text-[#08182B] outline-none focus:bg-[#FAF8F5] focus:ring-1 focus:ring-[#C06B3E]"
+                      />
+                      {phases.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhase(idx)}
+                          aria-label={`Remove phase ${idx + 1}`}
+                          className="rounded-full p-1 text-[#94A3B8] hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#EFE5DB] pt-3">
+                  <button
+                    type="button"
+                    onClick={handleAddPhase}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#C06B3E] px-3 py-1 text-[11.5px] font-bold text-[#C06B3E] hover:bg-[#FAF4EE] cursor-pointer"
+                  >
+                    <Plus size={12} /> Add custom phase
+                  </button>
+                  <span className="text-[11.5px] text-[#8E8376]">
+                    These checkpoints form the project's default milestone roadmap once hired.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Field 5: Skills Required */}
             <div>

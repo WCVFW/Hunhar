@@ -55,7 +55,23 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
   const apply = useCallback((p: MilestonePlan) => {
     setPlan(p)
     const r = toRows(p.items)
-    setRows(p.canEdit && r.length === 0 ? [emptyRow()] : r)
+    if (p.canEdit && r.length === 0) {
+      if (p.defaultPhases && p.defaultPhases.length > 0) {
+        const total = Number(p.agreedAmount) || 0
+        const perPhase = Math.round(total / p.defaultPhases.length)
+        const rowsFromPhases = p.defaultPhases.map((phaseTitle, idx) => ({
+          title: phaseTitle,
+          description: `Phase ${idx + 1} deliverable checkpoint`,
+          amount: String(idx === p.defaultPhases!.length - 1 ? Math.max(0, total - perPhase * (p.defaultPhases!.length - 1)) : perPhase),
+          dueDate: '',
+        }))
+        setRows(rowsFromPhases)
+      } else {
+        setRows([emptyRow()])
+      }
+    } else {
+      setRows(r)
+    }
     setNote('')
   }, [])
 
@@ -120,16 +136,16 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
   let statusTone = 'bg-[#FAF4EE] text-[#C06B3E]'
   switch (effectiveStatus) {
     case 'NONE':
-      statusText = plan.myRole === 'FREELANCER' ? 'Propose your milestone plan to the client' : 'Waiting for the freelancer to propose milestones'
+      statusText = plan.myRole === 'FREELANCER' ? 'The client proposed this milestone plan — review & accept, or edit and negotiate' : 'Milestone plan proposed from project checkpoint phases'
       break
     case 'DRAFT':
       statusText = editing ? `Draft — not sent to the ${other} yet` : `The ${who(plan.draftBy)} is preparing the plan`
       break
     case 'WITH_CLIENT':
-      statusText = plan.myRole === 'CLIENT' ? 'The freelancer sent this plan — accept it, or edit and send it back' : 'Sent to the client for review'
+      statusText = plan.myRole === 'CLIENT' ? 'The freelancer updated this milestone plan — review & accept, or edit and negotiate' : 'Sent to the client for review & acceptance'
       break
     case 'WITH_FREELANCER':
-      statusText = plan.myRole === 'FREELANCER' ? 'The client changed the plan — accept it, or edit and send it back' : 'Sent back to the freelancer for review'
+      statusText = plan.myRole === 'FREELANCER' ? 'The client proposed this milestone plan — review & accept, or edit and negotiate' : 'Proposed to the freelancer for review & acceptance'
       break
     case 'ACCEPTED':
       statusText = `Agreed${plan.acceptedAt ? ` on ${formatDate(plan.acceptedAt, true)}` : ''} — fund each milestone to start its work`
@@ -355,9 +371,9 @@ export default function MilestonePlanPanel({ projectId, onAccepted }: Props): Re
           <button
             type="button"
             disabled={!!busy || edited}
-            title={edited ? `You changed the plan — send it to the ${other} instead` : undefined}
+            title={edited ? `You changed the plan — send changes to the ${other} instead` : undefined}
             onClick={() => setConfirmAcceptOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#C06B3E] px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#AA572D] disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#16A34A] px-5 py-2 text-[12.5px] font-bold text-white hover:bg-[#15803D] disabled:opacity-50 cursor-pointer shadow-sm transition-all"
           >
             <CheckCircle2 size={14} /> {busy === 'accept' ? 'Accepting…' : 'Accept plan'}
           </button>
